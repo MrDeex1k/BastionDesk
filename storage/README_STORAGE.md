@@ -3,10 +3,13 @@
 Ten serwis dostarcza S3‑kompatybilne storage w oparciu o oficjalny obraz MinIO.
 
 ## Uruchamianie
-- Zdefiniuj w `.env` (w katalogu głównym) co najmniej `MINIO_ROOT_USER` i `MINIO_ROOT_PASSWORD`.
+- W `.env` ustaw: `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `S3_BUCKET` (nazwa bucketu do automatycznego utworzenia).
 - Uruchom: `docker-compose up --build storage`.
-- API MinIO jest dostępne na porcie hosta `9000`. Konsola MinIO działa na porcie `9001`.
-- Przy starcie tworzony jest folder `/data/backups/postgres` na backupy PostgreSQL (współdzielony w wolumenie).
+- API MinIO: port hosta `9000`; konsola: port `9001`.
+- Przy starcie:
+  - tworzony jest folder `/data/backups/postgres` w wolumenie,
+  - wykonywana jest konfiguracja `mc` i **automatyczne utworzenie bucketa** `S3_BUCKET` (`mc mb --ignore-existing minio/$S3_BUCKET`).
+- W obrazie jest `wget` (healthcheck) oraz `mc` (bootstrap bucketu).
 
 ## Dane i wolumeny
 - Wolumen `minio-data` jest montowany pod `/data` w kontenerze.
@@ -20,3 +23,7 @@ Ten serwis dostarcza S3‑kompatybilne storage w oparciu o oficjalny obraz MinIO
 
 ## Healthcheck
 - W `docker-compose.yml` zdefiniowany jest healthcheck oparty o `wget --spider http://localhost:9000/minio/health/live`.
+
+## Backend (S3 endpoint)
+- Backend łączy się z MinIO pod `http://storage:9000` (sieć `bastiondesk-net-internal`).
+- Region (`S3_REGION`) może pozostać dowolny (np. `us-east-1`), wymagany tylko przez klienta S3 do podpisywania.

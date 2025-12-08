@@ -74,7 +74,20 @@ services:
     container_name: bastiondesk-storage
     env_file:
       - .env
-    entrypoint: ["/bin/sh", "-c", "mkdir -p /data/backups/postgres && exec minio server /data --console-address :9001"]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /data/backups/postgres
+        minio server /data --console-address :9001 &
+        pid=$!
+        for i in 1 2 3 4 5; do
+          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          sleep 2
+        done
+        mc alias set minio http://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing minio/"$${S3_BUCKET}"
+        wait $pid
     ports:
       - "9000:9000"
       - "9001:9001"
