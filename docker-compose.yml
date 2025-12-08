@@ -47,6 +47,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      storage:
+        condition: service_healthy
     command: ["bun", "run", "start"]
     ports:
       - "3333:3333"
@@ -81,7 +83,7 @@ services:
     networks:
       - bastiondesk-net-internal
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5

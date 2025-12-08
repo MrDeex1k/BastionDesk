@@ -19,4 +19,4 @@ Ten serwis dostarcza S3‑kompatybilne storage w oparciu o oficjalny obraz MinIO
   ```
 
 ## Healthcheck
-- W `docker-compose.yml` zdefiniowany jest healthcheck oparty o `curl http://localhost:9000/minio/health/live`.
+- W `docker-compose.yml` zdefiniowany jest healthcheck oparty o `wget --spider http://localhost:9000/minio/health/live`.
