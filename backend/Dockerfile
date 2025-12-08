@@ -2,11 +2,11 @@ FROM oven/bun:1 AS base
 
 WORKDIR /app
 
-# Instalacja zależności (korzysta z bun.lockb)
-COPY bun.lockb package.json ./
-RUN bun install --ci
+# Kopiuj tylko pliki zależności i zainstaluj produkcyjne zależności przez bun
+COPY package*.json ./
+RUN bun install
 
-# Kopiowanie źródeł
+# Skopiuj resztę plików aplikacji
 COPY . .
 
 EXPOSE 3333

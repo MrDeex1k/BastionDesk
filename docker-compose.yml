@@ -61,6 +61,9 @@ services:
     container_name: bastiondesk-nginx
     ports:
       - "4567:4567"
+    depends_on:
+      backend:
+        condition: service_started
     networks:
       - bastiondesk-net-internal
       - bastiondesk-net-external
@@ -71,10 +74,7 @@ services:
     container_name: bastiondesk-storage
     env_file:
       - .env
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      mkdir -p /data/backups/postgres &&
-      exec minio server /data --console-address ":9001"
+    entrypoint: ["/bin/sh", "-c", "mkdir -p /data/backups/postgres && exec minio server /data --console-address :9001"]
     ports:
       - "9000:9000"
       - "9001:9001"
