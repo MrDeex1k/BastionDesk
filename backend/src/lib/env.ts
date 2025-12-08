@@ -62,6 +62,13 @@ export const env = {
 	// Rate Limiting
 	RATE_LIMIT_WINDOW_MS: getEnvNumber("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
 	RATE_LIMIT_MAX_REQUESTS: getEnvNumber("RATE_LIMIT_MAX_REQUESTS", 100),
+
+	// Storage (S3 / MinIO)
+	S3_ENDPOINT: getEnvVar("S3_ENDPOINT", "http://storage:9000"),
+	S3_REGION: getEnvVar("S3_REGION", "us-east-1"),
+	S3_ACCESS_KEY: getEnvVar("S3_ACCESS_KEY", "minioadmin"),
+	S3_SECRET_KEY: getEnvVar("S3_SECRET_KEY", "minioadmin"),
+	S3_BUCKET: getEnvVar("S3_BUCKET", "bastiondesk"),
 } as const;
 
 // Tryb produkcyjny

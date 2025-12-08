@@ -148,7 +148,53 @@ Wszystkie endpointy autoryzacji są dostępne pod `/api/auth/*`:
 | `WEBAUTHN_RP_ID`              | Relying Party ID (domena)               | `localhost`               |
 | `WEBAUTHN_RP_NAME`            | Nazwa aplikacji dla PassKey             | `BastionDesk`             |
 | `CORS_ORIGIN`                 | Dozwolone originy dla CORS              | `http://localhost:5173`   |
+| `S3_ENDPOINT`                 | Endpoint S3/MinIO                       | `http://storage:9000`     |
+| `S3_REGION`                   | Region S3                               | `us-east-1`               |
+| `S3_ACCESS_KEY`               | Klucz dostępu (MinIO/AWS)               | -                         |
+| `S3_SECRET_KEY`               | Sekret dostępu (MinIO/AWS)              | -                         |
+| `S3_BUCKET`                   | Domyślny bucket na pliki                | `bastiondesk`             |
 
+### Storage (MinIO / S3) - Bun native S3 client
+
+Backend używa natywnego klienta S3 w Bun do pracy z MinIO.
+
+Przykład użycia:
+
+```typescript
+import {
+  putObject,
+  getObjectBuffer,
+  getObjectJson,
+  deleteObject,
+  presignObject,
+} from "@/lib/storage";
+
+// Zapis pliku
+await putObject(`incidents/${incidentId}/file.bin`, buffer);
+
+// Odczyt jako Buffer
+const data = await getObjectBuffer(`incidents/${incidentId}/file.bin`);
+
+// Odczyt jako JSON
+const meta = await getObjectJson<{ foo: string }>(
+  `incidents/${incidentId}/meta.json`
+);
+
+// Presigned URL (np. do pobierania)
+const url = presignObject(`incidents/${incidentId}/file.bin`, {
+  expiresIn: 3600, // 1h
+  acl: "private",
+});
+
+// Usunięcie
+await deleteObject(`incidents/${incidentId}/file.bin`);
+```
+
+Uwagi:
+- `S3_ENDPOINT` wskazuje na `http://storage:9000` (usługa MinIO w docker-compose).
+- Bucket `S3_BUCKET` jest tworzony automatycznie przy starcie serwisu `storage` (mc mb --ignore-existing).
+- Prefiksy/ścieżki są częścią klucza; możesz budować je dowolnie, np. `incidents/{id}/attachments/{filename}`.
+- `S3_REGION` dla MinIO może pozostać dowolny (np. `us-east-1`), jest wymagany tylko przez mechanizm podpisywania.
 ## Docker
 
 ```bash
@@ -158,31 +204,6 @@ docker-compose up -d backend
 # Lub osobno
 docker build -t bastiondesk-backend .
 docker run -p 3333:3333 --env-file .env bastiondesk-backend
-```
-
-## Architektura bazy danych
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Backend (Express)                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   ┌─────────────────────┐    ┌─────────────────────────┐   │
-│   │    Better-Auth      │    │   Application Logic     │   │
-│   │  (Autoryzacja)      │    │   (Incidents, etc.)     │   │
-│   └─────────┬───────────┘    └───────────┬─────────────┘   │
-│             │                            │                  │
-│             │ pg Pool                    │ Bun SQL          │
-│             │ (node-postgres)            │ (native driver)  │
-│             │                            │                  │
-└─────────────┼────────────────────────────┼──────────────────┘
-              │                            │
-              └────────────┬───────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │  PostgreSQL │
-                    │   Database  │
-                    └─────────────┘
 ```
 
 ## Następne kroki (TODO)
