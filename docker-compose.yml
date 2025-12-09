@@ -36,7 +36,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 10GB
+          memory: 12GB
 
   backend:
     build:
@@ -47,7 +47,9 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      storage:
+      storage-1:
+        condition: service_healthy
+      storage-3:
         condition: service_healthy
     command: ["bun", "run", "start"]
     ports:
@@ -68,31 +70,145 @@ services:
       - bastiondesk-net-internal
       - bastiondesk-net-external
 
-  storage:
+  storage-1:
     build:
       context: ./storage
-    container_name: bastiondesk-storage
+    container_name: bastiondesk-storage-1
     env_file:
       - .env
+    environment:
+      - BOOTSTRAP_NODE=true
     entrypoint:
       - /bin/sh
       - -c
       - |
         mkdir -p /data/backups/postgres
-        minio server /data --console-address :9001 &
+        minio server --address :9000 --console-address :9001 \
+          http://storage-1:9000/data \
+          http://storage-2:9000/data \
+          http://storage-3:9000/data \
+          http://storage-4:9000/data &
         pid=$!
-        for i in 1 2 3 4 5; do
+        for i in $(seq 1 20); do
           wget --spider --quiet http://localhost:9000/minio/health/ready && break
           sleep 2
         done
-        mc alias set minio http://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
-        mc mb --ignore-existing minio/"$${S3_BUCKET}"
+        if [ "$${BOOTSTRAP_NODE:-false}" = "true" ]; then
+          mc alias set minio http://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+          mc mb --ignore-existing minio/"$${S3_BUCKET}"
+          mc version enable minio/"$${S3_BUCKET}" || true
+        fi
         wait $pid
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio-data:/data
+      - minio-data-1:/data
+    networks:
+      - bastiondesk-net-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  storage-2:
+    build:
+      context: ./storage
+    container_name: bastiondesk-storage-2
+    env_file:
+      - .env
+    environment:
+      - BOOTSTRAP_NODE=false
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /data/backups/postgres
+        minio server --address :9000 --console-address :9001 \
+          http://storage-1:9000/data \
+          http://storage-2:9000/data \
+          http://storage-3:9000/data \
+          http://storage-4:9000/data &
+        pid=$!
+        for i in $(seq 1 20); do
+          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          sleep 2
+        done
+        wait $pid
+    volumes:
+      - minio-data-2:/data
+    networks:
+      - bastiondesk-net-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  storage-3:
+    build:
+      context: ./storage
+    container_name: bastiondesk-storage-3
+    env_file:
+      - .env
+    environment:
+      - BOOTSTRAP_NODE=false
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /data/backups/postgres
+        minio server --address :9000 --console-address :9001 \
+          http://storage-1:9000/data \
+          http://storage-2:9000/data \
+          http://storage-3:9000/data \
+          http://storage-4:9000/data &
+        pid=$!
+        for i in $(seq 1 20); do
+          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          sleep 2
+        done
+        wait $pid
+    volumes:
+      - minio-data-3:/data
+    networks:
+      - bastiondesk-net-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  storage-4:
+    build:
+      context: ./storage
+    container_name: bastiondesk-storage-4
+    env_file:
+      - .env
+    environment:
+      - BOOTSTRAP_NODE=false
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /data/backups/postgres
+        minio server --address :9000 --console-address :9001 \
+          http://storage-1:9000/data \
+          http://storage-2:9000/data \
+          http://storage-3:9000/data \
+          http://storage-4:9000/data &
+        pid=$!
+        for i in $(seq 1 20); do
+          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          sleep 2
+        done
+        wait $pid
+    volumes:
+      - minio-data-4:/data
     networks:
       - bastiondesk-net-internal
     healthcheck:
@@ -107,7 +223,13 @@ volumes:
     driver: local
   huggingface-cache:
     driver: local
-  minio-data:
+  minio-data-1:
+    driver: local
+  minio-data-2:
+    driver: local
+  minio-data-3:
+    driver: local
+  minio-data-4:
     driver: local
 
 networks:
