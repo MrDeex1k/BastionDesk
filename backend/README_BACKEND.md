@@ -19,7 +19,6 @@ backend/
 │   ├── types/                # Definicje typów TypeScript
 │   │   └── index.ts
 │   └── utils/                # Funkcje pomocnicze
-├── .env.example              # Przykładowe zmienne środowiskowe
 ├── package.json
 ├── tsconfig.json
 └── README_BACKEND.md
@@ -71,9 +70,9 @@ Better-Auth używa **pg Pool** (node-postgres) dla własnych operacji autoryzacy
 
 ### Wymagania
 
-- [Bun](https://bun.sh/) >= 1.0
+- [Bun](https://bun.sh/) >= 1.3.4
 - PostgreSQL 18+ (lub Docker)
-- Node.js 22
+- Node.js 24+
 
 ### Instalacja
 
@@ -129,30 +128,12 @@ Wszystkie endpointy autoryzacji są dostępne pod `/api/auth/*`:
 |-----------------------------------|--------|-----------------------------|
 | `/api/auth/sign-up/email`         | POST   | Rejestracja email/password  |
 | `/api/auth/sign-in/email`         | POST   | Logowanie email/password    |
-| `/api/auth/sign-out`              | POST   | Wylogowanie                 |
-| `/api/auth/session`               | GET    | Pobierz aktualną sesję      |
 | `/api/auth/passkey/register`      | POST   | Rejestracja PassKey         |
 | `/api/auth/sign-in/passkey`       | POST   | Logowanie PassKey           |
+| `/api/auth/session`               | GET    | Pobierz aktualną sesję      |
 | `/api/auth/organization/create`   | POST   | Utwórz organizację          |
 | `/api/auth/organization/list`     | GET    | Lista organizacji           |
-
-## Zmienne środowiskowe
-
-| Zmienna                       | Opis                                    | Domyślna wartość          |
-|-------------------------------|-----------------------------------------|---------------------------|
-| `PORT`                        | Port serwera                            | `3333`                    |
-| `NODE_ENV`                    | Środowisko (development/production)     | `development`             |
-| `DATABASE_URL`                | Connection string PostgreSQL            | -                         |
-| `BETTER_AUTH_SECRET`          | Sekret do tokenów (min. 32 znaki)       | -                         |
-| `BETTER_AUTH_URL`             | Base URL API                            | `http://localhost:3333`   |
-| `WEBAUTHN_RP_ID`              | Relying Party ID (domena)               | `localhost`               |
-| `WEBAUTHN_RP_NAME`            | Nazwa aplikacji dla PassKey             | `BastionDesk`             |
-| `CORS_ORIGIN`                 | Dozwolone originy dla CORS              | `http://localhost:5173`   |
-| `S3_ENDPOINT`                 | Endpoint S3/MinIO                       | `http://storage:9000`     |
-| `S3_REGION`                   | Region S3                               | `us-east-1`               |
-| `S3_ACCESS_KEY`               | Klucz dostępu (MinIO/AWS)               | -                         |
-| `S3_SECRET_KEY`               | Sekret dostępu (MinIO/AWS)              | -                         |
-| `S3_BUCKET`                   | Domyślny bucket na pliki                | `bastiondesk`             |
+| `/api/auth/sign-out`              | POST   | Wylogowanie                 |
 
 ### Storage (MinIO / S3) - Bun native S3 client
 
