@@ -53,9 +53,11 @@ Better-Auth używa **pg Pool** (node-postgres) dla własnych operacji autoryzacy
 ## Funkcjonalności autoryzacji
 
 - ✅ **Email/Password** - podstawowa autoryzacja
+- ✅ **Password Management** - resetowanie i zmiana haseł
 - ✅ **PassKeys (WebAuthn/U2F)** - klucze sprzętowe (YubiKey, Titan)
 - ✅ **HaveIBeenPwned** - sprawdzanie kompromitacji haseł
 - ✅ **Organizacje** - multi-tenancy z rolami
+- ✅ **Zarządzanie członkami** - zaproszenia, dodawanie, usuwanie i zmiana ról
 - ✅ **Zespoły (Teams)** - grupowanie użytkowników
 
 ## Role użytkowników
@@ -131,8 +133,17 @@ Wszystkie endpointy autoryzacji są dostępne pod `/api/auth/*`:
 | `/api/auth/passkey/register`      | POST   | Rejestracja PassKey         |
 | `/api/auth/sign-in/passkey`       | POST   | Logowanie PassKey           |
 | `/api/auth/session`               | GET    | Pobierz aktualną sesję      |
+| `/api/auth/request-password-reset`| POST   | Żądanie resetowania hasła   |
+| `/api/auth/reset-password`        | POST   | Resetowanie hasła          |
+| `/api/auth/change-password`       | POST   | Zmiana hasła użytkownika    |
 | `/api/auth/organization/create`   | POST   | Utwórz organizację          |
 | `/api/auth/organization/list`     | GET    | Lista organizacji           |
+| `/api/auth/organization/invite-member`| POST | Zaproszenie członka do organizacji |
+| `/api/auth/organization/add-member`| POST | Dodanie członka do organizacji |
+| `/api/auth/organization/list-members`| GET | Lista członków organizacji  |
+| `/api/auth/organization/update-member-role`| POST | Aktualizacja roli członka   |
+| `/api/auth/organization/remove-member`| POST | Usunięcie członka z organizacji |
+| `/api/auth/organization/get-active-member`| GET | Pobierz aktywnego członka   |
 | `/api/auth/sign-out`              | POST   | Wylogowanie                 |
 
 ### Storage (MinIO / S3) - Bun native S3 client
