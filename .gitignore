@@ -1,7 +1,6 @@
 .env
 .env.*
 db.sql
-uv.lock
-bun.lock
+*.lock
 node_modules
 .DS_Store
