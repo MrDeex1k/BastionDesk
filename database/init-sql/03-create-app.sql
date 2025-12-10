@@ -5,10 +5,12 @@
 -- Typ wyliczeniowy dla statusu incydentu
 -- Dostosuj statusy do swojego przepływu pracy
 CREATE TYPE incident_status AS ENUM (
-    'pending',      -- Nowe zgłoszenie (oczekuje)
-    'analyzing',    -- W trakcie analizy (przez AI lub Analityka)
-    'resolved',     -- Rozwiązane
-    'rejected'      -- Odrzucone
+    'Zgłoszony',  
+    'Raport w trakcie',    
+    'Raport złożony',  
+    'Sprawozdanie w trakcie',  
+    'Sprawozdanie złożone',  
+    'Odrzucone'  
 );
 
 -- Typ wyliczeniowy dla kategorii LLM (poziomy priorytetu/ryzyka)
@@ -24,26 +26,32 @@ CREATE TYPE incident_category AS ENUM (
 
 CREATE TABLE IF NOT EXISTS incidents (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    
+    data_zgloszenia timestamptz NOT NULL DEFAULT now(),
+
     -- Powiązanie z tabelą 'user' z Better-Auth
     user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-    
+
     -- Status zgłoszenia
-    status incident_status NOT NULL DEFAULT 'pending',
-    
+    status incident_status NOT NULL DEFAULT 'Zgłoszony',
+
     -- Opis użytkownika (wymagany)
     user_description text NOT NULL,
-    
+
     -- DANE Z MINIO (JSONB)
     -- Przechowujemy tu metadane plików (bucket, path, filename, etag), a nie same pliki.
     -- Przykład: [{"path": "incidents/123/screen.png", "bucket": "secure-bucket"}]
     user_screenshot_data jsonb DEFAULT '[]'::jsonb,
     user_attachment_data jsonb DEFAULT '[]'::jsonb,
-    
+
     -- Sekcja Analityka
+    analyst_id text REFERENCES "user"(id) ON DELETE CASCADE,  -- NULL na starcie, ustawiane później
     analyst_note text,
-    analyst_report_data jsonb DEFAULT '{}'::jsonb,     -- Raport analityka (DOCX/PDF w MinIO)
-    analyst_statement_data jsonb DEFAULT '{}'::jsonb,  -- Sprawozdanie analityka (DOCX/PDF w MinIO)
+    czy_rozwiązany BOOLEAN NOT NULL DEFAULT FALSE,
+    data_rozwiązania timestamptz,  -- NULL na starcie, ustawiane przy rozwiązaniu
+    analyst_report jsonb DEFAULT '{}'::jsonb,     -- Raport analityka (DOCX/PDF w MinIO)
+    analyst_report_data timestamptz,  -- NULL na starcie
+    analyst_statement jsonb DEFAULT '{}'::jsonb,  -- Sprawozdanie analityka (DOCX/PDF w MinIO)
+    analyst_statement_data timestamptz,  -- NULL na starcie
 
     -- Kategoria nadana przez LLM (poziomy priorytetu/ryzyka)
     llm_category incident_category,
@@ -132,3 +140,21 @@ CREATE TRIGGER log_status_change
 AFTER UPDATE ON incidents
 FOR EACH ROW
 EXECUTE PROCEDURE log_incident_changes();
+
+-- C. Funkcja automatycznie ustawiająca datę rozwiązania gdy incydent zostanie oznaczony jako rozwiązany
+CREATE OR REPLACE FUNCTION set_resolution_date()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Jeśli czy_rozwiazany zmieniło się z FALSE na TRUE, ustaw datę rozwiązania
+    IF (OLD.czy_rozwiazany = FALSE AND NEW.czy_rozwiazany = TRUE) THEN
+        NEW.data_rozwiazania = now();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger dla automatycznego ustawiania daty rozwiązania
+CREATE TRIGGER set_resolution_date_trigger
+BEFORE UPDATE ON incidents
+FOR EACH ROW
+EXECUTE PROCEDURE set_resolution_date();
