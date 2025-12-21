@@ -208,8 +208,8 @@ System wykorzystuje **3 role**:
 | `analyst_report_data` | `jsonb` | Metadane raportu analityka w MinIO |
 | `analyst_statement_data` | `jsonb` | Dodatkowe oświadczenia analityka |
 | `llm_category` | `text` | Kategoria nadana przez LLM |
-| `created_at` | `timestamptz` | Data utworzenia |
-| `updated_at` | `timestamptz` | Data ostatniej aktualizacji |
+| `created_at` | `timestamp` | Data utworzenia |
+| `updated_at` | `timestamp` | Data ostatniej aktualizacji |
 
 ### 14. `incident_audit_log` - Historia zmian zgłoszeń
 
@@ -220,7 +220,7 @@ System wykorzystuje **3 role**:
 | `changed_by` | `text` | ID użytkownika lub 'SYSTEM'/'LLM' |
 | `old_status` | `incident_status` | Poprzedni status |
 | `new_status` | `incident_status` | Nowy status |
-| `changed_at` | `timestamptz` | Data zmiany |
+| `changed_at` | `timestamp` | Data zmiany |
 
 ---
 
