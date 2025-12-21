@@ -32,7 +32,8 @@ def run_inference(prompt: str) -> str:
 		{
 			"role": "user",
 			"content": (
-				"Przeanalizuj incydent: "
+				"Twoim zadaniem jest przeanalizowanie opisu incydentu związanego z bezpieczeństwem komputerowym i podanie kategorii incydentu. Kategorie to Czerwony, Żółty, Zielony. Czerwony to najwyższy priorytet, \
+				Żółty to średni priorytet, Zielony to najniższy priorytet. Jeśli nie jesteś pewien, podaj Żółty. Treść incydentu to: "
 				+ prompt
 			),
 		}
@@ -65,7 +66,8 @@ async def query_message(request: QueryRequest) -> dict:
 	try:
 		response = run_inference(request.prompt)
 	except Exception as exc:
-		raise HTTPException(status_code=500, detail=str(exc)) from exc
+		# Gdy model jest niedostępny, zwróć domyślną wartość "Żółty"
+		response = "Żółty"
 	return {"response": response}
 
 
