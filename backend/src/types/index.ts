@@ -3,11 +3,14 @@
 export type LoginMethod = "password" | "passkey" | "oauth";
 export type UserRole = "admin" | "analityk" | "pracownik";
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
+// Zgodne z 03-create-app.sql: IncidentStatus ENUM (polskie nazwy)
 export type IncidentStatus =
-	| "pending"
-	| "analyzing"
-	| "resolved"
-	| "rejected";
+	| "Zgłoszony"
+	| "Raport w trakcie"
+	| "Raport złożony"
+	| "Sprawozdanie w trakcie"
+	| "Sprawozdanie złożone"
+	| "Odrzucone";
 
 // Zgodne z 03-create-app.sql: incident_category ENUM
 export type IncidentCategory = "Czerwony" | "Żółty" | "Zielony";
@@ -72,19 +75,52 @@ export interface Team {
 	updatedAt: Date | null;
 }
 
+// Zgodne z 03-create-app.sql: tabela incidents
 export interface Incident {
 	id: string;
+	dataZgloszenia: Date;
 	userId: string;
+	organizationId: string;
 	status: IncidentStatus;
 	userDescription: string;
-	userScreenshotData: Record<string, unknown>[] | null;
-	userAttachmentData: Record<string, unknown>[] | null;
+	// Screenshot (opcjonalny)
+	userScreenshotPath: string | null;
+	userScreenshotMetadata: Record<string, unknown>;
+	// Attachment (opcjonalny)
+	userAttachmentPath: string | null;
+	userAttachmentMetadata: Record<string, unknown>;
+	// Analityk
+	analystId: string | null;
 	analystNote: string | null;
-	analystReportData: Record<string, unknown> | null;
-	analystStatementData: Record<string, unknown> | null;
+	czyRozwiazany: boolean;
+	dataRozwiazania: Date | null;
+	// Raport analityka
+	analystReportPath: string | null;
+	analystReportMetadata: Record<string, unknown>;
+	analystReportData: Date | null;
+	// Sprawozdanie analityka
+	analystStatementPath: string | null;
+	analystStatementMetadata: Record<string, unknown>;
+	analystStatementData: Date | null;
+	// LLM kategoria
 	llmCategory: IncidentCategory | null;
 	createdAt: Date;
 	updatedAt: Date;
+}
+
+// Typ dla tworzenia incydentu
+export interface CreateIncidentInput {
+	userDescription: string;
+	screenshot?: File;
+	attachment?: File;
+}
+
+// Typ dla metadanych plików
+export interface FileMetadata {
+	originalName: string;
+	size: number;
+	mimeType: string;
+	uploadedAt: string;
 }
 
 export interface IncidentAuditLog {

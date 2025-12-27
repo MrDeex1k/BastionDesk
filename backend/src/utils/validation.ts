@@ -3,14 +3,9 @@
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
-// =============================================================================
-// Common Schemas
-// =============================================================================
 
-// UUIDv7 validation
 export const uuidSchema = z.string().uuid({ message: "Nieprawidłowy format UUID" });
 
-// Email validation
 export const emailSchema = z
 	.string()
 	.email({ message: "Nieprawidłowy adres email" })
@@ -29,16 +24,15 @@ export const paginationSchema = z.object({
 	limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-// =============================================================================
-// Incident Schemas
-// =============================================================================
 
 // Zgodne z 03-create-app.sql: incident_status ENUM
 export const incidentStatusSchema = z.enum([
-	"pending",
-	"analyzing",
-	"resolved",
-	"rejected",
+	"Zgłoszony",
+	"Raport w trakcie",
+	"Raport złożony",
+	"Sprawozdanie w trakcie",
+	"Sprawozdanie złożone",
+	"Odrzucone",
 ]);
 
 // Zgodne z 03-create-app.sql: incident_category ENUM
@@ -48,26 +42,33 @@ export const incidentCategorySchema = z.enum([
 	"Zielony",
 ]);
 
+// Schemat dla tworzenia incydentu (multipart/form-data)
+// Pliki będą obsługiwane oddzielnie przez file middleware
 export const createIncidentSchema = z.object({
 	userDescription: z
 		.string()
 		.min(10, { message: "Opis musi mieć co najmniej 10 znaków" })
 		.max(5000, { message: "Opis może mieć maksymalnie 5000 znaków" }),
-	userScreenshotData: z.record(z.string(), z.unknown()).optional(),
-	userAttachmentData: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const updateIncidentSchema = z.object({
-	status: incidentStatusSchema.optional(),
-	analystNote: z.string().max(10000, { message: "Notatka może mieć maksymalnie 10000 znaków" }).optional(),
-	analystReportData: z.record(z.string(), z.unknown()).optional(),
-	analystStatementData: z.record(z.string(), z.unknown()).optional(),
-	llmCategory: incidentCategorySchema.optional(),
+// Schemat dla aktualizacji statusu incydentu
+export const updateIncidentStatusSchema = z.object({
+	status: incidentStatusSchema,
 });
 
-// =============================================================================
-// Organization Schemas
-// =============================================================================
+// Schemat dla notatek analityka
+export const updateIncidentNoteSchema = z.object({
+	analystNote: z
+		.string()
+		.min(1, { message: "Notatka nie może być pusta" })
+		.max(10000, { message: "Notatka może mieć maksymalnie 10000 znaków" }),
+});
+
+// Schemat dla oznaczania incydentu jako rozwiązany
+export const resolveIncidentSchema = z.object({
+	resolved: z.boolean(),
+});
+
 
 export const userRoleSchema = z.enum(["admin", "analityk", "pracownik"]);
 
@@ -92,9 +93,6 @@ export const inviteMemberSchema = z.object({
 	role: userRoleSchema.default("pracownik"),
 });
 
-// =============================================================================
-// Query Schemas
-// =============================================================================
 
 export const incidentQuerySchema = paginationSchema.extend({
 	status: incidentStatusSchema.optional(),
@@ -103,9 +101,6 @@ export const incidentQuerySchema = paginationSchema.extend({
 	sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
-// =============================================================================
-// Validation Middleware Factory
-// =============================================================================
 
 type ValidateTarget = "body" | "query" | "params";
 
@@ -211,12 +206,11 @@ export function validateMultiple(schemas: {
 	};
 }
 
-// =============================================================================
-// Type Inference Helpers
-// =============================================================================
 
 export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
-export type UpdateIncidentInput = z.infer<typeof updateIncidentSchema>;
+export type UpdateIncidentStatusInput = z.infer<typeof updateIncidentStatusSchema>;
+export type UpdateIncidentNoteInput = z.infer<typeof updateIncidentNoteSchema>;
+export type ResolveIncidentInput = z.infer<typeof resolveIncidentSchema>;
 export type IncidentQueryInput = z.infer<typeof incidentQuerySchema>;
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

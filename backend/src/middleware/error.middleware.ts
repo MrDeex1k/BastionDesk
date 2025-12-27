@@ -189,11 +189,11 @@ export function errorHandler(
  *   res.json({ success: true, data: users });
  * }));
  */
-export function asyncHandler<T>(
-	fn: (req: Request, res: Response, next: NextFunction) => Promise<T>,
+export function asyncHandler<T extends Request = Request>(
+	fn: (req: T, res: Response, next: NextFunction) => Promise<unknown>,
 ) {
 	return (req: Request, res: Response, next: NextFunction): void => {
-		Promise.resolve(fn(req, res, next)).catch(next);
+		Promise.resolve(fn(req as T, res, next)).catch(next);
 	};
 }
 

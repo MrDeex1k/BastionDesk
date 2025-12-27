@@ -69,10 +69,10 @@ app.get("/api", (_req, res) => {
 });
 
 // =============================================================================
-// API Routes (Faza 6)
+// API Routes
 // =============================================================================
-// TODO: Dodać routery w Fazie 6
-// app.use("/api/incidents", incidentsRouter);
+import incidentsRouter from "./routes/incidents";
+app.use("/api/incidents", incidentsRouter);
 
 // =============================================================================
 // Error Handling
