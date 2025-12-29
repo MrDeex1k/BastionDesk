@@ -44,15 +44,19 @@ async function getAssignedIncidents(req: Request, res: Response) {
 				i."organizationId",
 				i.status,
 				i."userDescription",
-				i."userScreenshotData",
-				i."userAttachmentData",
+				i."userScreenshotPath",
+				i."userScreenshotMetadata",
+				i."userAttachmentPath",
+				i."userAttachmentMetadata",
 				i."analystId",
 				i."analystNote",
 				i."czyRozwiazany",
 				i."dataRozwiazania",
-				i."analystReport",
+				i."analystReportPath",
+				i."analystReportMetadata",
 				i."analystReportData",
-				i."analystStatement",
+				i."analystStatementPath",
+				i."analystStatementMetadata",
 				i."analystStatementData",
 				i."llmCategory",
 				i."createdAt",
@@ -124,15 +128,19 @@ async function getUnassignedIncidents(req: Request, res: Response) {
 				i."organizationId",
 				i.status,
 				i."userDescription",
-				i."userScreenshotData",
-				i."userAttachmentData",
+				i."userScreenshotPath",
+				i."userScreenshotMetadata",
+				i."userAttachmentPath",
+				i."userAttachmentMetadata",
 				i."analystId",
 				i."analystNote",
 				i."czyRozwiazany",
 				i."dataRozwiazania",
-				i."analystReport",
+				i."analystReportPath",
+				i."analystReportMetadata",
 				i."analystReportData",
-				i."analystStatement",
+				i."analystStatementPath",
+				i."analystStatementMetadata",
 				i."analystStatementData",
 				i."llmCategory",
 				i."createdAt",
@@ -273,10 +281,10 @@ async function downloadFile(req: Request, res: Response) {
 		}
 
 		// Sprawdź metadane pliku w bazie danych
-		const columnName = type === 'screenshots' ? 'userScreenshotData' :
-						   type === 'attachments' ? 'userAttachmentData' :
-						   type === 'reports' ? 'analystReport' :
-						   'analystStatement';
+		const columnName = type === 'screenshots' ? 'userScreenshotMetadata' :
+						   type === 'attachments' ? 'userAttachmentMetadata' :
+						   type === 'reports' ? 'analystReportMetadata' :
+						   'analystStatementMetadata';
 
 		const fileData = await queryOne<{ [key: string]: any }>(`
 			SELECT "${columnName}" as fileData FROM incidents
@@ -920,15 +928,19 @@ async function getIncidentDetails(req: Request, res: Response) {
 				i."organizationId",
 				i.status,
 				i."userDescription",
-				i."userScreenshotData",
-				i."userAttachmentData",
+				i."userScreenshotPath",
+				i."userScreenshotMetadata",
+				i."userAttachmentPath",
+				i."userAttachmentMetadata",
 				i."analystId",
 				i."analystNote",
 				i."czyRozwiazany",
 				i."dataRozwiazania",
-				i."analystReport",
+				i."analystReportPath",
+				i."analystReportMetadata",
 				i."analystReportData",
-				i."analystStatement",
+				i."analystStatementPath",
+				i."analystStatementMetadata",
 				i."analystStatementData",
 				i."llmCategory",
 				i."createdAt",

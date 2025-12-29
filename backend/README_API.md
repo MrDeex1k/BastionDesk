@@ -841,54 +841,48 @@ Wszystkie endpointy dla pracowników wymagają autoryzacji z rolą `pracownik` l
 
 ### Zgłaszanie incydentu
 
-#### `POST /api/employee/incidents`
+#### `POST /api/incidents`
 
-**Opis:** Tworzy nowe zgłoszenie incydentu przez pracownika.
+**Opis:** Tworzy nowe zgłoszenie incydentu przez pracownika z opcjonalnymi plikami.
 
 **Nagłówki:**
 ```
 Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-Content-Type: application/json
+Content-Type: multipart/form-data (ustawia się automatycznie)
 ```
 
-**Request Body:**
-```json
-{
-  "userDescription": "Opis problemu - co się stało, jakie objawy...",
-  "userScreenshotPath": "incidents/uuid/screenshots/screenshot1.png",
-  "userScreenshotMetadata": {
-    "bucket": "bastiondesk-bucket",
-    "filename": "screenshot1.png",
-    "mimeType": "image/png",
-    "size": 102400
-  },
-  "userAttachmentPath": "incidents/uuid/attachments/log.txt",
-  "userAttachmentMetadata": {
-    "bucket": "bastiondesk-bucket",
-    "filename": "log.txt",
-    "mimeType": "text/plain",
-    "size": 5120
-  }
+**Request Body (multipart/form-data):**
+```
+userDescription: "Opis problemu - co się stało, jakie objawy..."  # wymagane
+screenshot: File (opcjonalny)                                 # max 10MB, PNG/JPEG/JPG/WebP
+attachment: File (opcjonalny)                                 # max 50MB, obrazki/PDF/ZIP/TXT/CSV
+```
+
+**Przykład JavaScript:**
+```javascript
+const formData = new FormData();
+formData.append('userDescription', 'Aplikacja zawiesza się przy logowaniu');
+
+// Screenshot (opcjonalny)
+const screenshotFile = inputScreenshot.files[0];
+if (screenshotFile) {
+    formData.append('screenshot', screenshotFile);
 }
-```
 
-**Przykład curl:**
-```bash
-curl -X POST http://localhost:3333/api/employee/incidents \
-  -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session=session_token_here" \
-  -d '{
-    "userDescription": "Aplikacja zawiesza się przy logowaniu",
-    "userScreenshotPath": "incidents/uuid/screenshots/error.png",
-    "userScreenshotMetadata": {
-      "bucket": "bastiondesk-bucket",
-      "filename": "error.png",
-      "mimeType": "image/png",
-      "size": 245760
+// Załącznik (opcjonalny)
+const attachmentFile = inputAttachment.files[0];
+if (attachmentFile) {
+    formData.append('attachment', attachmentFile);
+}
+
+const response = await fetch('/api/incidents', {
+    method: 'POST',
+    headers: {
+        'Authorization': `Bearer ${token}`,
+        // NIE dodawać Content-Type - browser sam ustawi multipart/form-data
     },
-    "userAttachmentPath": null,
-    "userAttachmentMetadata": null
-  }'
+    body: formData
+});
 ```
 
 **Response (Success - 201):**
@@ -898,27 +892,41 @@ curl -X POST http://localhost:3333/api/employee/incidents \
   "data": {
     "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
     "dataZgloszenia": "2024-01-01T12:00:00.000Z",
-    "status": "Zgłoszony",
+    "userId": "user_abc123",
+    "organizationId": "org_xyz789",
+    "status": "Nowe zgłoszenie",
+    "userDescription": "Aplikacja zawiesza się przy logowaniu",
+    "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshot_1704067200000_error.png",
+    "userScreenshotMetadata": {
+      "originalName": "error.png",
+      "size": 245760,
+      "mimeType": "image/png",
+      "uploadedAt": "2024-01-01T10:30:00.000Z"
+    },
+    "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachment_1704067201000_log.txt",
+    "userAttachmentMetadata": {
+      "originalName": "log.txt",
+      "size": 15360,
+      "mimeType": "text/plain",
+      "uploadedAt": "2024-01-01T10:30:00.000Z"
+    },
     "createdAt": "2024-01-01T12:00:00.000Z",
-    "filesUploaded": {
-      "screenshots": 1,
-      "attachments": 0
-    }
+    "updatedAt": "2024-01-01T12:00:00.000Z"
   }
 }
 ```
 
 **Uwagi:**
-- Pliki są automatycznie uploadowane do storage (MinIO/S3) podczas tworzenia zgłoszenia
-- Screenshoty są dostępne pod ścieżką: `incidents/{incidentId}/screenshots/{filename}`
-- Załączniki są dostępne pod ścieżką: `incidents/{incidentId}/attachments/{filename}`
-- Metadane plików są przechowywane w bazie danych dla szybkiego dostępu
+- Backend automatycznie generuje ścieżki plików i przesyła je do MinIO
+- Frontend wysyła tylko opis i pliki - ścieżki są tworzone przez backend
+- Pliki są walidowane pod kątem rozmiaru i typu MIME
+- Ścieżki mają format: `incidents/{incidentId}/{type}_{timestamp}_{filename}`
 
 ### Pobieranie własnych incydentów
 
-#### `GET /api/employee/incidents`
+#### `GET /api/incidents/my`
 
-**Opis:** Pobiera listę własnych incydentów pracownika z paginacją, filtrowaniem i sortowaniem.
+**Opis:** Pobiera listę własnych incydentów pracownika z paginacją i sortowaniem.
 
 **Nagłówki:**
 ```
@@ -928,13 +936,10 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 **Query Parameters:**
 - `page` (number, optional) - Numer strony (domyślnie: 1)
 - `limit` (number, optional) - Liczba wyników na stronę (domyślnie: 20, max: 100)
-- `status` (string, optional) - Filtrowanie po statusie (`Zgłoszony`, `Raport w trakcie`, `Raport złożony`, `Sprawozdanie w trakcie`, `Sprawozdanie złożone`, `Odrzucone`)
-- `sortBy` (string, optional) - Pole sortowania (`createdAt`, `updatedAt`, `status`, `dataZgloszenia`) - domyślnie: `createdAt`
-- `sortOrder` (string, optional) - Kierunek sortowania (`asc`, `desc`) - domyślnie: `desc`
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:3333/api/employee/incidents?page=1&limit=10&status=Zgłoszony&sortBy=createdAt&sortOrder=desc" \
+curl "http://localhost:3333/api/incidents/my?page=1&limit=10" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -950,10 +955,24 @@ curl "http://localhost:3333/api/employee/incidents?page=1&limit=10&status=Zgłos
       "organizationId": "org_xyz789",
       "status": "Zgłoszony",
       "userDescription": "Aplikacja zawiesza się przy logowaniu",
-      "userScreenshotPath": null,
-      "userScreenshotMetadata": null,
-      "userAttachmentPath": null,
-      "userAttachmentMetadata": null,
+      "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshots/1704067200000_login_error.png",
+      "userScreenshotMetadata": {
+        "bucket": "bastiondesk-bucket",
+        "filename": "login_error.png",
+        "mimeType": "image/png",
+        "size": 189440,
+        "originalName": "login_error.png",
+        "uploadedAt": "2024-01-01T10:30:00.000Z"
+      },
+      "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachments/1704067201000_system_logs.txt",
+      "userAttachmentMetadata": {
+        "bucket": "bastiondesk-bucket",
+        "filename": "system_logs.txt",
+        "mimeType": "text/plain",
+        "size": 25600,
+        "originalName": "system_logs.txt",
+        "uploadedAt": "2024-01-01T10:30:01.000Z"
+      },
       "analystId": null,
       "analystNote": null,
       "czyRozwiazany": false,
@@ -980,9 +999,9 @@ curl "http://localhost:3333/api/employee/incidents?page=1&limit=10&status=Zgłos
 
 ### Szczegóły incydentu
 
-#### `GET /api/employee/incidents/:id`
+#### `GET /api/incidents/:id`
 
-**Opis:** Pobiera szczegółowe informacje o własnym incydencie.
+**Opis:** Pobiera szczegółowe informacje o incydencie. Pracownicy widzą tylko własne incydenty.
 
 **Nagłówki:**
 ```
@@ -994,7 +1013,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/employee/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
+curl http://localhost:3333/api/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1009,17 +1028,33 @@ curl http://localhost:3333/api/employee/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a
     "organizationId": "org_xyz789",
     "status": "Raport w trakcie",
     "userDescription": "Aplikacja zawiesza się przy logowaniu",
-    "userScreenshotPath": null,
-    "userScreenshotMetadata": null,
-    "userAttachmentPath": null,
-    "userAttachmentMetadata": null,
+    "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshots/1704067200000_error_screenshot.png",
+    "userScreenshotMetadata": {
+      "bucket": "bastiondesk-bucket",
+      "filename": "error_screenshot.png",
+      "mimeType": "image/png",
+      "size": 245760,
+      "originalName": "error.png",
+      "uploadedAt": "2024-01-01T10:30:00.000Z"
+    },
+    "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachments/1704067201000_error_logs.txt",
+    "userAttachmentMetadata": {
+      "bucket": "bastiondesk-bucket",
+      "filename": "error_logs.txt",
+      "mimeType": "text/plain",
+      "size": 15360,
+      "originalName": "logs.txt",
+      "uploadedAt": "2024-01-01T10:30:01.000Z"
+    },
     "analystId": "user_analyst456",
     "analystNote": "Sprawdzam logi systemowe...",
     "czyRozwiazany": false,
     "dataRozwiazania": null,
-    "analystReport": null,
+    "analystReportPath": null,
+    "analystReportMetadata": null,
     "analystReportData": null,
-    "analystStatement": null,
+    "analystStatementPath": null,
+    "analystStatementMetadata": null,
     "analystStatementData": null,
     "llmCategory": "Żółty",
     "createdAt": "2024-01-01T12:00:00.000Z",
@@ -1028,69 +1063,10 @@ curl http://localhost:3333/api/employee/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a
 }
 ```
 
-### Pobieranie raportów
-
-#### `GET /api/employee/incidents/:id/reports`
-
-**Opis:** Pobiera raporty analityka dla własnego incydentu.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Path Parameters:**
-- `id` (string, wymagane) - UUID incydentu
-
-**Przykład curl:**
-```bash
-curl http://localhost:3333/api/employee/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": {
-    "technical_analysis": "Analiza techniczna problemu...",
-    "findings": "Znalezione przyczyny...",
-    "recommendations": "Zalecenia rozwiązania..."
-  }
-}
-```
-
-### Pobieranie sprawozdań
-
-#### `GET /api/employee/incidents/:id/statements`
-
-**Opis:** Pobiera sprawozdania analityka dla własnego incydentu.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Path Parameters:**
-- `id` (string, wymagane) - UUID incydentu
-
-**Przykład curl:**
-```bash
-curl http://localhost:3333/api/employee/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/statements \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": {
-    "resolution_summary": "Podsumowanie rozwiązania...",
-    "actions_taken": "Podjęte działania...",
-    "preventive_measures": "Środki zapobiegawcze..."
-  }
-}
-```
+**Uwagi dla pracowników:**
+- Pracownicy mogą przeglądać swoje incydenty i ich status
+- Raporty i sprawozdania są dostępne w szczegółach incydentu jako metadane plików
+- Do pobierania plików używają analitycy i administratorzy (endpointy `/api/analyst/incidents/:id/files/...`)
 
 ## Incidents API - Analitycy
 
@@ -1111,6 +1087,8 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 - `page` (number, optional) - Numer strony (domyślnie: 1)
 - `limit` (number, optional) - Liczba wyników na stronę (domyślnie: 20, max: 100)
 - `status` (string, optional) - Filtrowanie po statusie
+- `sortBy` (string, optional) - Pole sortowania (domyślnie: `createdAt`)
+- `sortOrder` (string, optional) - Kierunek sortowania (domyślnie: `desc`)
 
 **Przykład curl:**
 ```bash
@@ -1129,12 +1107,38 @@ curl "http://localhost:3333/api/analyst/incidents/assigned?page=1&limit=10&statu
       "userId": "user_employee123",
       "organizationId": "org_xyz789",
       "status": "Raport w trakcie",
-      "userDescription": "Problem z aplikacją",
+      "userDescription": "Aplikacja zawiesza się przy logowaniu",
+      "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshots/1704067200000_login_error.png",
+      "userScreenshotMetadata": {
+        "bucket": "bastiondesk-bucket",
+        "filename": "login_error.png",
+        "mimeType": "image/png",
+        "size": 189440,
+        "originalName": "login_error.png",
+        "uploadedAt": "2024-01-01T10:30:00.000Z"
+      },
+      "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachments/1704067201000_debug_logs.txt",
+      "userAttachmentMetadata": {
+        "bucket": "bastiondesk-bucket",
+        "filename": "debug_logs.txt",
+        "mimeType": "text/plain",
+        "size": 32768,
+        "originalName": "debug_logs.txt",
+        "uploadedAt": "2024-01-01T10:30:01.000Z"
+      },
       "analystId": "user_analyst456",
-      "analystNote": "Sprawdzam logi systemowe...",
+      "analystNote": "Sprawdzam logi systemowe. Wydaje się, że problem jest związany z konfiguracją bazy danych. Przygotowuję szczegółową analizę.",
       "czyRozwiazany": false,
-      "userName": "Jan Kowalski",
-      "createdAt": "2024-01-01T12:00:00.000Z"
+      "dataRozwiazania": null,
+      "analystReportPath": null,
+      "analystReportMetadata": null,
+      "analystReportData": null,
+      "analystStatementPath": null,
+      "analystStatementMetadata": null,
+      "analystStatementData": null,
+      "llmCategory": "Żółty",
+      "createdAt": "2024-01-01T12:00:00.000Z",
+      "updatedAt": "2024-01-01T13:30:00.000Z"
     }
   ],
   "pagination": {
@@ -1176,10 +1180,31 @@ curl "http://localhost:3333/api/analyst/incidents/unassigned?page=1&limit=5" \
       "userId": "user_employee123",
       "organizationId": "org_xyz789",
       "status": "Zgłoszony",
-      "userDescription": "Problem z synchronizacją danych",
+      "userDescription": "Problem z synchronizacją danych - aplikacja nie aktualizuje rekordów w czasie rzeczywistym",
+      "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshots/1704067200000_sync_issue.png",
+      "userScreenshotMetadata": {
+        "bucket": "bastiondesk-bucket",
+        "filename": "sync_issue.png",
+        "mimeType": "image/png",
+        "size": 156000,
+        "originalName": "sync_issue.png",
+        "uploadedAt": "2024-01-01T10:30:00.000Z"
+      },
+      "userAttachmentPath": null,
+      "userAttachmentMetadata": null,
       "analystId": null,
-      "userName": "Jan Kowalski",
-      "createdAt": "2024-01-01T12:00:00.000Z"
+      "analystNote": null,
+      "czyRozwiazany": false,
+      "dataRozwiazania": null,
+      "analystReportPath": null,
+      "analystReportMetadata": null,
+      "analystReportData": null,
+      "analystStatementPath": null,
+      "analystStatementMetadata": null,
+      "analystStatementData": null,
+      "llmCategory": null,
+      "createdAt": "2024-01-01T12:00:00.000Z",
+      "updatedAt": "2024-01-01T12:00:00.000Z"
     }
   ],
   "pagination": {
@@ -1423,18 +1448,21 @@ curl http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6
     "organizationId": "org_xyz789",
     "status": "Raport złożony",
     "userDescription": "Problem z aplikacją",
-    "userScreenshotData": [],
-    "userAttachmentData": [],
+    "userScreenshotPath": null,
+    "userScreenshotMetadata": null,
+    "userAttachmentPath": null,
+    "userAttachmentMetadata": null,
     "analystId": "user_analyst456",
     "analystNote": "Problem rozwiązany poprzez restart serwera bazy danych",
     "czyRozwiazany": false,
     "analystReportPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports/analysis.pdf",
     "analystReportMetadata": {
-      "path": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports/analysis.pdf",
       "bucket": "bastiondesk-bucket",
-      "filename": "analysis.pdf",
+      "filename": "analysis_report.pdf",
       "mimeType": "application/pdf",
-      "size": 245760
+      "size": 245760,
+      "originalName": "analysis.pdf",
+      "uploadedAt": "2024-01-01T14:00:00.000Z"
     },
     "userName": "Jan Kowalski",
     "analystName": "Anna Nowak"
@@ -1491,11 +1519,12 @@ curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
     "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
     "analystReportPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports/analysis.pdf",
     "analystReportMetadata": {
-      "path": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports/analysis_report.pdf",
       "bucket": "bastiondesk-bucket",
       "filename": "analysis_report.pdf",
       "mimeType": "application/pdf",
-      "size": 245760
+      "size": 245760,
+      "originalName": "analysis.pdf",
+      "uploadedAt": "2024-01-01T14:00:00.000Z"
     },
     "analystReportData": "2024-01-01T14:00:00.000Z",
     "status": "Raport złożony"
@@ -1555,7 +1584,9 @@ curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
       "bucket": "bastiondesk-bucket",
       "filename": "final_statement.docx",
       "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "size": 189440
+      "size": 189440,
+      "originalName": "final_statement.docx",
+      "uploadedAt": "2024-01-01T15:00:00.000Z"
     },
     "analystStatementData": "2024-01-01T15:00:00.000Z",
     "status": "Sprawozdanie złożone"
@@ -1563,132 +1594,6 @@ curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
 }
 ```
 
-## Incidents API - Analitycy
-
-Wszystkie endpointy dla analityków wymagają autoryzacji z rolą `analityk` lub wyższą. Dostęp do wszystkich incydentów w ramach swojej organizacji.
-
-### Incydenty przypisane
-
-#### `GET /api/analyst/incidents/assigned`
-
-**Opis:** Pobiera incydenty przypisane do aktualnego analityka.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Query Parameters:**
-- `page` (number, optional) - Numer strony (domyślnie: 1)
-- `limit` (number, optional) - Liczba wyników na stronę (domyślnie: 20, max: 100)
-- `status` (string, optional) - Filtrowanie po statusie
-- `sortBy` (string, optional) - Pole sortowania (domyślnie: `createdAt`)
-- `sortOrder` (string, optional) - Kierunek sortowania (domyślnie: `desc`)
-
-**Przykład curl:**
-```bash
-curl "http://localhost:3333/api/analyst/incidents/assigned?page=1&limit=10&status=Raport w trakcie" \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
-      "dataZgloszenia": "2024-01-01T12:00:00.000Z",
-      "userId": "user_employee123",
-      "organizationId": "org_xyz789",
-      "status": "Raport w trakcie",
-      "userDescription": "Aplikacja zawiesza się przy logowaniu",
-      "userScreenshotPath": null,
-      "userScreenshotMetadata": null,
-      "userAttachmentPath": null,
-      "userAttachmentMetadata": null,
-      "analystId": "user_analyst456",
-      "analystNote": "Sprawdzam logi systemowe...",
-      "czyRozwiazany": false,
-      "dataRozwiazania": null,
-      "analystReportPath": null,
-      "analystReportMetadata": null,
-      "analystReportData": null,
-      "analystStatementPath": null,
-      "analystStatementMetadata": null,
-      "analystStatementData": null,
-      "llmCategory": null,
-      "createdAt": "2024-01-01T12:00:00.000Z",
-      "updatedAt": "2024-01-01T13:30:00.000Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 3,
-    "totalPages": 1
-  }
-}
-```
-
-### Incydenty nieprzypisane
-
-#### `GET /api/analyst/incidents/unassigned`
-
-**Opis:** Pobiera nieprzypisane incydenty w organizacji analityka.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Query Parameters:** takie same jak dla endpointu `/assigned`
-
-**Przykład curl:**
-```bash
-curl "http://localhost:3333/api/analyst/incidents/unassigned?page=1&limit=5" \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
-      "dataZgloszenia": "2024-01-01T12:00:00.000Z",
-      "userId": "user_employee123",
-      "organizationId": "org_xyz789",
-      "status": "Zgłoszony",
-      "userDescription": "Problem z synchronizacją danych",
-      "userScreenshotPath": null,
-      "userScreenshotMetadata": null,
-      "userAttachmentPath": null,
-      "userAttachmentMetadata": null,
-      "analystId": null,
-      "analystNote": null,
-      "czyRozwiazany": false,
-      "dataRozwiazania": null,
-      "analystReportPath": null,
-      "analystReportMetadata": null,
-      "analystReportData": null,
-      "analystStatementPath": null,
-      "analystStatementMetadata": null,
-      "analystStatementData": null,
-      "llmCategory": null,
-      "createdAt": "2024-01-01T12:00:00.000Z",
-      "updatedAt": "2024-01-01T12:00:00.000Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 5,
-    "total": 2,
-    "totalPages": 1
-  }
-}
-```
 
 ## Incidents API - Administratorzy
 
@@ -1792,16 +1697,41 @@ curl http://localhost:3333/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7
     "userId": "user_employee123",
     "organizationId": "org_xyz789",
     "status": "Raport w trakcie",
-    "userDescription": "Problem z aplikacją",
-    "userScreenshotData": [],
-    "userAttachmentData": [],
+    "userDescription": "Problem z synchronizacją danych między modułami aplikacji",
+    "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshots/1704067200000_sync_error.png",
+    "userScreenshotMetadata": {
+      "bucket": "bastiondesk-bucket",
+      "filename": "sync_error.png",
+      "mimeType": "image/png",
+      "size": 203400,
+      "originalName": "sync_error.png",
+      "uploadedAt": "2024-01-01T10:30:00.000Z"
+    },
+    "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachments/1704067201000_error_log.txt",
+    "userAttachmentMetadata": {
+      "bucket": "bastiondesk-bucket",
+      "filename": "error_log.txt",
+      "mimeType": "text/plain",
+      "size": 45000,
+      "originalName": "error_log.txt",
+      "uploadedAt": "2024-01-01T10:30:01.000Z"
+    },
     "analystId": "user_analyst456",
-    "analystNote": "Sprawdzam logi systemowe...",
+    "analystNote": "Analiza w toku. Problem wydaje się związany z konfiguracją API. Sprawdzam logi serwera aplikacji i bazy danych. Przygotowuję szczegółowy raport z rekomendacjami rozwiązania.",
     "czyRozwiazany": false,
     "dataRozwiazania": null,
-    "analystReport": null,
-    "analystReportData": null,
-    "analystStatement": null,
+    "analystReportPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports/sync_analysis.pdf",
+    "analystReportMetadata": {
+      "bucket": "bastiondesk-bucket",
+      "filename": "sync_analysis.pdf",
+      "mimeType": "application/pdf",
+      "size": 320000,
+      "originalName": "sync_analysis.pdf",
+      "uploadedAt": "2024-01-01T14:15:00.000Z"
+    },
+    "analystReportData": "2024-01-01T14:15:00.000Z",
+    "analystStatementPath": null,
+    "analystStatementMetadata": null,
     "analystStatementData": null,
     "llmCategory": "Żółty",
     "createdAt": "2024-01-01T12:00:00.000Z",
@@ -2131,6 +2061,246 @@ curl "http://localhost:3333/api/admin/analytics/metrics?period=30" \
 }
 ```
 
+## Przesyłanie plików do MinIO
+
+System umożliwia bezpieczne przesyłanie plików do MinIO (S3-compatible storage) z pełną walidacją i kontrolą dostępu. Wszystkie pliki są automatycznie organizowane w odpowiedniej strukturze katalogów.
+
+### Architektura przechowywania plików
+
+**Ścieżki w MinIO:**
+```
+incidents/{incidentId}/
+├── screenshots/{timestamp}_{filename}    # Screenshoty pracowników
+├── attachments/{timestamp}_{filename}    # Załączniki pracowników
+├── reports/{filename}                    # Raporty analityków
+└── statements/{filename}                 # Sprawozdania analityków
+```
+
+**Kontrola dostępu:**
+- **Pracownicy**: Mogą przesyłać tylko własne pliki do swoich incydentów
+- **Analitycy**: Mogą przesyłać raporty/sprawozdania tylko do przypisanych incydentów
+- **Administratorzy**: Pełny dostęp do wszystkich plików w organizacji
+
+### Tworzenie incydentu z plikami (Pracownicy)
+
+#### `POST /api/incidents`
+
+**Opis:** Tworzy nowe zgłoszenie incydentu. **Frontend wysyła tylko opis i pliki - backend automatycznie generuje ścieżki i metadane.**
+
+**Nagłówki:**
+```
+Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
+Content-Type: multipart/form-data (ustawia się automatycznie)
+```
+
+**Request Body (multipart/form-data):**
+```
+userDescription: "Opis problemu..."                    # wymagane
+screenshot: File (opcjonalny)                         # max 10MB, PNG/JPEG/JPG/WebP
+attachment: File (opcjonalny)                         # max 50MB, obrazki/PDF/ZIP/TXT/CSV
+```
+
+**Jak to działa dla frontend developera:**
+
+1. **Zbierz dane od użytkownika:**
+   ```javascript
+   const description = "Aplikacja zawiesza się przy logowaniu";
+   const screenshotFile = inputScreenshot.files[0];  // File object z <input type="file">
+   const attachmentFile = inputAttachment.files[0];  // File object z <input type="file">
+   ```
+
+2. **Utwórz FormData i wyślij:**
+   ```javascript
+   const formData = new FormData();
+   formData.append('userDescription', description);
+
+   if (screenshotFile) {
+       formData.append('screenshot', screenshotFile);
+   }
+   if (attachmentFile) {
+       formData.append('attachment', attachmentFile);
+   }
+
+   const response = await fetch('/api/incidents', {
+       method: 'POST',
+       headers: {
+           'Authorization': `Bearer ${token}`,
+           // NIE dodawać Content-Type - browser sam ustawi multipart/form-data
+       },
+       body: formData
+   });
+
+   const result = await response.json();
+   ```
+
+3. **Backend automatycznie:**
+   - Generuje unikalny `incidentId`
+   - Przesyła pliki do MinIO
+   - Tworzy ścieżki: `incidents/{incidentId}/screenshots/{timestamp}_{filename}`
+   - Zapisuje metadane w bazie danych
+   - Zwraca informacje o przesłanych plikach
+
+**Limity plików:**
+- **Screenshot**: 10MB (PNG, JPEG, JPG, WebP)
+- **Attachment**: 50MB (obrazy + PDF, ZIP, TXT, CSV)
+
+### Przesyłanie raportów (Analitycy)
+
+#### `POST /api/analyst/incidents/:id/reports`
+
+**Opis:** Przesyła raport analityka dotyczący zgłoszenia.
+
+**Nagłówki:**
+```
+Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "reportData": {
+    "filename": "analysis_report.pdf",
+    "data": "base64_encoded_pdf_data_without_prefix",
+    "mimeType": "application/pdf"
+  }
+}
+```
+
+**Przykład JavaScript:**
+```javascript
+// Konwertuj plik na base64
+const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+            // Usuń prefix "data:mime;base64,"
+            const base64 = reader.result.split(',')[1];
+            resolve(base64);
+        };
+        reader.onerror = reject;
+    });
+};
+
+const uploadReport = async (incidentId, file) => {
+    const base64Data = await fileToBase64(file);
+
+    const response = await fetch(`/api/analyst/incidents/${incidentId}/reports`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+            reportData: {
+                filename: file.name,
+                data: base64Data,
+                mimeType: file.type
+            }
+        })
+    });
+
+    return response.json();
+};
+```
+
+### Przesyłanie sprawozdań (Analitycy)
+
+#### `POST /api/analyst/incidents/:id/statements`
+
+**Opis:** Przesyła sprawozdanie analityka dotyczące zgłoszenia.
+
+**Format identyczny jak dla raportów:**
+```json
+{
+  "statementData": {
+    "filename": "final_statement.docx",
+    "data": "base64_encoded_docx_data",
+    "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  }
+}
+```
+
+**Limity plików:**
+- **Report**: 50MB (PDF, DOC, DOCX)
+- **Statement**: 50MB (PDF, DOC, DOCX)
+
+### Walidacja i bezpieczeństwo
+
+**Automatyczna walidacja:**
+- Rozmiar plików (wg typu)
+- Typ MIME (dozwolone formaty)
+- Nazwa pliku (sanitization)
+- Unikalne nazwy z timestamp
+- Kontrola dostępu wg roli
+
+**Bezpieczeństwo:**
+- Wszystkie pliki prywatne (acl: 'private')
+- Dostęp tylko przez API z kontrolą uprawnień
+- Metadane przechowywane w bazie danych
+- Automatyczne czyszczenie nieprawidłowych uploadów
+
+### Odpowiedzi API
+
+**Sukces (utworzono incydent z plikami):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
+    "userDescription": "Aplikacja zawiesza się przy logowaniu",
+    "status": "Nowe zgłoszenie",
+    "dataZgloszenia": "2024-01-01T10:30:00.000Z",
+    "organizationId": "org_abc123",
+
+    // Ścieżki i metadane plików (generowane automatycznie przez backend)
+    "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshot_1704067200000_error.png",
+    "userScreenshotMetadata": {
+      "originalName": "error.png",
+      "size": 245760,
+      "mimeType": "image/png",
+      "uploadedAt": "2024-01-01T10:30:00.000Z"
+    },
+    "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachment_1704067201000_log.txt",
+    "userAttachmentMetadata": {
+      "originalName": "log.txt",
+      "size": 15360,
+      "mimeType": "text/plain",
+      "size": 15360
+    }
+  }
+}
+```
+
+**Jak frontend może wykorzystać zwrócone dane:**
+
+```javascript
+const result = await response.json();
+
+// Zapisz ID incydentu do późniejszego użycia
+const incidentId = result.data.id;
+
+// Ścieżki plików są już gotowe - backend je wygenerował
+const screenshotPath = result.data.userScreenshotPath; // "incidents/uuid/screenshot_1704067200000_error.png"
+const attachmentPath = result.data.userAttachmentPath;   // "incidents/uuid/attachment_1704067201000_log.txt"
+
+// Metadane zawierają informacje o plikach
+console.log('Screenshot:', result.data.userScreenshotMetadata.originalName, result.data.userScreenshotMetadata.size, 'bytes');
+console.log('Attachment:', result.data.userAttachmentMetadata.mimeType);
+```
+
+**Błędy walidacji:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FILE_TOO_LARGE",
+    "message": "Plik jest za duży. Maksymalny rozmiar: 10MB"
+  }
+}
+```
+
 ## Pobieranie plików
 
 System umożliwia pobieranie plików (screenshotów, załączników, raportów i sprawozdań) z odpowiednią kontrolą dostępu.
@@ -2139,23 +2309,18 @@ System umożliwia pobieranie plików (screenshotów, załączników, raportów i
 
 | Rola | Dostęp do plików |
 |------|------------------|
-| **Pracownik** | Tylko własne pliki z własnych incydentów |
-| **Analityk** | Pliki z incydentów przypisanych do niego lub pliki analityków (raporty/sprawozdania) z jego organizacji |
-| **Administrator** | Wszystkie pliki z organizacji |
+| **Pracownik** | ❌ Brak dostępu do pobierania plików (tylko upload przy tworzeniu incydentu) |
+| **Analityk** | ✅ Pliki z incydentów przypisanych do niego lub pliki analityków (raporty/sprawozdania) z jego organizacji |
+| **Administrator** | ✅ Wszystkie pliki z organizacji |
 
 ### Typy plików
 
 - `screenshots` - Screenshoty przesłane przez pracowników
-- `attachments` - Załączniki przesłane przez pracowników  
+- `attachments` - Załączniki przesłane przez pracowników
 - `reports` - Raporty przesłane przez analityków
 - `statements` - Sprawozdania przesłane przez analityków
 
 ### Endpointy pobierania plików
-
-#### Pracownicy
-```
-GET /api/employee/incidents/:id/files/:type/:filename
-```
 
 #### Analitycy
 ```
@@ -2167,11 +2332,57 @@ GET /api/analyst/incidents/:id/files/:type/:filename
 GET /api/admin/incidents/:id/files/:type/:filename
 ```
 
-### Przykład użycia
+**Uwaga:** Pracownicy nie mają dostępu do pobierania plików ze względów bezpieczeństwa. Mogą oni tylko przesyłać pliki podczas tworzenia incydentu.
 
+### Przykład użycia - pobieranie plików
+
+**Jak frontend pobiera pliki (tylko dla analityków i administratorów):**
+
+```javascript
+// 1. Najpierw pobierz szczegóły incydentu (zawiera ścieżki plików)
+const incidentResponse = await fetch(`/api/analyst/incidents/${incidentId}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+});
+const incident = await incidentResponse.json();
+
+// 2. Użyj zwróconych ścieżek do pobrania plików
+if (incident.data.userScreenshotPath) {
+    // Pobierz plik używając endpointu analityka/administratora
+    const screenshotResponse = await fetch(
+        `/api/analyst/incidents/${incidentId}/files/screenshots/${incident.data.userScreenshotMetadata.originalName}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (screenshotResponse.ok) {
+        const blob = await screenshotResponse.blob();
+        // Zapisz lub wyświetl obraz
+        const url = URL.createObjectURL(blob);
+        document.getElementById('screenshot-img').src = url;
+    }
+}
+
+// Analogicznie dla innych typów plików
+if (incident.data.analystReportPath) {
+    const reportResponse = await fetch(
+        `/api/analyst/incidents/${incidentId}/files/reports/${incident.data.analystReportMetadata.originalName}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (reportResponse.ok) {
+        const blob = await reportResponse.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = incident.data.analystReportMetadata.originalName;
+        a.click();
+    }
+}
+```
+
+**cURL przykłady:**
 ```bash
-# Pobieranie screenshotu przez pracownika
-curl "http://localhost:3333/api/employee/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/screenshots/error.png" \
+# Pobieranie screenshotu przez analityka
+curl "http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/screenshots/error.png" \
   -H "Cookie: better-auth.session=session_token_here" \
   --output error.png
 
@@ -2179,6 +2390,11 @@ curl "http://localhost:3333/api/employee/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5
 curl "http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/reports/analysis.docx" \
   -H "Cookie: better-auth.session=session_token_here" \
   --output analysis.docx
+
+# Pobieranie sprawozdania przez administratora
+curl "http://localhost:3333/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/statements/final_report.pdf" \
+  -H "Cookie: better-auth.session=session_token_here" \
+  --output final_report.pdf
 ```
 
 ### Odpowiedzi błędów

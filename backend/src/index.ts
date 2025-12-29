@@ -14,9 +14,8 @@ import { errorHandler, notFoundHandler } from "./middleware";
 
 const app = express();
 
-// =============================================================================
+
 // CORS Configuration
-// =============================================================================
 app.use(
 	cors({
 		origin: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
@@ -26,20 +25,17 @@ app.use(
 	}),
 );
 
-// =============================================================================
-// Better-Auth Handler (MUSI być PRZED express.json()!)
-// =============================================================================
+
+// Better-Auth Handler
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
-// =============================================================================
+
 // Middleware
-// =============================================================================
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// =============================================================================
+
 // Health Check (z weryfikacją bazy danych)
-// =============================================================================
 app.get("/health", async (_req, res) => {
 	const dbConnected = await checkDatabaseConnection();
 
@@ -53,9 +49,8 @@ app.get("/health", async (_req, res) => {
 	});
 });
 
-// =============================================================================
+
 // API Info
-// =============================================================================
 app.get("/api", (_req, res) => {
 	res.json({
 		message: "BastionDesk API",
@@ -68,36 +63,31 @@ app.get("/api", (_req, res) => {
 	});
 });
 
-// =============================================================================
-// API Routes
-// =============================================================================
+
 import incidentsRouter from "./routes/incidents";
 app.use("/api/incidents", incidentsRouter);
 
-// =============================================================================
-// Error Handling
-// =============================================================================
+
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// =============================================================================
+
 // Start Server
-// =============================================================================
 const server = app.listen(env.PORT, () => {
 	console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║                    BastionDesk Backend                       ║
-╠══════════════════════════════════════════════════════════════╣
-║  🚀 Server running on port ${env.PORT.toString().padEnd(32)}║
-║  📡 Environment: ${env.NODE_ENV.padEnd(42)}║
-║  🔐 Auth URL: ${env.BETTER_AUTH_URL.padEnd(45)}║
-╚══════════════════════════════════════════════════════════════╝
+	Server running on port ${env.PORT.toString().padEnd(32)}
+	Environment: ${env.NODE_ENV.padEnd(42)}
+	Auth URL: ${env.BETTER_AUTH_URL.padEnd(45)}
+	
+	Available endpoints:
+	/api/auth/* - Better-Auth endpoints
+	/api/incidents - Incidents API
+	/health - Health check
   `);
 });
 
-// =============================================================================
+
 // Graceful Shutdown
-// =============================================================================
 async function gracefulShutdown(signal: string) {
 	console.log(`\n${signal} received, shutting down gracefully...`);
 

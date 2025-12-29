@@ -80,7 +80,7 @@ async function getAllIncidents(req: Request, res: Response) {
 
 		// Pobierz incydenty
 		const orderBy = `i."${sortBy}" ${sortOrder}`;
-		const incidents = await query<Incident>(`
+		const incidents = await query<Incident & { userName?: string; analystName?: string }>(`
 			SELECT
 				i.id,
 				i."dataZgloszenia",
