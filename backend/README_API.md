@@ -1255,7 +1255,7 @@ curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
 
 #### `POST /api/analyst/incidents/:id/unassign`
 
-**Opis:** Oddaje przypisane zgłoszenie z powrotem do puli nieprzypisanych incydentów.
+**Opis:** Oddaje przypisane zgłoszenie z powrotem do puli nieprzypisanych incydentów. Mogą to zrobić zarówno analityk (tylko własne incydenty) jak i administrator (wszystkie incydenty).
 
 **Nagłówki:**
 ```

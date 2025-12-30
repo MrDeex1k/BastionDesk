@@ -491,13 +491,16 @@ async function unassignIncident(req: Request, res: Response) {
 			});
 		}
 
-		// Sprawdź czy incydent jest przypisany do bieżącego analityka
-		if (incident.analystId !== userId) {
+		// Sprawdź czy użytkownik ma prawo oddać incydent do puli
+		// Admin może oddawać wszystkie incydenty, analityk tylko przypisane do niego
+		const canUnassign = incident.analystId === userId || authReq.memberRole === 'admin';
+
+		if (!canUnassign) {
 			return res.status(403).json({
 				success: false,
 				error: {
-					code: 'INCIDENT_NOT_ASSIGNED',
-					message: 'Zgłoszenie nie jest przypisane do Ciebie',
+					code: 'CANNOT_UNASSIGN_INCIDENT',
+					message: 'Brak uprawnień do oddania tego zgłoszenia do puli',
 				},
 			});
 		}
