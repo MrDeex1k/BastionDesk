@@ -1,7 +1,7 @@
-.venv
 .env
-.DS_Store
-.vscode
 .git
+.venv
+.lock
+.vscode
+.DS_Store
 __pycache__
-uv.lock

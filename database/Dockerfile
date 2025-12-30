@@ -1,5 +1,4 @@
-# PostgreSQL 18 Dockerfile
-FROM postgres:18
+FROM postgres:18.1
 
 # Set environment labels
 LABEL maintainer="BastionDesk"
