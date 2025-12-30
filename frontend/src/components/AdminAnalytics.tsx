@@ -195,7 +195,10 @@ export function AdminAnalytics() {
     }
   });
 
-  const formatResolutionTime = (avgTime: { days: number; hours: number; minutes: number }) => {
+  const formatResolutionTime = (avgTime: { days: number; hours: number; minutes: number } | number) => {
+    if (typeof avgTime === 'number') {
+      return "0m";
+    }
     if (avgTime.days > 0) {
       return `${avgTime.days}d ${avgTime.hours}h`;
     } else if (avgTime.hours > 0) {
@@ -246,7 +249,7 @@ export function AdminAnalytics() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl text-slate-200">
-              {statsLoading ? "..." : formatResolutionTime(statsData?.data.avgResolutionTime!)}
+              {statsLoading ? "..." : formatResolutionTime(statsData?.data.avgResolutionTime ?? 0)}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               Dla rozwiązanych incydentów
@@ -427,10 +430,11 @@ export function AdminAnalytics() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={(entry: any) => `${entry.category}: ${entry.count}`}
+                      label
                       outerRadius={100}
                       fill="#8884d8"
                       dataKey="count"
+                      nameKey="category"
                     >
                       {statsData?.data?.categoryBreakdown?.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.category] || "#64748b"} />

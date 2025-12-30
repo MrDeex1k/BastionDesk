@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
@@ -93,9 +93,9 @@ const getStatusIcon = (status: string) => {
 export function MyIncidentsList() {
   const [page, setPage] = useState(1);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const LIMIT = 5; 
+  const LIMIT = 5;
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery<IncidentsResponse>({
     queryKey: ["myIncidents", page],
     queryFn: async () => {
       // --- REAL SERVER IMPLEMENTATION ---
@@ -183,8 +183,8 @@ export function MyIncidentsList() {
         }
       } as IncidentsResponse;
     },
-    placeholderData: keepPreviousData, 
-  }) as { data: IncidentsResponse | undefined; isLoading: boolean; isError: boolean };
+    placeholderData: (previousData) => previousData, 
+  });
 
   // Jeśli wybrano zgłoszenie, pokaż szczegóły
   if (selectedIncidentId) {
@@ -207,7 +207,7 @@ export function MyIncidentsList() {
             </div>
           ) : (
             <div className="space-y-4 pb-4">
-              {data?.data.map((incident: any) => (
+              {data?.data.map((incident) => (
                 <div
                   key={incident.id}
                   onClick={() => setSelectedIncidentId(incident.id)}

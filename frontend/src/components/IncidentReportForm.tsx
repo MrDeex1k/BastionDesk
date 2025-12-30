@@ -223,7 +223,7 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
                         variant="ghost"
                         size="sm"
                         className="h-6 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 z-10"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                        onClick={(e) => {
                           e.preventDefault();
                           setScreenshot(null);
                           if (screenshotInputRef.current) screenshotInputRef.current.value = "";
@@ -273,7 +273,7 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
                         variant="ghost"
                         size="sm"
                         className="h-6 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 z-10"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                        onClick={(e) => {
                           e.preventDefault();
                           setAttachment(null);
                           if (attachmentInputRef.current) attachmentInputRef.current.value = "";
