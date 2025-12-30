@@ -57,6 +57,14 @@ services:
     networks:
       - bastiondesk-net-internal
 
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    networks:
+      - bastiondesk-net-external
+
   nginx:
     build:
       context: ./nginx
