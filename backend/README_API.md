@@ -313,6 +313,7 @@ curl http://localhost:3333/api/auth/session \
 }
 ```
 
+
 ### Password Management (Zarządzanie hasłem)
 
 #### `POST /api/auth/request-password-reset`
@@ -404,6 +405,26 @@ curl -X POST http://localhost:3333/api/auth/change-password \
   "message": "Hasło zostało pomyślnie zmienione."
 }
 ```
+
+### Sign Out (Wylogowanie)
+
+#### `POST /api/auth/sign-out`
+
+**Opis:** Wylogowuje aktualnego użytkownika i kończy sesję.
+
+**Przykład curl:**
+```bash
+curl -X POST http://localhost:3333/api/auth/sign-out \
+  -H "Cookie: better-auth.session=session_token_here"
+```
+
+**Response (Success):**
+```json
+{
+  "success": true
+}
+```
+
 
 ### Organization (Organizacja)
 
@@ -551,7 +572,7 @@ curl -X POST http://localhost:3333/api/auth/organization/invite-member \
 
 #### `POST /api/auth/organization/add-member`
 
-**Opis:** Dodaje istniejącego użytkownika bezpośrednio do organizacji (bez zaproszenia).
+**Opis:** Dodaje istniejącego użytkownika bezpośrednio do organizacji (bez zaproszenia) na podstawie **userId**. Jeśli chcesz dodać użytkownika po adresie email, użyj endpointu `/add-member-by-email`.
 
 **Request Body:**
 ```json
@@ -592,6 +613,81 @@ curl -X POST http://localhost:3333/api/auth/organization/add-member \
   }
 }
 ```
+
+#### `POST /api/auth/organization/add-member-by-email`
+
+**Opis:** Dodaje istniejącego użytkownika bezpośrednio do organizacji (bez zaproszenia) na podstawie **adresu email**. Endpoint automatycznie znajduje userId na podstawie emaila i dodaje użytkownika do organizacji.
+
+**Request Body:**
+```json
+{
+  "email": "existing@example.com",
+  "role": "pracownik",
+  "organizationId": "org_xyz789"
+}
+```
+
+**Parametry:**
+- `email` (string, wymagane) - Adres email użytkownika do dodania
+- `role` (string, wymagane) - Rola użytkownika: `"admin"`, `"analityk"`, lub `"pracownik"`
+- `organizationId` (string, opcjonalne) - ID organizacji (domyślnie: aktywna organizacja)
+
+**Przykład curl:**
+```bash
+curl -X POST http://localhost:3333/api/auth/organization/add-member-by-email \
+  -H "Content-Type: application/json" \
+  -H "Cookie: better-auth.session=session_token_here" \
+  -d '{
+    "email": "existing@example.com",
+    "role": "pracownik"
+  }'
+```
+
+**Response (Success):**
+```json
+{
+  "member": {
+    "id": "member_new456",
+    "userId": "user_existing123",
+    "organizationId": "org_xyz789",
+    "role": "pracownik",
+    "createdAt": "2024-01-01T12:00:00.000Z",
+    "user": {
+      "id": "user_existing123",
+      "email": "existing@example.com",
+      "name": "Existing User",
+      "emailVerified": true,
+      "createdAt": "2024-01-01T10:00:00.000Z",
+      "updatedAt": "2024-01-01T10:00:00.000Z"
+    }
+  }
+}
+```
+
+**Response (Error - użytkownik nie istnieje):**
+```json
+{
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "Użytkownik o podanym adresie email nie istnieje w systemie"
+  }
+}
+```
+
+**Response (Error - użytkownik już jest członkiem):**
+```json
+{
+  "error": {
+    "code": "ALREADY_MEMBER",
+    "message": "Użytkownik jest już członkiem tej organizacji"
+  }
+}
+```
+
+**Uwagi:**
+- Użytkownik musi już istnieć w systemie (musi być zarejestrowany)
+- Jeśli chcesz wysłać zaproszenie do nowego użytkownika, użyj endpointu `/invite-member`
+- Endpoint sprawdza czy użytkownik nie jest już członkiem organizacji
 
 #### `GET /api/auth/organization/list-members`
 
@@ -744,7 +840,41 @@ curl http://localhost:3333/api/auth/organization/get-active-member \
 }
 ```
 
+
 ### PassKey (Klucze sprzętowe)
+
+#### `POST /api/auth/passkey/check-availability`
+
+**Opis:** Sprawdza czy dla podanego adresu email istnieją zarejestrowane klucze PassKey. Endpoint publiczny, przydatny do budowania UX logowania (np. pokazywanie przycisku "Zaloguj kluczem" tylko gdy użytkownik ma zarejestrowane klucze).
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Przykład curl:**
+```bash
+curl -X POST http://localhost:3333/api/auth/passkey/check-availability \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+**Response (Success):**
+```json
+{
+  "hasPasskeys": true,
+  "count": 2
+}
+```
+
+**Uwagi:**
+- Endpoint publiczny (nie wymaga autoryzacji)
+- Dla bezpieczeństwa zwraca `hasPasskeys: false` zarówno gdy użytkownik nie istnieje, jak i gdy nie ma kluczy
+- `count` zawiera liczbę zarejestrowanych kluczy (0 jeśli brak)
 
 #### `POST /api/auth/passkey/register`
 
@@ -816,24 +946,6 @@ curl -X POST http://localhost:3333/api/auth/passkey/sign-in \
 }
 ```
 
-### Sign Out (Wylogowanie)
-
-#### `POST /api/auth/sign-out`
-
-**Opis:** Wylogowuje aktualnego użytkownika i kończy sesję.
-
-**Przykład curl:**
-```bash
-curl -X POST http://localhost:3333/api/auth/sign-out \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true
-}
-```
 
 ## Incidents API - Pracownicy
 

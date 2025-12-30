@@ -14,6 +14,8 @@ import { passkey } from "@better-auth/passkey";
 import { organization, haveIBeenPwned } from "better-auth/plugins";
 import { env } from "./env";
 import { ac, admin, analityk, pracownik } from "./permissions";
+import { passkeyCheckPlugin } from "./passkey-check-plugin";
+import { organizationHelpersPlugin } from "./organization-helpers-plugin";
 
 // =============================================================================
 // Database Pool Configuration
@@ -73,6 +75,11 @@ export const auth = betterAuth({
 		}),
 
 		// ---------------------------------------------------------------------
+		// PassKey Check Plugin - sprawdzanie dostępności kluczy
+		// ---------------------------------------------------------------------
+		passkeyCheckPlugin(),
+
+		// ---------------------------------------------------------------------
 		// HaveIBeenPwned - sprawdzanie kompromitacji haseł
 		// Używamy tylko customPasswordCompromisedMessage (zgodnie z API)
 		// ---------------------------------------------------------------------
@@ -103,6 +110,11 @@ export const auth = betterAuth({
 			//   // Implementacja wysyłania emaila
 			// },
 		}),
+
+		// ---------------------------------------------------------------------
+		// Organization Helpers Plugin - rozszerzenia funkcjonalności organizacji
+		// ---------------------------------------------------------------------
+		organizationHelpersPlugin(),
 	],
 });
 
