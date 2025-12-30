@@ -54,7 +54,7 @@ app.get("/health", async (_req, res) => {
 app.get("/api", (_req, res) => {
 	res.json({
 		message: "BastionDesk API",
-		version: "0.1.0",
+		version: "0.9.0",
 		endpoints: {
 			auth: "/api/auth/*",
 			incidents: "/api/incidents",
