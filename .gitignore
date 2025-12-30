@@ -1,4 +1,5 @@
 .env
+tests
 .env.*
 db.sql
 *.lock

@@ -1447,13 +1447,27 @@ curl http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6
     "userId": "user_employee123",
     "organizationId": "org_xyz789",
     "status": "Raport złożony",
-    "userDescription": "Problem z aplikacją",
-    "userScreenshotPath": null,
-    "userScreenshotMetadata": null,
-    "userAttachmentPath": null,
-    "userAttachmentMetadata": null,
+    "userDescription": "Problem z synchronizacją danych - aplikacja nie aktualizuje rekordów w czasie rzeczywistym",
+    "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshots/1704067200000/sync_issue.png",
+    "userScreenshotMetadata": {
+      "bucket": "bastiondesk-bucket",
+      "filename": "sync_issue.png",
+      "mimeType": "image/png",
+      "size": 203400,
+      "originalName": "sync_issue.png",
+      "uploadedAt": "2024-01-01T10:30:00.000Z"
+    },
+    "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachments/1704067201000/debug_logs.txt",
+    "userAttachmentMetadata": {
+      "bucket": "bastiondesk-bucket",
+      "filename": "debug_logs.txt",
+      "mimeType": "text/plain",
+      "size": 32768,
+      "originalName": "debug_logs.txt",
+      "uploadedAt": "2024-01-01T10:30:01.000Z"
+    },
     "analystId": "user_analyst456",
-    "analystNote": "Problem rozwiązany poprzez restart serwera bazy danych",
+    "analystNote": "Problem rozwiązany poprzez restart serwera bazy danych. Przyczyną była utrata połączenia z bazą danych cache. Zaimplementowano automatyczne odzyskiwanie połączenia.",
     "czyRozwiazany": false,
     "analystReportPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports/analysis.pdf",
     "analystReportMetadata": {
@@ -1595,256 +1609,6 @@ curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
 ```
 
 
-## Incidents API - Administratorzy
-
-Wszystkie endpointy dla administratorów wymagają autoryzacji z rolą `admin`. Dostęp do wszystkich incydentów w ramach swojej organizacji.
-
-### Wszystkie incydenty
-
-#### `GET /api/admin/incidents`
-
-**Opis:** Pobiera wszystkie incydenty w organizacji administratora z paginacją, filtrowaniem i sortowaniem.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Query Parameters:**
-- `page` (number, optional) - Numer strony (domyślnie: 1)
-- `limit` (number, optional) - Liczba wyników na stronę (domyślnie: 20, max: 100)
-- `status` (string, optional) - Filtrowanie po statusie (`Zgłoszony`, `Raport w trakcie`, `Raport złożony`, `Sprawozdanie w trakcie`, `Sprawozdanie złożone`, `Odrzucone`)
-- `userId` (string, optional) - Filtrowanie po ID użytkownika
-- `analystId` (string, optional) - Filtrowanie po ID analityka (`null` dla nieprzypisanych)
-- `sortBy` (string, optional) - Pole sortowania (`createdAt`, `updatedAt`, `status`, `dataZgloszenia`, `userId`, `analystId`) - domyślnie: `createdAt`
-- `sortOrder` (string, optional) - Kierunek sortowania (`asc`, `desc`) - domyślnie: `desc`
-
-**Przykład curl:**
-```bash
-curl "http://localhost:3333/api/admin/incidents?page=1&limit=10&status=Zgłoszony&sortBy=createdAt&sortOrder=desc" \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
-      "dataZgloszenia": "2024-01-01T12:00:00.000Z",
-      "userId": "user_employee123",
-      "organizationId": "org_xyz789",
-      "status": "Zgłoszony",
-      "userDescription": "Problem z aplikacją",
-      "userScreenshotPath": null,
-      "userScreenshotMetadata": null,
-      "userAttachmentPath": null,
-      "userAttachmentMetadata": null,
-      "analystId": null,
-      "analystNote": null,
-      "czyRozwiazany": false,
-      "dataRozwiazania": null,
-      "analystReportPath": null,
-      "analystReportMetadata": null,
-      "analystReportData": null,
-      "analystStatementPath": null,
-      "analystStatementMetadata": null,
-      "analystStatementData": null,
-      "llmCategory": null,
-      "createdAt": "2024-01-01T12:00:00.000Z",
-      "updatedAt": "2024-01-01T12:00:00.000Z",
-      "userName": "Jan Kowalski",
-      "analystName": null
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 25,
-    "totalPages": 3
-  }
-}
-```
-
-### Szczegóły incydentu (admin)
-
-#### `GET /api/admin/incidents/:id`
-
-**Opis:** Pobiera szczegółowe informacje o dowolnym incydencie w organizacji administratora.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Path Parameters:**
-- `id` (string, wymagane) - UUID incydentu
-
-**Przykład curl:**
-```bash
-curl http://localhost:3333/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
-    "dataZgloszenia": "2024-01-01T12:00:00.000Z",
-    "userId": "user_employee123",
-    "organizationId": "org_xyz789",
-    "status": "Raport w trakcie",
-    "userDescription": "Problem z synchronizacją danych między modułami aplikacji",
-    "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/screenshots/1704067200000_sync_error.png",
-    "userScreenshotMetadata": {
-      "bucket": "bastiondesk-bucket",
-      "filename": "sync_error.png",
-      "mimeType": "image/png",
-      "size": 203400,
-      "originalName": "sync_error.png",
-      "uploadedAt": "2024-01-01T10:30:00.000Z"
-    },
-    "userAttachmentPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/attachments/1704067201000_error_log.txt",
-    "userAttachmentMetadata": {
-      "bucket": "bastiondesk-bucket",
-      "filename": "error_log.txt",
-      "mimeType": "text/plain",
-      "size": 45000,
-      "originalName": "error_log.txt",
-      "uploadedAt": "2024-01-01T10:30:01.000Z"
-    },
-    "analystId": "user_analyst456",
-    "analystNote": "Analiza w toku. Problem wydaje się związany z konfiguracją API. Sprawdzam logi serwera aplikacji i bazy danych. Przygotowuję szczegółowy raport z rekomendacjami rozwiązania.",
-    "czyRozwiazany": false,
-    "dataRozwiazania": null,
-    "analystReportPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports/sync_analysis.pdf",
-    "analystReportMetadata": {
-      "bucket": "bastiondesk-bucket",
-      "filename": "sync_analysis.pdf",
-      "mimeType": "application/pdf",
-      "size": 320000,
-      "originalName": "sync_analysis.pdf",
-      "uploadedAt": "2024-01-01T14:15:00.000Z"
-    },
-    "analystReportData": "2024-01-01T14:15:00.000Z",
-    "analystStatementPath": null,
-    "analystStatementMetadata": null,
-    "analystStatementData": null,
-    "llmCategory": "Żółty",
-    "createdAt": "2024-01-01T12:00:00.000Z",
-    "updatedAt": "2024-01-01T13:30:00.000Z",
-    "userName": "Jan Kowalski",
-    "analystName": "Anna Nowak"
-  }
-}
-```
-
-### Statystyki incydentów
-
-#### `GET /api/admin/analytics/stats`
-
-**Opis:** Pobiera podstawowe statystyki incydentów dla organizacji administratora.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Przykład curl:**
-```bash
-curl http://localhost:3333/api/admin/analytics/stats \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": {
-    "totalIncidents": 150,
-    "resolvedIncidents": 120,
-    "resolvedPercentage": 80,
-    "avgResolutionTime": {
-      "days": 2,
-      "hours": 4,
-      "minutes": 30,
-      "seconds": 15,
-      "totalSeconds": 183015
-    },
-    "statusBreakdown": [
-      { "status": "Zgłoszony", "count": 5 },
-      { "status": "Raport w trakcie", "count": 10 },
-      { "status": "Raport złożony", "count": 15 },
-      { "status": "Sprawozdanie w trakcie", "count": 20 },
-      { "status": "Sprawozdanie złożone", "count": 85 },
-      { "status": "Odrzucone", "count": 15 }
-    ],
-    "categoryBreakdown": [
-      { "category": "Zielony", "count": 50 },
-      { "category": "Żółty", "count": 70 },
-      { "category": "Czerwony", "count": 30 }
-    ]
-  }
-}
-```
-
-### Szczegółowe metryki
-
-#### `GET /api/admin/analytics/metrics`
-
-**Opis:** Pobiera szczegółowe metryki czasowe i statystyki użytkowników dla organizacji administratora.
-
-**Nagłówki:**
-```
-Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
-```
-
-**Query Parameters:**
-- `period` (number, optional) - Okres w dniach (domyślnie: 30, max: 365)
-
-**Przykład curl:**
-```bash
-curl "http://localhost:3333/api/admin/analytics/metrics?period=30" \
-  -H "Cookie: better-auth.session=session_token_here"
-```
-
-**Response (Success):**
-```json
-{
-  "success": true,
-  "data": {
-    "period": {
-      "days": 30,
-      "startDate": "2024-11-10T00:00:00.000Z"
-    },
-    "timeSeries": {
-      "incidentsCreated": [
-        { "date": "2024-11-10", "count": 5 },
-        { "date": "2024-11-11", "count": 8 }
-      ],
-      "incidentsResolved": [
-        { "date": "2024-11-12", "count": 3 },
-        { "date": "2024-11-13", "count": 6 }
-      ],
-      "avgResolutionTimeHours": [
-        { "date": "2024-11-12", "avg_time_hours": 24.5 },
-        { "date": "2024-11-13", "avg_time_hours": 18.2 }
-      ]
-    },
-    "topUsers": [
-      { "userId": "user_123", "userName": "Jan Kowalski", "count": 15 },
-      { "userId": "user_456", "userName": "Anna Nowak", "count": 12 }
-    ],
-    "topAnalysts": [
-      { "analystId": "user_789", "analystName": "Piotr Wiśniewski", "resolved": 25 },
-      { "analystId": "user_101", "analystName": "Maria Jankowska", "resolved": 22 }
-    ]
-  }
-}
-```
 
 ## Incidents API - Administratorzy
 
@@ -1882,17 +1646,27 @@ curl "http://localhost:3333/api/admin/incidents?page=1&limit=10&status=Zgłoszon
   "success": true,
   "data": [
     {
-      "id": "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
-      "dataZgloszenia": "2024-01-01T12:00:00.000Z",
-      "userId": "user_employee123",
+      "id": "0192d1f8-5c8e-7b1a-8f2d-4e5f6a7b8c9d",
+      "dataZgloszenia": "2024-01-01T11:30:00.000Z",
+      "userId": "user_employee456",
       "organizationId": "org_xyz789",
-      "status": "Zgłoszony",
-      "userDescription": "Problem z aplikacją",
-      "analystId": null,
+      "status": "Raport w trakcie",
+      "userDescription": "Aplikacja zawiesza się przy logowaniu",
+      "userScreenshotPath": "incidents/0192d1f8-5c8e-7b1a-8f2d-4e5f6a7b8c9d/screenshots/1704064200000/login_error.png",
+      "userScreenshotMetadata": {
+        "bucket": "bastiondesk-bucket",
+        "filename": "login_error.png",
+        "mimeType": "image/png",
+        "size": 245760,
+        "originalName": "login_error.png",
+        "uploadedAt": "2024-01-01T09:30:00.000Z"
+      },
+      "analystId": "user_analyst789",
+      "analystNote": "Sprawdzam logi autoryzacji. Problem może być związany z konfiguracją LDAP.",
       "czyRozwiazany": false,
-      "userName": "Jan Kowalski",
-      "analystName": null,
-      "createdAt": "2024-01-01T12:00:00.000Z"
+      "userName": "Anna Nowak",
+      "analystName": "Piotr Wiśniewski",
+      "createdAt": "2024-01-01T11:30:00.000Z"
     }
   ],
   "pagination": {
