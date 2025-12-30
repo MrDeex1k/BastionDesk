@@ -9,7 +9,7 @@ COPY . .
 RUN if [ -f bun.lockb ]; then bun install --ci --frozen-lockfile; else bun install --ci; fi
 RUN bun run build
 
-FROM nginx:stable-alpine
+FROM nginx:1.29.4-alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
