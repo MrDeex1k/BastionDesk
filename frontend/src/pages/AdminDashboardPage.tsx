@@ -1,6 +1,13 @@
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Building2, Activity } from "lucide-react";
 import { AdminIncidentList } from "../components/AdminIncidentList";
 import { AdminAnalytics } from "../components/AdminAnalytics";
+import { AdminOrganizationManagement } from "../components/AdminOrganizationManagement";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
 
 export function AdminDashboardPage() {
   return (
@@ -15,20 +22,47 @@ export function AdminDashboardPage() {
           Panel Administratorski
         </h1>
         <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-          Zarządzanie wszystkimi incydentami bezpieczeństwa w organizacji
+          Zarządzanie bezpieczeństwem i strukturą organizacji
         </p>
       </div>
 
-      <div className="w-full max-w-7xl space-y-8">
-        {/* Analytics Section */}
-        <div>
-          <AdminAnalytics />
-        </div>
+      <div className="w-full max-w-7xl">
+        <Tabs defaultValue="stats" className="w-full space-y-8">
+          <div className="flex justify-center">
+            <TabsList className="grid w-full max-w-md grid-cols-2 bg-slate-900 border border-slate-800">
+              <TabsTrigger 
+                value="stats"
+                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400"
+              >
+                <Activity className="h-4 w-4 mr-2" />
+                Statystyki i Incydenty
+              </TabsTrigger>
+              <TabsTrigger 
+                value="organization"
+                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-400"
+              >
+                <Building2 className="h-4 w-4 mr-2" />
+                Zarządzanie Organizacją
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-        {/* Incidents List */}
-        <div>
-          <AdminIncidentList />
-        </div>
+          <TabsContent value="stats" className="space-y-8">
+            {/* Analytics Section */}
+            <div>
+              <AdminAnalytics />
+            </div>
+
+            {/* Incidents List */}
+            <div>
+              <AdminIncidentList />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="organization" className="space-y-8">
+            <AdminOrganizationManagement />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

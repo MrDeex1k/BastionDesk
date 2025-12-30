@@ -1,5 +1,6 @@
 import { Shield, LogIn, LogOut, LayoutDashboard } from "lucide-react";
 import { Button } from "./ui/button";
+import { SettingsDialog } from "./SettingsDialog";
 
 interface HeaderProps {
   onLogoClick: () => void;
@@ -62,6 +63,9 @@ export function Header({
                 <LayoutDashboard className="size-4 mr-2" />
                 {getDashboardName(userRole)}
               </Button>
+              
+              <SettingsDialog />
+              
               <Button 
                 variant="ghost" 
                 className="text-slate-400 hover:text-white hover:bg-white/5"

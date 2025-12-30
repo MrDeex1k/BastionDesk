@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
@@ -6,8 +6,7 @@ import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { Textarea } from "./ui/textarea";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import {
+import { Label } from "./ui/label";import type { LucideIcon } from "lucide-react";import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -49,15 +48,16 @@ interface IncidentDetail {
   status: string;
   userDescription: string;
   userScreenshotPath?: string | null;
-  userScreenshotMetadata?: any | null;
+  userScreenshotMetadata?: Record<string, unknown> | null;
   userAttachmentPath?: string | null;
-  userAttachmentMetadata?: any | null;
+  userAttachmentMetadata?: Record<string, unknown> | null;
   analystId: string | null;
   analystNote: string | null;
   czyRozwiazany: boolean;
   dataRozwiazania?: string | null;
   analystReportPath?: string;
   analystReportMetadata?: {
+    path?: string;
     bucket: string;
     filename: string;
     mimeType: string;
@@ -97,7 +97,7 @@ const getStatusColor = (status: string) => {
 
 type ActionType = 'status' | 'upload_report' | 'upload_statement';
 
-const getAvailableTransitions = (currentStatus: string): { label: string, value: string, variant?: string, icon: any, actionType?: ActionType }[] => {
+const getAvailableTransitions = (currentStatus: string): { label: string, value: string, variant?: string, icon: LucideIcon, actionType?: ActionType }[] => {
   switch (currentStatus) {
     case "Zgłoszony":
       return [
@@ -118,19 +118,6 @@ const getAvailableTransitions = (currentStatus: string): { label: string, value:
     default:
       return [];
   }
-};
-
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = error => reject(error);
-  });
 };
 
 export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: IncidentDetailsProps) {
@@ -157,7 +144,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
       */
 
       // --- MOCK IMPLEMENTATION ---
-      const cached = queryClient.getQueryData<any>(["incident", incidentId]);
+      const cached = queryClient.getQueryData<IncidentDetailResponse>(["incident", incidentId]);
       if (cached?.data?.id === incidentId) {
         // use cached data if available
       }
@@ -198,6 +185,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
           dataRozwiazania: null,
           analystReportPath: `incidents/${mockIncidentId}/reports/sync_analysis.pdf`,
           analystReportMetadata: {
+            path: `incidents/${mockIncidentId}/reports/sync_analysis.pdf`,
             bucket: "bastiondesk-bucket",
             filename: "sync_analysis.pdf",
             mimeType: "application/pdf",
@@ -219,13 +207,10 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     }
   });
 
-  useEffect(() => {
-    if (data?.data?.analystNote) {
-      setNoteContent(data.data.analystNote);
-    } else {
-      setNoteContent("");
-    }
-  }, [data]);
+  // Initialize note content from data
+  if (data?.data?.analystNote && noteContent === "") {
+    setNoteContent(data.data.analystNote);
+  }
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -242,14 +227,14 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     },
     onSuccess: () => {
       toast.success("Incydent został przypisany do Ciebie");
-      queryClient.setQueryData(["incident", incidentId], (old: any) => ({
+      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
         ...old,
         data: {
-          ...old.data,
+          ...old?.data,
           analystId: currentAnalystId,
           analystName: "Obecny Analityk",
           status: "Raport w trakcie"
-        }
+        } as IncidentDetail
       }));
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
@@ -288,14 +273,14 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     },
     onSuccess: () => {
       toast.success("Incydent został oddany do puli");
-      queryClient.setQueryData(["incident", incidentId], (old: any) => ({
+      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
         ...old,
         data: {
-          ...old.data,
+          ...old?.data,
           analystId: null,
-          analystName: null,
+          analystName: undefined,
           status: "Zgłoszony"
-        }
+        } as IncidentDetail
       }));
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
       onBack();
@@ -318,15 +303,15 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
         }
       };
     },
-    onSuccess: (_data: any, variables) => {
+    onSuccess: (_data: unknown, variables) => {
       const newStatus = variables;
       toast.success(`Status zmieniony na: ${newStatus}`);
-      queryClient.setQueryData(["incident", incidentId], (old: any) => ({
+      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
         ...old,
         data: {
-          ...old.data,
+          ...old?.data,
           status: newStatus
-        }
+        } as IncidentDetail
       }));
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
@@ -358,15 +343,15 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
         }
       };
     },
-    onSuccess: (responseData) => {
+    onSuccess: (responseData: { success: boolean; data: { dataRozwiazania: string } }) => {
       toast.success("Incydent oznaczony jako rozwiązany");
-      queryClient.setQueryData(["incident", incidentId], (old: any) => ({
+      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
         ...old,
         data: {
-          ...old.data,
+          ...old?.data,
           czyRozwiazany: true,
           dataRozwiazania: responseData.data.dataRozwiazania
-        }
+        } as IncidentDetail
       }));
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
@@ -400,12 +385,12 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     },
     onSuccess: () => {
       toast.success("Notatka została zapisana");
-      queryClient.setQueryData(["incident", incidentId], (old: any) => ({
+      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
         ...old,
         data: {
-          ...old.data,
+          ...old?.data,
           analystNote: noteContent
-        }
+        } as IncidentDetail
       }));
     },
     onError: () => {
@@ -416,14 +401,12 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
   const uploadFileMutation = useMutation({
     mutationFn: async () => {
       if (!selectedFile || !uploadType) return;
-      
-      await fileToBase64(selectedFile);
-      
+
       // --- REAL SERVER IMPLEMENTATION ---
       /*
-      const endpoint = uploadType === 'report' ? 'reports' : 'statements';
+      const base64Data = await fileToBase64(selectedFile);
       const bodyKey = uploadType === 'report' ? 'reportData' : 'statementData';
-
+      const apiEndpoint = uploadType === 'report' ? 'reports' : 'statements';
       const requestBody = {
         [bodyKey]: {
           filename: selectedFile.name,
@@ -431,8 +414,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
           mimeType: selectedFile.type
         }
       };
-      
-      const response = await fetch(`/api/analyst/incidents/${incidentId}/${endpoint}`, {
+      const response = await fetch(`/api/analyst/incidents/${incidentId}/${apiEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
@@ -488,8 +470,8 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
       setSelectedFile(null);
       setUploadType(null);
 
-      queryClient.setQueryData(["incident", incidentId], (old: any) => {
-        const newData = { ...old.data };
+      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => {
+        const newData = { ...old?.data } as IncidentDetail;
         
         if (data?.data) {
           // Aktualizacja na podstawie odpowiedzi z serwera/mocka
@@ -505,7 +487,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     }
   });
 
-  const handleTransitionClick = (transition: any) => {
+  const handleTransitionClick = (transition: { label: string, value: string, variant?: string, icon: LucideIcon, actionType?: ActionType }) => {
     if (transition.actionType === 'upload_report') {
       setUploadType('report');
       setIsUploadDialogOpen(true);
@@ -645,7 +627,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
                     <Button
                       key={transition.value}
                       size="sm"
-                      variant={transition.variant as any || "outline"}
+                      variant={(transition.variant as "default" | "destructive" | "outline" | "secondary" | "ghost" | "link") || "outline"}
                       className={transition.variant === 'destructive' ? "bg-red-900/20 text-red-400 border-red-900/50 hover:bg-red-900/40" : ""}
                       onClick={() => handleTransitionClick(transition)}
                       disabled={statusMutation.isPending}
@@ -704,7 +686,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
               <div className="overflow-hidden">
                 <p className="text-sm font-medium text-slate-300">Zrzut ekranu</p>
                 <p className={`text-xs truncate ${incident.userScreenshotPath ? 'text-green-400' : 'text-slate-500'}`}>
-                  {incident.userScreenshotPath ? incident.userScreenshotMetadata?.filename || "Dostępny plik" : "Brak pliku"}
+                  {incident.userScreenshotPath ? (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'object' && 'filename' in incident.userScreenshotMetadata ? String(incident.userScreenshotMetadata.filename) : "Dostępny plik") : "Brak pliku"}
                 </p>
               </div>
               {incident.userScreenshotPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto flex-shrink-0" />}
@@ -717,7 +699,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
               <div className="overflow-hidden">
                 <p className="text-sm font-medium text-slate-300">Załącznik</p>
                 <p className={`text-xs truncate ${incident.userAttachmentPath ? 'text-green-400' : 'text-slate-500'}`}>
-                  {incident.userAttachmentPath ? incident.userAttachmentMetadata?.filename || "Dostępny plik" : "Brak pliku"}
+                  {incident.userAttachmentPath ? (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'object' && 'filename' in incident.userAttachmentMetadata ? String(incident.userAttachmentMetadata.filename) : "Dostępny plik") : "Brak pliku"}
                 </p>
               </div>
               {incident.userAttachmentPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto flex-shrink-0" />}

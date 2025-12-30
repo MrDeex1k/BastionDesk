@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
@@ -28,18 +28,18 @@ interface Incident {
   status: string;
   userDescription: string;
   userScreenshotPath?: string | null;
-  userScreenshotMetadata?: any | null;
+  userScreenshotMetadata?: Record<string, unknown> | null;
   userAttachmentPath?: string | null;
-  userAttachmentMetadata?: any | null;
+  userAttachmentMetadata?: Record<string, unknown> | null;
   analystId?: string | null;
   analystNote?: string | null;
   czyRozwiazany: boolean;
   dataRozwiazania?: string | null;
   analystReportPath?: string | null;
-  analystReportMetadata?: any | null;
+  analystReportMetadata?: Record<string, unknown> | null;
   analystReportData?: string | null;
   analystStatementPath?: string | null;
-  analystStatementMetadata?: any | null;
+  analystStatementMetadata?: Record<string, unknown> | null;
   analystStatementData?: string | null;
   llmCategory?: string | null;
   createdAt: string;
@@ -92,7 +92,7 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const LIMIT = 5;
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery<IncidentsResponse>({
     queryKey: ["analystIncidents", type, page],
     queryFn: async () => {
       // --- REAL SERVER IMPLEMENTATION ---
@@ -147,8 +147,8 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
         }
       } as IncidentsResponse;
     },
-    placeholderData: keepPreviousData,
-  }) as { data: IncidentsResponse | undefined; isLoading: boolean; isError: boolean };
+    placeholderData: (previousData) => previousData,
+  });
 
   if (selectedIncidentId) {
     return <IncidentDetails incidentId={selectedIncidentId} onBack={() => setSelectedIncidentId(null)} mode="analyst" />;
@@ -177,7 +177,7 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
             </div>
           ) : (
             <div className="space-y-4 pb-4">
-              {data?.data.map((incident: any) => (
+              {data?.data.map((incident) => (
                 <div
                   key={incident.id}
                   onClick={() => setSelectedIncidentId(incident.id)}

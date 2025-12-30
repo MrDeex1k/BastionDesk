@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
@@ -34,18 +34,18 @@ interface Incident {
   status: string;
   userDescription: string;
   userScreenshotPath: string | null;
-  userScreenshotMetadata: any | null;
+  userScreenshotMetadata: Record<string, unknown> | null;
   userAttachmentPath: string | null;
-  userAttachmentMetadata: any | null;
+  userAttachmentMetadata: Record<string, unknown> | null;
   analystId: string | null;
   analystNote: string | null;
   czyRozwiazany: boolean;
   dataRozwiazania: string | null;
   analystReportPath: string | null;
-  analystReportMetadata: any | null;
+  analystReportMetadata: Record<string, unknown> | null;
   analystReportData: string | null;
   analystStatementPath: string | null;
-  analystStatementMetadata: any | null;
+  analystStatementMetadata: Record<string, unknown> | null;
   analystStatementData: string | null;
   llmCategory: string | null;
   createdAt: string;
@@ -103,7 +103,7 @@ export function AdminIncidentList() {
   
   const LIMIT = 10;
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery<IncidentsResponse>({
     queryKey: ["adminIncidents", page, statusFilter, userIdFilter, analystFilter, sortBy, sortOrder],
     queryFn: async () => {
       // --- REAL SERVER IMPLEMENTATION ---
@@ -145,7 +145,7 @@ export function AdminIncidentList() {
 
       // Generowanie większej puli danych (symulacja wszystkich incydentów w organizacji)
       const totalIncidents = 45;
-      let allMockData: Incident[] = Array.from({ length: totalIncidents }).map((_, i) => {
+      const allMockData: Incident[] = Array.from({ length: totalIncidents }).map((_, i) => {
         const statusIndex = i % allStatuses.length;
         const status = allStatuses[statusIndex];
         const user = mockUsers[i % mockUsers.length];
@@ -238,12 +238,12 @@ export function AdminIncidentList() {
 
       // Sortowanie
       filteredData.sort((a, b) => {
-        let aVal: any = a[sortBy as keyof Incident];
-        let bVal: any = b[sortBy as keyof Incident];
+        const aVal: unknown = a[sortBy as keyof Incident];
+        const bVal: unknown = b[sortBy as keyof Incident];
         
         // Obsługa null values
-        if (aVal === null) return sortOrder === "asc" ? 1 : -1;
-        if (bVal === null) return sortOrder === "asc" ? -1 : 1;
+        if (aVal === null || aVal === undefined) return sortOrder === "asc" ? 1 : -1;
+        if (bVal === null || bVal === undefined) return sortOrder === "asc" ? -1 : 1;
         
         if (typeof aVal === "string" && typeof bVal === "string") {
           return sortOrder === "asc" 
@@ -251,7 +251,11 @@ export function AdminIncidentList() {
             : bVal.localeCompare(aVal);
         }
         
-        return sortOrder === "asc" ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          return sortOrder === "asc" ? (aVal - bVal) : (bVal - aVal);
+        }
+        
+        return 0;
       });
 
       const total = filteredData.length;
@@ -270,8 +274,8 @@ export function AdminIncidentList() {
         }
       } as IncidentsResponse;
     },
-    placeholderData: keepPreviousData,
-  }) as { data: IncidentsResponse | undefined; isLoading: boolean; isError: boolean };
+    placeholderData: (previousData) => previousData,
+  });
 
   const handleClearFilters = () => {
     setStatusFilter("all");
@@ -444,7 +448,7 @@ export function AdminIncidentList() {
             </div>
           ) : (
             <div className="space-y-3 pb-4 pt-4">
-              {data?.data.map((incident: Incident) => (
+              {data?.data.map((incident) => (
                 <div
                   key={incident.id}
                   onClick={() => setSelectedIncidentId(incident.id)}
