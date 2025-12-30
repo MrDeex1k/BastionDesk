@@ -6,5 +6,4 @@ db.sql
 *.lock
 node_modules
 .DS_Store
-end-points.md
 example_user.md
