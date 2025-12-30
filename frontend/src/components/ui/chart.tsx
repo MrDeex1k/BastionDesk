@@ -106,14 +106,14 @@ const ChartTooltip = RechartsPrimitive.Tooltip;
 
 interface ChartTooltipContentProps extends React.ComponentProps<"div"> {
   active?: boolean;
-  payload?: any[];
+  payload?: Array<Record<string, unknown>>;
   label?: string;
   hideLabel?: boolean;
   hideIndicator?: boolean;
   indicator?: "line" | "dot" | "dashed";
-  labelFormatter?: (value: any, payload: any[]) => string;
+  labelFormatter?: (value: unknown, payload: Array<Record<string, unknown>>) => string;
   labelClassName?: string;
-  formatter?: (value: any, name: string, item: any, index: number, payload: any[]) => React.ReactNode;
+  formatter?: (value: unknown, name: string, item: Record<string, unknown>, index: number, payload: Array<Record<string, unknown>>) => React.ReactNode;
   color?: string;
   nameKey?: string;
   labelKey?: string;
@@ -187,7 +187,7 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {payload.map((item: any, index: number) => {
+        {payload.map((item: Record<string, unknown>, index: number) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
           const indicatorColor = color || item.payload.fill || item.color;
@@ -266,7 +266,7 @@ function ChartLegendContent({
   nameKey,
 }: React.ComponentProps<"div"> & {
     hideIcon?: boolean;
-    payload?: any[];
+    payload?: Array<Record<string, unknown>>;
     verticalAlign?: "top" | "bottom";
     nameKey?: string;
   }) {
@@ -284,7 +284,7 @@ function ChartLegendContent({
         className,
       )}
     >
-      {payload.map((item: any) => {
+      {payload.map((item: Record<string, unknown>) => {
         const key = `${nameKey || item.dataKey || "value"}`;
         const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
