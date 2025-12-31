@@ -322,26 +322,15 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
 
   const resolveMutation = useMutation({
     mutationFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
       const response = await fetch(`/api/analyst/incidents/${incidentId}/resolve`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       });
+      
       if (!response.ok) throw new Error("Failed to resolve incident");
+      
       return response.json();
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      return {
-        success: true,
-        message: "Zgłoszenie zostało oznaczone jako rozwiązane",
-        data: {
-          id: incidentId,
-          czyRozwiazany: true,
-          dataRozwiazania: new Date().toISOString()
-        }
-      };
     },
     onSuccess: (responseData: { success: boolean; data: { dataRozwiazania: string } }) => {
       toast.success("Incydent oznaczony jako rozwiązany");
@@ -362,26 +351,16 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
 
   const notesMutation = useMutation({
     mutationFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
       const response = await fetch(`/api/analyst/incidents/${incidentId}/notes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: noteContent })
+        body: JSON.stringify({ notes: noteContent }),
+        credentials: 'include',
       });
+      
       if (!response.ok) throw new Error("Failed to update notes");
+      
       return response.json();
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      return { 
-        success: true, 
-        message: "Notatki zostały zaktualizowane",
-        data: {
-          id: incidentId,
-          analystNote: noteContent
-        }
-      };
     },
     onSuccess: () => {
       toast.success("Notatka została zapisana");
@@ -402,8 +381,21 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     mutationFn: async () => {
       if (!selectedFile || !uploadType) return;
 
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
+      // Funkcja konwersji pliku do base64
+      const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => {
+            const base64String = reader.result as string;
+            // Usuń prefix "data:*/*;base64,"
+            const base64Data = base64String.split(',')[1];
+            resolve(base64Data);
+          };
+          reader.onerror = (error) => reject(error);
+        });
+      };
+
       const base64Data = await fileToBase64(selectedFile);
       const bodyKey = uploadType === 'report' ? 'reportData' : 'statementData';
       const apiEndpoint = uploadType === 'report' ? 'reports' : 'statements';
@@ -414,55 +406,17 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
           mimeType: selectedFile.type
         }
       };
+      
       const response = await fetch(`/api/analyst/incidents/${incidentId}/${apiEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        credentials: 'include',
       });
-      if (!response.ok) throw new Error(`Failed to upload ${uploadType}`);
-      return response.json();
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      await new Promise(resolve => setTimeout(resolve, 800));
       
-      const mockTimestamp = new Date().toISOString();
-      const mockPath = uploadType === 'report' 
-        ? `incidents/${incidentId}/reports/${selectedFile.name}`
-        : `incidents/${incidentId}/statements/${selectedFile.name}`;
-
-      return { 
-        success: true, 
-        message: uploadType === 'report' ? 'Raport został przesłany' : 'Sprawozdanie zostało przesłane',
-        data: {
-          id: incidentId,
-          ...(uploadType === 'report' ? {
-            analystReportPath: mockPath,
-            analystReportMetadata: {
-              bucket: "bastiondesk-bucket",
-              filename: selectedFile.name,
-              mimeType: selectedFile.type,
-              size: selectedFile.size,
-              originalName: selectedFile.name,
-              uploadedAt: mockTimestamp
-            },
-            analystReportData: mockTimestamp,
-            status: "Raport złożony"
-          } : {
-            analystStatementPath: mockPath,
-            analystStatementMetadata: {
-              bucket: "bastiondesk-bucket",
-              filename: selectedFile.name,
-              mimeType: selectedFile.type,
-              size: selectedFile.size,
-              originalName: selectedFile.name,
-              uploadedAt: mockTimestamp
-            },
-            analystStatementData: mockTimestamp,
-            status: "Sprawozdanie złożone"
-          })
-        }
-      };
+      if (!response.ok) throw new Error(`Failed to upload ${uploadType}`);
+      
+      return response.json();
     },
     onSuccess: (data) => {
       toast.success(data?.message || (data?.data?.status === "Raport złożony" ? "Raport został przesłany" : "Sprawozdanie zostało przesłane"));
@@ -689,7 +643,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
                   {incident.userScreenshotPath ? (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'object' && 'filename' in incident.userScreenshotMetadata ? String(incident.userScreenshotMetadata.filename) : "Dostępny plik") : "Brak pliku"}
                 </p>
               </div>
-              {incident.userScreenshotPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto flex-shrink-0" />}
+              {incident.userScreenshotPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
             </div>
 
             <div className={`p-4 rounded-lg border flex items-center gap-3 ${incident.userAttachmentPath ? 'bg-blue-500/5 border-blue-500/20' : 'bg-slate-950/30 border-slate-800'}`}>
@@ -702,7 +656,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
                   {incident.userAttachmentPath ? (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'object' && 'filename' in incident.userAttachmentMetadata ? String(incident.userAttachmentMetadata.filename) : "Dostępny plik") : "Brak pliku"}
                 </p>
               </div>
-              {incident.userAttachmentPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto flex-shrink-0" />}
+              {incident.userAttachmentPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
             </div>
           </div>
 

@@ -178,6 +178,7 @@ export function AdminOrganizationManagement() {
     try {
       const response = await fetch(
         "/api/auth/organization/list-members?limit=100&sortBy=createdAt&sortDirection=desc",
+        { credentials: 'include' }
       );
       if (response.ok) {
         const data: MembersResponse = await response.json();
@@ -216,6 +217,7 @@ export function AdminOrganizationManagement() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, role }),
+          credentials: 'include',
         },
       );
 
@@ -246,6 +248,7 @@ export function AdminOrganizationManagement() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, role }),
+          credentials: 'include',
         },
       );
 
@@ -299,6 +302,7 @@ export function AdminOrganizationManagement() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ memberId, role: newRole }),
+          credentials: 'include',
         },
       );
 
@@ -334,7 +338,8 @@ export function AdminOrganizationManagement() {
       const response = await fetch('/api/auth/organization/remove-member', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ memberIdOrEmail: memberToDelete.id })
+        body: JSON.stringify({ memberIdOrEmail: memberToDelete.id }),
+        credentials: 'include',
       });
 
       const data = await response.json();

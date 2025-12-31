@@ -5,6 +5,8 @@ import { Card } from "./ui/card";
 import { UserPlus, Mail, KeyRound, User, ArrowLeft, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { signUp } from "@/lib/auth-client";
 
 interface RegisterFormProps {
   onBack: () => void;
@@ -58,27 +60,24 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
 
   const registerMutation = useMutation({
     mutationFn: async () => {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const { data, error } = await signUp.email({
+        email,
+        password,
+        name: fullName,
+      });
 
-      // --- Mock Sytuacji ---
-      // Wymagane dane testowe: Jan Kowalski; jankowalski@gmail.com; asdfghjklzxcvbnm
-      if (
-        fullName === "Jan Kowalski" && 
-        email === "jankowalski@gmail.com" && 
-        password === "asdfghjklzxcvbnm"
-      ) {
-        return true;
-      } else {
-        throw new Error("Błąd rejestracji (Symulacja: użyj danych testowych)");
+      if (error) {
+        throw new Error(error.message || "Błąd rejestracji");
       }
+
+      return data;
     },
     onSuccess: () => {
-      console.log("Rejestracja pomyślna (MOCK)");
+      toast.success("Rejestracja zakończona pomyślnie!");
       onRegisterSuccess();
     },
-    onError: (error) => {
-      console.log("Błąd rejestracji (MOCK):", error);
+    onError: (error: Error) => {
+      toast.error(error.message);
       setFullNameError(error.message);
     }
   });

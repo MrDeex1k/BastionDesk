@@ -98,90 +98,15 @@ export function MyIncidentsList() {
   const { data, isLoading, isError } = useQuery<IncidentsResponse>({
     queryKey: ["myIncidents", page],
     queryFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
-      const response = await fetch(`/api/incidents/my?page=${page}&limit=${LIMIT}`);
+      const response = await fetch(`/api/incidents/my?page=${page}&limit=${LIMIT}`, {
+        credentials: 'include',
+      });
+      
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
+      
       return response.json() as Promise<IncidentsResponse>;
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      // await new Promise((resolve) => setTimeout(resolve, 800)); // Symulacja opóźnienia
-
-      // Generowanie mockowych danych w zależności od strony
-      const mockData: Incident[] = Array.from({ length: LIMIT }).map((_, i) => {
-        const hasScreenshot = i % 2 === 0;
-        const hasAttachment = i % 3 === 0;
-        const isInProgress = i % 3 === 1;
-        const isResolved = i % 3 === 2;
-        
-        return {
-          id: `mock-${page}-${i}`,
-          dataZgloszenia: new Date(Date.now() - i * 86400000).toISOString(),
-          userId: "user_abc123",
-          organizationId: "org_xyz789",
-          status: i % 3 === 0 ? "Zgłoszony" : i % 3 === 1 ? "W trakcie realizacji" : "Rozwiązany",
-          userDescription: `Przykładowe zgłoszenie numer ${((page - 1) * LIMIT) + i + 1}. Aplikacja działa wolno lub występuje inny problem techniczny.`,
-          userScreenshotPath: hasScreenshot ? `incidents/mock-${page}-${i}/screenshots/1704067200000_error.png` : null,
-          userScreenshotMetadata: hasScreenshot ? {
-            bucket: "bastiondesk-bucket",
-            filename: "error.png",
-            mimeType: "image/png",
-            size: 189440,
-            originalName: "error.png",
-            uploadedAt: new Date(Date.now() - i * 86400000).toISOString()
-          } : null,
-          userAttachmentPath: hasAttachment ? `incidents/mock-${page}-${i}/attachments/1704067201000_logs.txt` : null,
-          userAttachmentMetadata: hasAttachment ? {
-            bucket: "bastiondesk-bucket",
-            filename: "logs.txt",
-            mimeType: "text/plain",
-            size: 25600,
-            originalName: "logs.txt",
-            uploadedAt: new Date(Date.now() - i * 86400000).toISOString()
-          } : null,
-          analystId: isInProgress || isResolved ? "user_analyst456" : null,
-          analystNote: isInProgress || isResolved ? "Zgłoszenie w trakcie analizy" : null,
-          czyRozwiazany: isResolved,
-          dataRozwiazania: isResolved ? new Date(Date.now() - i * 43200000).toISOString() : null,
-          analystReportPath: isResolved ? `incidents/mock-${page}-${i}/reports/analysis.pdf` : null,
-          analystReportMetadata: isResolved ? {
-            bucket: "bastiondesk-bucket",
-            filename: "analysis.pdf",
-            mimeType: "application/pdf",
-            size: 245760,
-            originalName: "analysis.pdf",
-            uploadedAt: new Date(Date.now() - i * 43200000).toISOString()
-          } : null,
-          analystReportData: isResolved ? new Date(Date.now() - i * 43200000).toISOString() : null,
-          analystStatementPath: isResolved ? `incidents/mock-${page}-${i}/statements/final.docx` : null,
-          analystStatementMetadata: isResolved ? {
-            bucket: "bastiondesk-bucket",
-            filename: "final.docx",
-            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            size: 189440,
-            originalName: "final.docx",
-            uploadedAt: new Date(Date.now() - i * 43200000).toISOString()
-          } : null,
-          analystStatementData: isResolved ? new Date(Date.now() - i * 43200000).toISOString() : null,
-          llmCategory: i % 4 === 0 ? "Malware" : i % 4 === 1 ? "Phishing" : i % 4 === 2 ? "Unauthorized Access" : null,
-          createdAt: new Date(Date.now() - i * 86400000).toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-      });
-
-      return {
-        success: true,
-        data: mockData,
-        pagination: {
-          page: page,
-          limit: LIMIT,
-          total: 12, // Zakładamy że jest 12 zgłoszeń łącznie
-          totalPages: Math.ceil(12 / LIMIT)
-        }
-      } as IncidentsResponse;
     },
     placeholderData: (previousData) => previousData, 
   });

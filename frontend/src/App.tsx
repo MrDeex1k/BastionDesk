@@ -1,8 +1,12 @@
-import { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import { toast } from "sonner";
+import { AuthProvider } from "./contexts/AuthContext";
+import { useAuth } from "./hooks/useAuth";
+import { signOut } from "./lib/auth-client";
 import { Header } from "./components/Header";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Footer } from "./components/Footer";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -17,19 +21,25 @@ import { CreateOrganizationPage } from "./pages/CreateOrganizationPage";
 const queryClient = new QueryClient();
 
 function AppContent() {
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const { role, session } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (role: string) => {
-    setUserRole(role);
-    switch (role) {
+  /**
+   * Przekierowanie użytkownika do odpowiedniego dashboardu po zalogowaniu
+   * Better-Auth automatycznie zarządza sesją, więc nie potrzebujemy setUserRole
+   */
+  const handleLogin = (userRole: string) => {
+    // Normalizacja roli
+    const normalizedRole = userRole === "analyst" ? "analityk" : userRole;
+    
+    switch (normalizedRole) {
       case "admin":
         navigate("/admin-dashboard");
         break;
-      case "analyst":
+      case "analityk":
         navigate("/analyst-dashboard");
         break;
-      case "employee":
+      case "pracownik":
         navigate("/employee-dashboard");
         break;
       default:
@@ -37,28 +47,39 @@ function AppContent() {
     }
   };
 
-  const handleLogout = () => {
-    setUserRole(null);
+  /**
+   * Wylogowanie użytkownika przez Better-Auth
+   */
+  const handleLogout = async () => {
+    await signOut();
+    toast.success("Wylogowano pomyślnie");
     navigate("/");
   };
 
+  /**
+   * Przekierowanie do dashboardu na podstawie aktualnej roli
+   */
   const handleDashboardClick = () => {
-    if (!userRole) return;
-    switch (userRole) {
+    if (!role) return;
+    
+    switch (role) {
       case "admin":
         navigate("/admin-dashboard");
         break;
-      case "analyst":
+      case "analityk":
         navigate("/analyst-dashboard");
         break;
-      case "employee":
+      case "pracownik":
         navigate("/employee-dashboard");
         break;
     }
   };
 
+  /**
+   * Kliknięcie w logo - przekierowanie do home lub dashboardu
+   */
   const handleLogoClick = () => {
-    if (userRole) {
+    if (session) {
       handleDashboardClick();
     } else {
       navigate("/");
@@ -69,7 +90,7 @@ function AppContent() {
     <div className="min-h-screen flex flex-col bg-linear-to-br from-slate-900 via-blue-900 to-slate-800 text-white">
       <Header 
         onLogoClick={handleLogoClick} 
-        userRole={userRole}
+        userRole={role}
         onLoginClick={() => navigate("/login")}
         onLogout={handleLogout}
         onDashboardClick={handleDashboardClick}
@@ -85,9 +106,30 @@ function AppContent() {
           <Route path="/waiting-for-organization" element={<WaitingForOrganizationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           
-          <Route path="/admin-dashboard" element={userRole === "admin" ? <AdminDashboardPage /> : <Navigate to="/" />} />
-          <Route path="/analyst-dashboard" element={userRole === "analyst" ? <AnalystDashboardPage /> : <Navigate to="/" />} />
-          <Route path="/employee-dashboard" element={userRole === "employee" ? <EmployeeDashboardPage /> : <Navigate to="/" />} />
+          <Route 
+            path="/admin-dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminDashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/analyst-dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={["analityk"]}>
+                <AnalystDashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/employee-dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={["pracownik"]}>
+                <EmployeeDashboardPage />
+              </ProtectedRoute>
+            } 
+          />
           
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
@@ -103,7 +145,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <AppContent />
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
       </Router>
     </QueryClientProvider>
   );

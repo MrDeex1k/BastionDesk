@@ -26,16 +26,25 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
 
   const forgotPasswordMutation = useMutation({
     mutationFn: async () => {
-      // Symulacja wysyłania żądania resetu hasła
-      // Tutaj będzie rzeczywista logika z Supabase
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Wywołanie Better-Auth API do resetu hasła
+      // UWAGA: System emailowy nie jest jeszcze skonfigurowany na backendzie
+      const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3333";
+      const response = await fetch(`${baseURL}/api/auth/forget-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          redirectTo: `${window.location.origin}/reset-password`,
+        })
+      });
 
-      // Symulacja losowego błędu (10% szans)
-      if (Math.random() < 0.1) {
-        throw new Error("Network error");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Błąd wysyłania żądania resetu");
       }
 
-      return true;
+      return response.json();
     },
     onSuccess: () => {
       setMessage({
@@ -44,10 +53,10 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
       });
       setEmail("");
     },
-    onError: () => {
+    onError: (error: Error) => {
       setMessage({
         type: "error",
-        text: "Nie udało się wysłać żądania resetu. Spróbuj ponownie za kilka minut!",
+        text: error.message || "Nie udało się wysłać żądania resetu. Spróbuj ponownie za kilka minut!",
       });
     }
   });

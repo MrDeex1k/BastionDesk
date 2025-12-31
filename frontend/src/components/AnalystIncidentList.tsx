@@ -95,57 +95,16 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
   const { data, isLoading, isError } = useQuery<IncidentsResponse>({
     queryKey: ["analystIncidents", type, page],
     queryFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
       const endpoint = type === 'assigned' ? '/api/analyst/incidents/assigned' : '/api/analyst/incidents/unassigned';
-      const response = await fetch(`${endpoint}?page=${page}&limit=${LIMIT}&sortOrder=desc`);
+      const response = await fetch(`${endpoint}?page=${page}&limit=${LIMIT}&sortOrder=desc`, {
+        credentials: 'include',
+      });
+      
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
+      
       return response.json() as Promise<IncidentsResponse>;
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      // await new Promise((resolve) => setTimeout(resolve, 800));
-
-      const mockData: Incident[] = Array.from({ length: LIMIT }).map((_, i) => ({
-        id: `mock-${type}-${page}-${i}`,
-        dataZgloszenia: new Date(Date.now() - i * 86400000).toISOString(),
-        userId: "user_employee123",
-        organizationId: "org_xyz789",
-        status: type === 'assigned' ? (i % 2 === 0 ? "Raport w trakcie" : "Rozwiązany") : "Zgłoszony",
-        userDescription: `Zgłoszenie ${type === 'assigned' ? 'przypisane' : 'nieprzypisane'} nr ${((page - 1) * LIMIT) + i + 1}. Problem z dostępem do systemu lub błąd aplikacji.`,
-        userScreenshotPath: i % 2 === 0 ? "incidents/mock/screenshot.png" : null,
-        userScreenshotMetadata: i % 2 === 0 ? { mimeType: "image/png" } : null,
-        userAttachmentPath: i % 3 === 0 ? "incidents/mock/logs.txt" : null,
-        userAttachmentMetadata: i % 3 === 0 ? { mimeType: "text/plain" } : null,
-        analystId: type === 'assigned' ? "user_analyst456" : null,
-        analystNote: type === 'assigned' ? "Analiza logów w toku..." : undefined,
-        czyRozwiazany: type === 'assigned' && i % 2 !== 0,
-        dataRozwiazania: null,
-        analystReportPath: null,
-        analystReportMetadata: null,
-        analystReportData: null,
-        analystStatementPath: null,
-        analystStatementMetadata: null,
-        analystStatementData: null,
-        llmCategory: i % 4 === 0 ? "Czerwony" : i % 2 === 0 ? "Żółty" : null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        // userName is not in API response example but useful for UI mock
-        userName: i % 2 === 0 ? "Jan Kowalski" : "Anna Nowak"
-      }));
-
-      return {
-        success: true,
-        data: mockData,
-        pagination: {
-          page: page,
-          limit: LIMIT,
-          total: type === 'assigned' ? 12 : 5,
-          totalPages: Math.ceil((type === 'assigned' ? 12 : 5) / LIMIT)
-        }
-      } as IncidentsResponse;
     },
     placeholderData: (previousData) => previousData,
   });

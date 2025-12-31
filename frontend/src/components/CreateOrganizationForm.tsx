@@ -5,6 +5,7 @@ import { Card } from "./ui/card";
 import { Mail, KeyRound, User, ArrowLeft, Building2, Link2, Image as ImageIcon, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface CreateOrganizationFormProps {
   onBack: () => void;
@@ -86,26 +87,35 @@ export function CreateOrganizationForm({ onBack, onRegisterSuccess }: CreateOrga
 
   const createOrgMutation = useMutation({
     mutationFn: async () => {
-       // Mock API call structure
-      const payload = {
-        email,
-        password,
-        name: fullName,
-        organizationName: orgName,
-        organizationSlug: orgSlug,
-        organizationLogo: logoUrl || null
-      };
+      // Niestandardowy endpoint Better-Auth: /api/auth/sign-up-with-organization/email
+      const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3333";
+      const response = await fetch(`${baseURL}/api/auth/sign-up-with-organization/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          password,
+          name: fullName,
+          organizationName: orgName,
+          organizationSlug: orgSlug,
+          organizationLogo: logoUrl || undefined,
+        })
+      });
 
-      console.log("Wysyłanie danych na endpoint POST /api/auth/sign-up-with-organization/email");
-      console.log("Request Body:", payload);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Błąd tworzenia organizacji");
+      }
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      return true;
+      return response.json();
     },
     onSuccess: () => {
+      toast.success("Organizacja utworzona pomyślnie!");
       onRegisterSuccess();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
     }
   });
 
@@ -119,7 +129,7 @@ export function CreateOrganizationForm({ onBack, onRegisterSuccess }: CreateOrga
 
   return (
     <div className="flex items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-2xl bg-gradient-to-br from-slate-800/90 to-slate-700/90 border-purple-900/50 p-8">
+      <Card className="w-full max-w-2xl bg-linear-to-br from-slate-800/90 to-slate-700/90 border-purple-900/50 p-8">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 mb-4">
             <Building2 className="size-12 text-purple-400" />

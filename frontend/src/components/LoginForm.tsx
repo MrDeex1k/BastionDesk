@@ -6,6 +6,7 @@ import { Card } from "./ui/card";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { signIn } from "@/lib/auth-client";
 
 interface LoginFormProps {
   onBack: () => void;
@@ -45,21 +46,16 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
     if (validateEmail(email)) {
       setIsCheckingEmail(true);
 
-      // MOCK: Force passkey flow for specific email
-      if (email === "passkeys@mail.pl") {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setStep("passkey");
-        setIsCheckingEmail(false);
-        return;
-      }
-
       try {
-        const response = await fetch('/api/auth/passkey/check-availability', {
+        // Sprawdź czy użytkownik ma zarejestrowane PassKeys
+        // Używamy standardowego fetch ponieważ Better-Auth nie ma metody checkAvailability
+        const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3333";
+        const response = await fetch(`${baseURL}/api/auth/passkey/check-availability`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
-
+        
         if (response.ok) {
           const data = await response.json();
           if (data.hasPasskeys) {
@@ -68,11 +64,12 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
             setStep("password");
           }
         } else {
-          // If API fails, fallback to password
+          // W przypadku błędu API, fallback do hasła
           setStep("password");
         }
       } catch (error) {
         console.error("Error checking passkey availability", error);
+        // W przypadku błędu API, fallback do hasła
         setStep("password");
       } finally {
         setIsCheckingEmail(false);
@@ -82,72 +79,49 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
 
   const loginMutation = useMutation({
     mutationFn: async () => {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { data, error } = await signIn.email({
+        email,
+        password,
+        callbackURL: "/", // Better-Auth automatycznie przekieruje
+      });
 
-      // --- Mock Users ---
-      const mockUsers = [
-        { email: 'admin@mail.pl', password: 'asdfghjkl', role: 'admin' },
-        { email: 'analityk@mail.pl', password: 'asdfghjkl', role: 'analyst' },
-        { email: 'pracownik@mail.pl', password: 'asdfghjkl', role: 'employee' }
-      ];
-
-      const user = mockUsers.find(u => u.email === email && u.password === password);
-
-      if (!user) {
-        throw new Error("Nieprawidłowy adres email lub hasło");
+      if (error) {
+        throw new Error(error.message || "Nieprawidłowy adres email lub hasło");
       }
 
-      return user;
+      return data;
     },
-    onSuccess: (user) => {
-      console.log("Zalogowano pomyślnie (MOCK):", user);
-      onLoginSuccess(user.role);
+    onSuccess: () => {
+      toast.success("Zalogowano pomyślnie!");
+      
+      // AuthContext automatycznie pobierze rolę przez organization.getActiveMember()
+      // więc przekazujemy placeholder - rzeczywista rola będzie dostępna w useAuth()
+      onLoginSuccess("employee");
     },
-    onError: (error) => {
-      console.log("Błąd logowania (MOCK):", error);
+    onError: (error: Error) => {
       setPasswordError(error.message);
+      toast.error("Błąd logowania");
     }
   });
 
   const passkeyLoginMutation = useMutation({
     mutationFn: async () => {
-      // MOCK: Handle specific test user
-      if (email === "passkeys@mail.pl") {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return { role: 'employee' };
+      const { data, error } = await signIn.passkey();
+
+      if (error) {
+        throw new Error(error.message || "Błąd logowania PassKey");
       }
 
-      // 1. Get Challenge
-      const response = await fetch('/api/auth/passkey/sign-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!response.ok) {
-        throw new Error("Błąd inicjalizacji logowania PassKey");
-      }
-
-      const options = await response.json();
-      console.log("PassKey Challenge:", options);
-
-      // 2. Simulate WebAuthn interaction (since we are in a mock environment/iframe, we can't do real WebAuthn easily)
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // In a real app:
-      // const credential = await navigator.credentials.get({ publicKey: ... });
-      // await verifyCredential(credential);
-
-      // 3. Mock Success return
-      return { role: 'admin' }; // Mocking admin login for PassKey
+      return data;
     },
-    onSuccess: (user) => {
+    onSuccess: () => {
       toast.success("Zalogowano pomyślnie używając PassKey");
-      onLoginSuccess(user.role);
+      
+      // AuthContext automatycznie pobierze rolę przez organization.getActiveMember()
+      onLoginSuccess("employee");
     },
-    onError: (error) => {
-      toast.error("Błąd logowania PassKey");
-      console.error(error);
+    onError: (error: Error) => {
+      toast.error(`Błąd logowania PassKey: ${error.message}`);
     }
   });
 
@@ -171,7 +145,7 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
 
   return (
     <div className="flex items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md bg-gradient-to-br from-slate-800/90 to-slate-700/90 border-blue-900/50 p-8">
+      <Card className="w-full max-w-md bg-linear-to-br from-slate-800/90 to-slate-700/90 border-blue-900/50 p-8">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 mb-4">
             {step === "passkey" ? (

@@ -21,7 +21,9 @@ export function Header({
   const getDashboardName = (role: string) => {
     switch (role) {
       case 'admin': return 'Panel Admina';
+      case 'analityk': 
       case 'analyst': return 'Panel Analityka';
+      case 'pracownik':
       case 'employee': return 'Panel Pracownika';
       default: return 'Panel';
     }

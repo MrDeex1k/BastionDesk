@@ -24,65 +24,18 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
 
   const incidentMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      // const response = await fetch('/api/incidents', {
-      //   method: 'POST',
-      //   // Headers for Authorization are handled by the browser/auth provider usually, 
-      //   // but if you have a token:
-      //   // headers: {
-      //   //   'Authorization': `Bearer ${token}`,
-      //   // },
-      //   body: formData, // Browser automatically sets Content-Type to multipart/form-data
-      // });
-      //
-      // if (!response.ok) {
-      //   const errorData = await response.json();
-      //   throw new Error(errorData.message || 'Wystąpił błąd podczas wysyłania zgłoszenia');
-      // }
-      //
-      // return response.json();
+      const response = await fetch('/api/incidents', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
 
-      // --- MOCK IMPLEMENTATION (Symulacja serwera) ---
-      console.log("Symulacja wysyłania POST /api/incidents");
-      
-      // Symulacja opóźnienia sieci
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Symulacja walidacji po stronie serwera
-      const description = formData.get("userDescription") as string;
-      
-      if (!description || description.length < 10) {
-        throw new Error("Opis jest za krótki (Wymagane min. 10 znaków)");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Wystąpił błąd podczas wysyłania zgłoszenia');
       }
 
-      // Mock Response (Success - 201)
-      return {
-        success: true,
-        data: {
-          id: "0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d",
-          dataZgloszenia: new Date().toISOString(),
-          userId: "user_mock_123",
-          organizationId: "org_mock_789",
-          status: "Nowe zgłoszenie",
-          userDescription: description,
-          userScreenshotPath: formData.get("screenshot") ? "incidents/mock/screenshot.png" : null,
-          userScreenshotMetadata: formData.get("screenshot") ? {
-            originalName: (formData.get("screenshot") as File).name,
-            size: (formData.get("screenshot") as File).size,
-            mimeType: (formData.get("screenshot") as File).type,
-            uploadedAt: new Date().toISOString()
-          } : null,
-          userAttachmentPath: formData.get("attachment") ? "incidents/mock/attachment.txt" : null,
-          userAttachmentMetadata: formData.get("attachment") ? {
-            originalName: (formData.get("attachment") as File).name,
-            size: (formData.get("attachment") as File).size,
-            mimeType: (formData.get("attachment") as File).type,
-            uploadedAt: new Date().toISOString()
-          } : null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      };
+      return response.json();
     },
     onSuccess: (data) => {
       setShowSuccess(true);

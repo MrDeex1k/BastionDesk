@@ -106,8 +106,6 @@ export function AdminIncidentList() {
   const { data, isLoading, isError } = useQuery<IncidentsResponse>({
     queryKey: ["adminIncidents", page, statusFilter, userIdFilter, analystFilter, sortBy, sortOrder],
     queryFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
       const params = new URLSearchParams({
         page: page.toString(),
         limit: LIMIT.toString(),
@@ -121,158 +119,15 @@ export function AdminIncidentList() {
         params.append("analystId", analystFilter === "unassigned" ? "null" : analystFilter);
       }
 
-      const response = await fetch(`/api/admin/incidents?${params.toString()}`);
+      const response = await fetch(`/api/admin/incidents?${params.toString()}`, {
+        credentials: 'include',
+      });
+      
       if (!response.ok) {
         throw new Error("Failed to fetch incidents");
       }
+      
       return response.json() as Promise<IncidentsResponse>;
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      // Generowanie mockowych danych
-      const allStatuses = ["Zgłoszony", "Raport w trakcie", "Raport złożony", "Sprawozdanie w trakcie", "Sprawozdanie złożone", "Odrzucone"];
-      const mockUsers = [
-        { id: "user_employee123", name: "Jan Kowalski" },
-        { id: "user_employee456", name: "Anna Nowak" },
-        { id: "user_employee789", name: "Piotr Wiśniewski" }
-      ];
-      const mockAnalysts = [
-        { id: "user_analyst001", name: "Tomasz Analityk" },
-        { id: "user_analyst002", name: "Katarzyna Bezpieczeństwo" },
-        { id: null, name: null }
-      ];
-      const llmCategories = ["Zielony", "Żółty", "Czerwony", null];
-
-      // Generowanie większej puli danych (symulacja wszystkich incydentów w organizacji)
-      const totalIncidents = 45;
-      const allMockData: Incident[] = Array.from({ length: totalIncidents }).map((_, i) => {
-        const statusIndex = i % allStatuses.length;
-        const status = allStatuses[statusIndex];
-        const user = mockUsers[i % mockUsers.length];
-        const analyst = mockAnalysts[i % mockAnalysts.length];
-        const hasScreenshot = i % 3 === 0;
-        const hasAttachment = i % 4 === 0;
-        const isResolved = status === "Sprawozdanie złożone";
-        const hasReport = status === "Raport złożony" || status === "Sprawozdanie w trakcie" || status === "Sprawozdanie złożone";
-        const timestamp = Date.now() - i * 3600000 * 12;
-        const incidentId = `0192d1f8-5c8e-7b1a-${String(i).padStart(4, '0')}-${String(i * 123).padStart(12, '0')}`;
-
-        return {
-          id: incidentId,
-          dataZgloszenia: new Date(timestamp).toISOString(),
-          userId: user.id,
-          organizationId: "org_xyz789",
-          status,
-          userDescription: `Zgłoszenie ${i + 1}: ${status === "Odrzucone" ? "Błędne zgłoszenie - brak wystarczających informacji" : "Problem z systemem wymagający analizy - aplikacja zawiesza się przy określonych operacjach"}`,
-          userScreenshotPath: hasScreenshot ? `incidents/${incidentId}/screenshots/${timestamp}_error_screen.png` : null,
-          userScreenshotMetadata: hasScreenshot ? {
-            bucket: "bastiondesk-bucket",
-            filename: "error_screen.png",
-            mimeType: "image/png",
-            size: 245760,
-            originalName: "error_screen.png",
-            uploadedAt: new Date(timestamp).toISOString()
-          } : null,
-          userAttachmentPath: hasAttachment ? `incidents/${incidentId}/attachments/${timestamp + 1000}_system_logs.txt` : null,
-          userAttachmentMetadata: hasAttachment ? {
-            bucket: "bastiondesk-bucket",
-            filename: "system_logs.txt",
-            mimeType: "text/plain",
-            size: 45000,
-            originalName: "system_logs.txt",
-            uploadedAt: new Date(timestamp + 1000).toISOString()
-          } : null,
-          analystId: analyst.id,
-          analystNote: analyst.id ? "Analiza w toku. Problem wydaje się związany z konfiguracją. Sprawdzam logi i przygotowuję rekomendacje." : null,
-          czyRozwiazany: isResolved,
-          dataRozwiazania: isResolved ? new Date(timestamp + 3600000 * 24).toISOString() : null,
-          analystReportPath: hasReport ? `incidents/${incidentId}/reports/analysis_report.pdf` : null,
-          analystReportMetadata: hasReport ? {
-            bucket: "bastiondesk-bucket",
-            filename: "analysis_report.pdf",
-            mimeType: "application/pdf",
-            size: 298000,
-            originalName: "analysis_report.pdf",
-            uploadedAt: new Date(timestamp + 3600000 * 12).toISOString()
-          } : null,
-          analystReportData: hasReport ? new Date(timestamp + 3600000 * 12).toISOString() : null,
-          analystStatementPath: isResolved ? `incidents/${incidentId}/statements/final_statement.docx` : null,
-          analystStatementMetadata: isResolved ? {
-            bucket: "bastiondesk-bucket",
-            filename: "final_statement.docx",
-            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            size: 189440,
-            originalName: "final_statement.docx",
-            uploadedAt: new Date(timestamp + 3600000 * 20).toISOString()
-          } : null,
-          analystStatementData: isResolved ? new Date(timestamp + 3600000 * 20).toISOString() : null,
-          llmCategory: llmCategories[i % llmCategories.length],
-          createdAt: new Date(timestamp).toISOString(),
-          updatedAt: new Date(timestamp + 3600000 * 6).toISOString(),
-          userName: user.name,
-          analystName: analyst.name
-        };
-      });
-
-      // Filtrowanie
-      let filteredData = allMockData;
-      
-      if (statusFilter !== "all") {
-        filteredData = filteredData.filter(inc => inc.status === statusFilter);
-      }
-      
-      if (userIdFilter.trim()) {
-        filteredData = filteredData.filter(inc => 
-          inc.userId.toLowerCase().includes(userIdFilter.toLowerCase()) ||
-          inc.userName?.toLowerCase().includes(userIdFilter.toLowerCase())
-        );
-      }
-      
-      if (analystFilter !== "all") {
-        if (analystFilter === "unassigned") {
-          filteredData = filteredData.filter(inc => inc.analystId === null);
-        } else {
-          filteredData = filteredData.filter(inc => inc.analystId === analystFilter);
-        }
-      }
-
-      // Sortowanie
-      filteredData.sort((a, b) => {
-        const aVal: unknown = a[sortBy as keyof Incident];
-        const bVal: unknown = b[sortBy as keyof Incident];
-        
-        // Obsługa null values
-        if (aVal === null || aVal === undefined) return sortOrder === "asc" ? 1 : -1;
-        if (bVal === null || bVal === undefined) return sortOrder === "asc" ? -1 : 1;
-        
-        if (typeof aVal === "string" && typeof bVal === "string") {
-          return sortOrder === "asc" 
-            ? aVal.localeCompare(bVal) 
-            : bVal.localeCompare(aVal);
-        }
-        
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          return sortOrder === "asc" ? (aVal - bVal) : (bVal - aVal);
-        }
-        
-        return 0;
-      });
-
-      const total = filteredData.length;
-      const totalPages = Math.ceil(total / LIMIT);
-      const startIndex = (page - 1) * LIMIT;
-      const paginatedData = filteredData.slice(startIndex, startIndex + LIMIT);
-
-      return {
-        success: true,
-        data: paginatedData,
-        pagination: {
-          page,
-          limit: LIMIT,
-          total,
-          totalPages
-        }
-      } as IncidentsResponse;
     },
     placeholderData: (previousData) => previousData,
   });

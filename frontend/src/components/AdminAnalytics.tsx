@@ -87,111 +87,26 @@ export function AdminAnalytics() {
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ["adminStats"],
     queryFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
-      const response = await fetch("/api/admin/analytics/stats");
+      const response = await fetch("/api/admin/analytics/stats", {
+        credentials: 'include',
+      });
+      
       if (!response.ok) throw new Error("Failed to fetch stats");
+      
       return response.json() as Promise<StatsResponse>;
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      return {
-        success: true,
-        data: {
-          totalIncidents: 150,
-          resolvedIncidents: 120,
-          resolvedPercentage: 80,
-          avgResolutionTime: {
-            days: 2,
-            hours: 4,
-            minutes: 30,
-            seconds: 15,
-            totalSeconds: 183015
-          },
-          statusBreakdown: [
-            { status: "Zgłoszony", count: 5 },
-            { status: "Raport w trakcie", count: 10 },
-            { status: "Raport złożony", count: 15 },
-            { status: "Sprawozdanie w trakcie", count: 20 },
-            { status: "Sprawozdanie złożone", count: 85 },
-            { status: "Odrzucone", count: 15 }
-          ],
-          categoryBreakdown: [
-            { category: "Zielony", count: 50 },
-            { category: "Żółty", count: 70 },
-            { category: "Czerwony", count: 30 }
-          ]
-        }
-      } as StatsResponse;
     }
   });
 
   const { data: metricsData, isLoading: metricsLoading } = useQuery({
     queryKey: ["adminMetrics", period],
     queryFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
-      const response = await fetch(`/api/admin/analytics/metrics?period=${period}`);
+      const response = await fetch(`/api/admin/analytics/metrics?period=${period}`, {
+        credentials: 'include',
+      });
+      
       if (!response.ok) throw new Error("Failed to fetch metrics");
+      
       return response.json() as Promise<MetricsResponse>;
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - period);
-
-      const incidentsCreated = [];
-      const incidentsResolved = [];
-      const avgResolutionTimeHours = [];
-
-      for (let i = 0; i < period; i++) {
-        const date = new Date();
-        date.setDate(date.getDate() - (period - i - 1));
-        const dateStr = date.toISOString().split('T')[0];
-        
-        incidentsCreated.push({
-          date: dateStr,
-          count: Math.floor(Math.random() * 10) + 2
-        });
-        
-        incidentsResolved.push({
-          date: dateStr,
-          count: Math.floor(Math.random() * 8) + 1
-        });
-        
-        avgResolutionTimeHours.push({
-          date: dateStr,
-          avg_time_hours: Math.random() * 48 + 12
-        });
-      }
-
-      return {
-        success: true,
-        data: {
-          period: {
-            days: period,
-            startDate: startDate.toISOString()
-          },
-          timeSeries: {
-            incidentsCreated,
-            incidentsResolved,
-            avgResolutionTimeHours
-          },
-          topUsers: [
-            { userId: "user_employee123", userName: "Jan Kowalski", count: 15 },
-            { userId: "user_employee456", userName: "Anna Nowak", count: 12 },
-            { userId: "user_employee789", userName: "Piotr Wiśniewski", count: 10 },
-            { userId: "user_employee234", userName: "Maria Kowalczyk", count: 8 },
-            { userId: "user_employee567", userName: "Tomasz Lewandowski", count: 7 }
-          ],
-          topAnalysts: [
-            { analystId: "user_analyst001", analystName: "Tomasz Analityk", resolved: 25 },
-            { analystId: "user_analyst002", analystName: "Katarzyna Bezpieczeństwo", resolved: 22 },
-            { analystId: "user_analyst003", analystName: "Michał Ochrona", resolved: 18 },
-            { analystId: "user_analyst004", analystName: "Agnieszka SIEM", resolved: 15 }
-          ]
-        }
-      } as MetricsResponse;
     }
   });
 
