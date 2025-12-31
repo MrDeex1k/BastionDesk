@@ -6,13 +6,53 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
 import { env } from "./lib/env";
 import { closeDatabase, checkDatabaseConnection } from "./lib/database";
-import { errorHandler, notFoundHandler } from "./middleware";
+import { errorHandler, notFoundHandler, apiRateLimiter } from "./middleware";
 
 const app = express();
+
+
+// Security Headers
+app.use(
+	helmet({
+		// Wyłącz HSTS - aplikacja działa tylko na localhost bez HTTPS
+		hsts: false,
+		
+		// Content Security Policy - dostosowany do aplikacji
+		contentSecurityPolicy: {
+			directives: {
+				defaultSrc: ["'self'"],
+				scriptSrc: ["'self'", "'unsafe-inline'"],
+				styleSrc: ["'self'", "'unsafe-inline'"],
+				imgSrc: ["'self'", "data:", "https:"],
+				connectSrc: ["'self'"],
+				fontSrc: ["'self'"],
+				objectSrc: ["'none'"],
+				mediaSrc: ["'self'"],
+				frameSrc: ["'none'"],
+			},
+		},
+		
+		// Zapobiega clickjacking
+		frameguard: { action: "deny" },
+		
+		// Zapobiega MIME-type sniffing
+		noSniff: true,
+		
+		// Włącza wbudowany filtr XSS przeglądarki
+		xssFilter: true,
+		
+		// Kontroluje informacje wysyłane w Referer
+		referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+		
+		// Wyłącza nagłówek X-Powered-By (ukrywa Express)
+		hidePoweredBy: true,
+	}),
+);
 
 
 // CORS Configuration
@@ -58,6 +98,8 @@ app.get("/api", (_req, res) => {
 		endpoints: {
 			auth: "/api/auth/*",
 			incidents: "/api/incidents",
+			analyst: "/api/analyst/*",
+			admin: "/api/admin/*",
 			health: "/health",
 		},
 	});
@@ -65,7 +107,13 @@ app.get("/api", (_req, res) => {
 
 
 import incidentsRouter from "./routes/incidents";
-app.use("/api/incidents", incidentsRouter);
+import apiRoutes from "./routes/index";
+
+// Rate Limiting dla własnych endpointów (zgodnie z Better-Auth: 100 req/10s)
+app.use("/api/incidents", apiRateLimiter, incidentsRouter);
+app.use("/api/admin", apiRateLimiter);
+app.use("/api/analyst", apiRateLimiter);
+app.use("/api", apiRoutes); // Podłącza /api/admin/* i /api/analyst/*
 
 
 app.use(notFoundHandler);

@@ -24,3 +24,5 @@ export {
 	ConflictError,
 	RateLimitError,
 } from "./error.middleware";
+
+export { apiRateLimiter, strictRateLimiter } from "./rate-limit.middleware";
