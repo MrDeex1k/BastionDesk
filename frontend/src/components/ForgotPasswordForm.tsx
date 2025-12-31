@@ -67,7 +67,7 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
 
   return (
     <div className="flex items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md bg-gradient-to-br from-slate-800/90 to-slate-700/90 border-blue-900/50 p-8">
+      <Card className="w-full max-w-md bg-linear-to-br from-slate-800/90 to-slate-700/90 border-blue-900/50 p-8">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 mb-4">
             <KeyRound className="size-12 text-purple-400" />

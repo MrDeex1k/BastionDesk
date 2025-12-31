@@ -66,7 +66,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white">
+    <div className="min-h-screen flex flex-col bg-linear-to-br from-slate-900 via-blue-900 to-slate-800 text-white">
       <Header 
         onLogoClick={handleLogoClick} 
         userRole={userRole}
