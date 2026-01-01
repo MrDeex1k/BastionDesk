@@ -17,6 +17,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/helmet": "^4.0.0",
+    "@types/nodemailer": "^7.0.4",
     "@types/pg": "^8.16.0"
   },
   "peerDependencies": {
@@ -30,6 +31,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
+    "nodemailer": "^7.0.12",
     "pg": "^8.16.3",
     "uuidv7": "^1.1.0",
     "zod": "^4.2.1"

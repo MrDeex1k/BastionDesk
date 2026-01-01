@@ -24,12 +24,12 @@ Wszystkie pola dat w API są zwracane jako **ciągi znaków w formacie ISO 8601*
 
 BastionDesk API jest podzielone na kilka głównych modułów:
 
-### 🔐 **Autoryzacja (Better-Auth)**
+### **Autoryzacja (Better-Auth)**
 - **Ścieżka bazowa:** `/api/auth/*`
 - **Opis:** Kompletne rozwiązanie autoryzacyjne z obsługą email/hasło, PassKeys, organizacji i zarządzania użytkownikami
 - **Dokumentacja:** [Better-Auth Documentation](https://better-auth.com/)
 
-### 👤 **Pracownicy (Employees)**
+### **Pracownicy (Employees)**
 - **Ścieżka bazowa:** `/api/employee/*`
 - **Uprawnienia:** `pracownik`, `analityk`, `admin`
 - **Funkcjonalności:**
@@ -37,7 +37,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
   - Przeglądanie własnych zgłoszeń
   - Pobieranie raportów i sprawozdań
 
-### 🔍 **Analitycy (Analysts)**
+### **Analitycy (Analysts)**
 - **Ścieżka bazowa:** `/api/analyst/*`
 - **Uprawnienia:** `analityk`, `admin`
 - **Funkcjonalności:**
@@ -45,7 +45,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
   - Analiza i rozwiązywanie problemów
   - Tworzenie raportów i sprawozdań
 
-### 👑 **Administratorzy (Admins)**
+### **Administratorzy (Admins)**
 - **Ścieżka bazowa:** `/api/admin/*`
 - **Uprawnienia:** `admin`
 - **Funkcjonalności:**
@@ -54,7 +54,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
   - Szczegółowe metryki: serie czasowe, top użytkownicy i analitycy
   - Pełny dostęp do wszystkich plików w organizacji
 
-### ⚙️ **System**
+### **System**
 - **Health Check:** `GET /health` - Status aplikacji i bazy danych
 - **API Info:** `GET /api` - Informacje o dostępnych endpointach
 
