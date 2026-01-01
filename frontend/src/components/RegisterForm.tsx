@@ -34,8 +34,8 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
       setEmailError("");
     }
 
-    if (password.length < 12) {
-      setPasswordError("Hasło musi mieć co najmniej 12 znaków");
+    if (password.length < 10) {
+      setPasswordError("Hasło musi mieć co najmniej 10 znaków");
       isValid = false;
     } else if (!password.trim()) {
       setPasswordError("Hasło jest wymagane");
@@ -46,7 +46,7 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
 
     const nameParts = fullName.trim().split(/\s+/);
     if (nameParts.length < 2) {
-      setFullNameError("Proszę podać imię i nazwisko (co najmniej dwa wyrazy)");
+      setFullNameError("Proszę podać imię i nazwisko");
       isValid = false;
     } else if (!fullName.trim()) {
       setFullNameError("Imię i nazwisko jest wymagane");

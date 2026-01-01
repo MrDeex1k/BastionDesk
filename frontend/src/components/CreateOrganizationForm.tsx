@@ -41,8 +41,8 @@ export function CreateOrganizationForm({ onBack, onRegisterSuccess }: CreateOrga
     }
 
     // Password validation
-    if (password.length < 12) {
-      setPasswordError("Hasło musi mieć co najmniej 12 znaków");
+    if (password.length < 10) {
+      setPasswordError("Hasło musi mieć co najmniej 10 znaków");
       isValid = false;
     } else if (!password.trim()) {
       setPasswordError("Hasło jest wymagane");
