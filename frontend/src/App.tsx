@@ -17,6 +17,8 @@ import { EmployeeDashboardPage } from "./pages/EmployeeDashboardPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { WaitingForOrganizationPage } from "./pages/WaitingForOrganizationPage";
 import { CreateOrganizationPage } from "./pages/CreateOrganizationPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { InviteRegistrationPage } from "./pages/InviteRegistrationPage";
 
 const queryClient = new QueryClient();
 
@@ -105,6 +107,8 @@ function AppContent() {
           <Route path="/create-organization" element={<CreateOrganizationPage />} />
           <Route path="/waiting-for-organization" element={<WaitingForOrganizationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/accept-invitation/:invitationId" element={<InviteRegistrationPage />} />
           
           <Route 
             path="/admin-dashboard" 
