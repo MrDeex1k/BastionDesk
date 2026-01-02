@@ -20,6 +20,8 @@ import { CreateOrganizationPage } from "./pages/CreateOrganizationPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { InviteRegistrationPage } from "./pages/InviteRegistrationPage";
 
+import './App.css'
+
 const queryClient = new QueryClient();
 
 function AppContent() {
