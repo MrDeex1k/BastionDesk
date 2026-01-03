@@ -33,11 +33,12 @@ import {
   Loader2,
   Plus,
 } from "lucide-react";
+import { authClient } from "../lib/auth-client";
 
 interface PassKey {
   id: string;
-  name: string;
-  createdAt: string;
+  name?: string;
+  createdAt: Date | string;
 }
 
 export function SettingsDialog() {
@@ -62,15 +63,11 @@ export function SettingsDialog() {
   const fetchPassKeys = async () => {
     setIsLoadingPassKeys(true);
     try {
-      const response = await fetch('/api/auth/passkey/list-user-passkeys');
-      if (response.ok) {
-        const data = await response.json();
-        setPassKeys(data.passkeys || []);
-      } else {
-        console.error("Failed to list passkeys");
-      }
+      const { data } = await authClient.passkey.listUserPasskeys();
+      setPassKeys(data || []);
     } catch (error) {
       console.error("Error fetching passkeys:", error);
+      toast.error("Nie udało się pobrać listy kluczy");
     } finally {
       setIsLoadingPassKeys(false);
     }
@@ -79,38 +76,24 @@ export function SettingsDialog() {
   const handleAddPassKey = async () => {
     setIsLoadingPassKeys(true);
     try {
-        const newKeyName = `Klucz ${new Date().toLocaleDateString('pl-PL')} ${new Date().toLocaleTimeString('pl-PL')}`;
-        
-        // Krok 1: Inicjacja rejestracji (pobranie challenge)
-        const response = await fetch('/api/auth/passkey/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: newKeyName
-            })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log("PassKey Register Challenge:", data);
+      const newKeyName = `Klucz ${new Date().toLocaleDateString('pl-PL')} ${new Date().toLocaleTimeString('pl-PL')}`;
+      
+      const { error } = await authClient.passkey.addPasskey({
+        name: newKeyName,
+      });
 
-            // Krok 2: Symulacja interakcji WebAuthn (navigator.credentials.create)
-            // W prawdziwej implementacji tutaj nastąpiłoby wywołanie API przeglądarki
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // Krok 3: Weryfikacja (Wysłanie podpisanego challenge do backendu)
-            // Ponieważ w tym kroku demo nie mamy pełnego backendu WebAuthn,
-            // uznajemy proces za zakończony sukcesem po stronie klienta.
-            
-            toast.success("Klucz PassKey został zarejestrowany");
-            fetchPassKeys();
-        } else {
-            toast.error("Nie udało się rozpocząć dodawania klucza");
-        }
-    } catch {
-        toast.error("Wystąpił błąd połączenia");
+      if (error) {
+        toast.error("Nie udało się dodać klucza PassKey");
+        console.error("PassKey add error:", error);
+      } else {
+        toast.success("Klucz PassKey został dodany");
+        fetchPassKeys();
+      }
+    } catch (error) {
+      console.error("Error adding passkey:", error);
+      toast.error("Wystąpił błąd podczas dodawania klucza");
     } finally {
-        setIsLoadingPassKeys(false);
+      setIsLoadingPassKeys(false);
     }
   };
 
@@ -119,22 +102,22 @@ export function SettingsDialog() {
     
     setIsLoadingPassKeys(true);
     try {
-        const response = await fetch('/api/auth/passkey/delete-passkey', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id })
-        });
+      const { error } = await authClient.passkey.deletePasskey({
+        id,
+      });
 
-        if (response.ok) {
-            toast.success("Klucz PassKey został usunięty");
-            fetchPassKeys();
-        } else {
-            toast.error("Nie udało się usunąć klucza");
-        }
-    } catch {
-        toast.error("Wystąpił błąd podczas usuwania klucza");
+      if (error) {
+        toast.error("Nie udało się usunąć klucza");
+        console.error("PassKey delete error:", error);
+      } else {
+        toast.success("Klucz PassKey został usunięty");
+        fetchPassKeys();
+      }
+    } catch (error) {
+      console.error("Error deleting passkey:", error);
+      toast.error("Wystąpił błąd podczas usuwania klucza");
     } finally {
-        setIsLoadingPassKeys(false);
+      setIsLoadingPassKeys(false);
     }
   };
 

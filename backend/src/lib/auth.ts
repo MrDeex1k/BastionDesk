@@ -78,6 +78,13 @@ export const auth = betterAuth({
 			rpID: env.WEBAUTHN_RP_ID,
 			rpName: env.WEBAUTHN_RP_NAME,
 			origin: env.WEBAUTHN_ORIGIN,
+			schema: {
+				passkey: {
+					fields: {
+						credentialID: "credentialId",
+					},
+				},
+			},
 		}),
 
 		// PassKey Check Plugin - sprawdzanie dostępności kluczy
