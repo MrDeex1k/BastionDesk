@@ -76,7 +76,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   useEffect(() => {
     async function fetchRole() {
-      if (!session?.user || !organizationId) {
+      if (!session?.user) {
+        setRole(null);
+        return;
+      }
+
+      // Jeśli użytkownik nie ma aktywnej organizacji, sprawdź czy ma jakieś organizacje
+      if (!organizationId) {
+        try {
+          const { data: organizations } = await organization.list();
+          if (organizations && organizations.length > 0) {
+            // Automatycznie ustaw pierwszą organizację jako aktywną
+            await organization.setActive({
+              organizationId: organizations[0].id,
+            });
+            // Refetch session aby pobrać nową activeOrganizationId
+            await refetch();
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to set active organization:", error);
+        }
         setRole(null);
         return;
       }

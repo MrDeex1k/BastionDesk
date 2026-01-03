@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -48,9 +49,21 @@ interface IncidentDetail {
   status: string;
   userDescription: string;
   userScreenshotPath?: string | null;
-  userScreenshotMetadata?: Record<string, unknown> | null;
+  userScreenshotMetadata?: {
+    originalName?: string;
+    filename?: string;
+    size?: number;
+    mimeType?: string;
+    uploadedAt?: string;
+  } | null;
   userAttachmentPath?: string | null;
-  userAttachmentMetadata?: Record<string, unknown> | null;
+  userAttachmentMetadata?: {
+    originalName?: string;
+    filename?: string;
+    size?: number;
+    mimeType?: string;
+    uploadedAt?: string;
+  } | null;
   analystId: string | null;
   analystNote: string | null;
   czyRozwiazany: boolean;
@@ -122,88 +135,27 @@ const getAvailableTransitions = (currentStatus: string): { label: string, value:
 
 export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: IncidentDetailsProps) {
   const queryClient = useQueryClient();
-  const currentAnalystId = "user_analyst456"; // Mock current user ID
+  const { user } = useAuth();
+  const currentAnalystId = user?.id || null;
   const [noteContent, setNoteContent] = useState("");
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [uploadType, setUploadType] = useState<'report' | 'statement' | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["incident", incidentId],
+    queryKey: ["incident", incidentId, mode],
     queryFn: async () => {
       // --- REAL SERVER IMPLEMENTATION ---
-      /*
       let endpoint = '';
       if (mode === 'analyst') endpoint = `/api/analyst/incidents/${incidentId}`;
       else if (mode === 'admin') endpoint = `/api/admin/incidents/${incidentId}`;
       else endpoint = `/api/incidents/${incidentId}`; // employee
       
-      const response = await fetch(endpoint);
+      const response = await fetch(endpoint, {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error("Failed to fetch incident details");
       return response.json() as Promise<IncidentDetailResponse>;
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      const cached = queryClient.getQueryData<IncidentDetailResponse>(["incident", incidentId]);
-      if (cached?.data?.id === incidentId) {
-        // use cached data if available
-      }
-
-      const timestamp = Date.now() - 3600000 * 12;
-      const mockIncidentId = incidentId || `0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d`;
-
-      return {
-        success: true,
-        data: {
-          id: mockIncidentId,
-          dataZgloszenia: new Date(timestamp).toISOString(),
-          userId: "user_employee123",
-          organizationId: "org_xyz789",
-          status: "Raport w trakcie",
-          userDescription: "Problem z synchronizacją danych między modułami aplikacji. Aplikacja zawiesza się przy próbie synchronizacji z bazą danych.",
-          userScreenshotPath: `incidents/${mockIncidentId}/screenshots/${timestamp}_sync_error.png`,
-          userScreenshotMetadata: {
-            bucket: "bastiondesk-bucket",
-            filename: "sync_error.png",
-            mimeType: "image/png",
-            size: 203400,
-            originalName: "sync_error.png",
-            uploadedAt: new Date(timestamp).toISOString()
-          },
-          userAttachmentPath: `incidents/${mockIncidentId}/attachments/${timestamp + 1000}_error_log.txt`,
-          userAttachmentMetadata: {
-            bucket: "bastiondesk-bucket",
-            filename: "error_log.txt",
-            mimeType: "text/plain",
-            size: 45000,
-            originalName: "error_log.txt",
-            uploadedAt: new Date(timestamp + 1000).toISOString()
-          },
-          analystId: "user_analyst456",
-          analystNote: "Analiza w toku. Problem wydaje się związany z konfiguracją API. Sprawdzam logi serwera aplikacji i bazy danych. Przygotowuję szczegółowy raport z rekomendacjami rozwiązania.",
-          czyRozwiazany: false,
-          dataRozwiazania: null,
-          analystReportPath: `incidents/${mockIncidentId}/reports/sync_analysis.pdf`,
-          analystReportMetadata: {
-            path: `incidents/${mockIncidentId}/reports/sync_analysis.pdf`,
-            bucket: "bastiondesk-bucket",
-            filename: "sync_analysis.pdf",
-            mimeType: "application/pdf",
-            size: 320000,
-            originalName: "sync_analysis.pdf",
-            uploadedAt: new Date(timestamp + 3600000 * 2).toISOString()
-          },
-          analystReportData: new Date(timestamp + 3600000 * 2).toISOString(),
-          analystStatementPath: undefined,
-          analystStatementMetadata: undefined,
-          analystStatementData: undefined,
-          llmCategory: "Żółty",
-          userName: "Jan Kowalski",
-          analystName: "Anna Nowak",
-          createdAt: new Date(timestamp).toISOString(),
-          updatedAt: new Date(timestamp + 3600000).toISOString()
-        }
-      } as IncidentDetailResponse;
     }
   });
 
@@ -214,28 +166,21 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      // --- MOCK IMPLEMENTATION ---
-      return { 
-        success: true, 
-        message: "Zgłoszenie zostało przypisane do Ciebie",
-        data: {
-          id: incidentId,
-          analystId: currentAnalystId,
-          status: "Raport w trakcie"
-        }
-      };
+      const endpoint = mode === 'admin' 
+        ? `/api/admin/incidents/${incidentId}/assign` 
+        : `/api/analyst/incidents/${incidentId}/assign`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error("Failed to assign incident");
+      return response.json();
     },
     onSuccess: () => {
       toast.success("Incydent został przypisany do Ciebie");
-      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
-        ...old,
-        data: {
-          ...old?.data,
-          analystId: currentAnalystId,
-          analystName: "Obecny Analityk",
-          status: "Raport w trakcie"
-        } as IncidentDetail
-      }));
+      queryClient.invalidateQueries({ queryKey: ["incident", incidentId], exact: false });
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
@@ -245,31 +190,17 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
 
   const unassignMutation = useMutation({
     mutationFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      /*
-      // Dla admina endpoint może być inny lub ten sam z odpowiednimi uprawnieniami
       const endpoint = mode === 'admin' 
         ? `/api/admin/incidents/${incidentId}/unassign` 
         : `/api/analyst/incidents/${incidentId}/unassign`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       });
       if (!response.ok) throw new Error("Failed to unassign incident");
       return response.json();
-      */
-
-      // --- MOCK IMPLEMENTATION ---
-      return { 
-        success: true, 
-        message: "Zgłoszenie zostało oddane do puli",
-        data: {
-          id: incidentId,
-          analystId: null,
-          status: "Zgłoszony"
-        }
-      };
     },
     onSuccess: () => {
       toast.success("Incydent został oddany do puli");
@@ -292,16 +223,14 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      // --- MOCK IMPLEMENTATION ---
-      return { 
-        success: true, 
-        message: "Status zgłoszenia został zaktualizowany",
-        data: {
-          id: incidentId,
-          oldStatus: data?.data.status,
-          newStatus: newStatus
-        }
-      };
+      const response = await fetch(`/api/analyst/incidents/${incidentId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error("Failed to update status");
+      return response.json();
     },
     onSuccess: (_data: unknown, variables) => {
       const newStatus = variables;
@@ -376,6 +305,49 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
       toast.error("Nie udało się zapisać notatki");
     }
   });
+
+  const downloadFile = async (type: 'reports' | 'statements' | 'screenshots' | 'attachments', filename: string) => {
+    try {
+      console.log('[FRONTEND] Downloading file:', { type, filename, incident: incident, mode });
+      
+      // Wybierz odpowiedni endpoint w zależności od trybu
+      let url = '';
+      if (mode === 'admin') {
+        url = `/api/admin/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
+      } else if (mode === 'analyst') {
+        url = `/api/analyst/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
+      } else {
+        // employee mode
+        url = `/api/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
+      }
+      
+      console.log('[FRONTEND] URL:', url);
+      
+      const response = await fetch(url, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[FRONTEND] Download failed:', response.status, errorText);
+        throw new Error('Failed to download file');
+      }
+      
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(a);
+      toast.success('Plik został pobrany');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Nie udało się pobrać pliku');
+    }
+  };
 
   const uploadFileMutation = useMutation({
     mutationFn: async () => {
@@ -637,26 +609,54 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
               <div className={`p-2 rounded-full ${incident.userScreenshotPath ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-600'}`}>
                 <ImageIcon className="h-5 w-5" />
               </div>
-              <div className="overflow-hidden">
+              <div className="overflow-hidden flex-1">
                 <p className="text-sm font-medium text-slate-300">Zrzut ekranu</p>
                 <p className={`text-xs truncate ${incident.userScreenshotPath ? 'text-green-400' : 'text-slate-500'}`}>
-                  {incident.userScreenshotPath ? (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'object' && 'filename' in incident.userScreenshotMetadata ? String(incident.userScreenshotMetadata.filename) : "Dostępny plik") : "Brak pliku"}
+                  {incident.userScreenshotPath ? (incident.userScreenshotMetadata?.originalName || incident.userScreenshotMetadata?.filename || "Dostępny plik") : "Brak pliku"}
                 </p>
               </div>
-              {incident.userScreenshotPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
+              {incident.userScreenshotPath && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 shrink-0"
+                  onClick={() => {
+                    const filename = incident.userScreenshotMetadata?.originalName || incident.userScreenshotMetadata?.filename || 'screenshot';
+                    downloadFile('screenshots', filename);
+                  }}
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Pobierz
+                </Button>
+              )}
+              {incident.userScreenshotPath && !isAssignedToMe && mode !== 'admin' && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
             </div>
 
             <div className={`p-4 rounded-lg border flex items-center gap-3 ${incident.userAttachmentPath ? 'bg-blue-500/5 border-blue-500/20' : 'bg-slate-950/30 border-slate-800'}`}>
               <div className={`p-2 rounded-full ${incident.userAttachmentPath ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-600'}`}>
                 <Paperclip className="h-5 w-5" />
               </div>
-              <div className="overflow-hidden">
+              <div className="overflow-hidden flex-1">
                 <p className="text-sm font-medium text-slate-300">Załącznik</p>
                 <p className={`text-xs truncate ${incident.userAttachmentPath ? 'text-green-400' : 'text-slate-500'}`}>
-                  {incident.userAttachmentPath ? (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'object' && 'filename' in incident.userAttachmentMetadata ? String(incident.userAttachmentMetadata.filename) : "Dostępny plik") : "Brak pliku"}
+                  {incident.userAttachmentPath ? (incident.userAttachmentMetadata?.originalName || incident.userAttachmentMetadata?.filename || "Dostępny plik") : "Brak pliku"}
                 </p>
               </div>
-              {incident.userAttachmentPath && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
+              {incident.userAttachmentPath && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 shrink-0"
+                  onClick={() => {
+                    const filename = incident.userAttachmentMetadata?.originalName || incident.userAttachmentMetadata?.filename || 'attachment';
+                    downloadFile('attachments', filename);
+                  }}
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Pobierz
+                </Button>
+              )}
+              {incident.userAttachmentPath && !isAssignedToMe && mode !== 'admin' && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
             </div>
           </div>
 
@@ -695,31 +695,41 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
                </div>
              ) : null}
 
-             {incident.analystReportMetadata && (
+             {incident.analystReportPath && (
                <div className="flex items-center gap-3 p-3 rounded-md bg-green-500/10 border border-green-500/20 mt-4">
                  <div className="p-2 rounded-full bg-green-500/20 text-green-400">
                    <FileDown className="h-4 w-4" />
                  </div>
                  <div className="flex-1">
                    <p className="text-sm font-medium text-green-400">Dostępny raport końcowy</p>
-                   <p className="text-xs text-slate-500">{incident.analystReportMetadata.filename}</p>
+                   <p className="text-xs text-slate-500">{incident.analystReportMetadata?.filename || 'Raport'}</p>
                  </div>
-                 <Button size="sm" variant="outline" className="border-green-500/30 text-green-400 hover:bg-green-500/20 hover:text-green-300">
+                 <Button 
+                   size="sm" 
+                   variant="outline" 
+                   className="border-green-500/30 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                   onClick={() => downloadFile('reports', incident.analystReportMetadata?.filename || 'report')}
+                 >
                    Pobierz
                  </Button>
                </div>
              )}
 
-             {incident.analystStatementMetadata && (
+             {incident.analystStatementPath && (
                <div className="flex items-center gap-3 p-3 rounded-md bg-purple-500/10 border border-purple-500/20 mt-2">
                  <div className="p-2 rounded-full bg-purple-500/20 text-purple-400">
                    <FileDown className="h-4 w-4" />
                  </div>
                  <div className="flex-1">
                    <p className="text-sm font-medium text-purple-400">Dostępne sprawozdanie końcowe</p>
-                   <p className="text-xs text-slate-500">{incident.analystStatementMetadata.filename}</p>
+                   <p className="text-xs text-slate-500">{incident.analystStatementMetadata?.filename || 'Sprawozdanie'}</p>
                  </div>
-                 <Button size="sm" variant="outline" className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300">
+                 <Button 
+                   size="sm" 
+                   variant="outline" 
+                   className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300"
+                   onClick={() => downloadFile('statements', incident.analystStatementMetadata?.filename || 'statement')}
+                 >
                    Pobierz
                  </Button>
                </div>

@@ -2,14 +2,14 @@ import { LoginForm } from "../components/LoginForm";
 import { useNavigate } from "react-router-dom";
 
 interface LoginPageProps {
-  onLogin: (role: string) => void;
+  onLogin: () => void;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
   
-  const handleLoginSuccess = (role: string) => {
-    onLogin(role);
+  const handleLoginSuccess = () => {
+    onLogin();
   };
 
   return (

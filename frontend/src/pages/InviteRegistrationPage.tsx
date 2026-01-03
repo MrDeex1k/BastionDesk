@@ -14,10 +14,12 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { authClient } from "../lib/auth-client";
+import { useAuth } from "../hooks/useAuth";
 
 export function InviteRegistrationPage() {
   const navigate = useNavigate();
   const { invitationId } = useParams<{ invitationId: string }>();
+  const { session, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -25,14 +27,21 @@ export function InviteRegistrationPage() {
   const [passwordError, setPasswordError] = useState("");
   const [fullNameError, setFullNameError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const orgName = "Organizacja";
+  const orgName = "Organizacji";
 
   useEffect(() => {
     if (!invitationId) {
       toast.error("Brak ID zaproszenia");
       navigate("/login");
+      return;
     }
-  }, [invitationId, navigate]);
+
+    // Jeśli użytkownik już jest zalogowany, przekieruj do akceptacji zaproszenia
+    if (!authLoading && session) {
+      navigate(`/accept-invitation/${invitationId}`);
+      return;
+    }
+  }, [invitationId, navigate, session, authLoading]);
 
   const validateForm = () => {
     let isValid = true;
@@ -82,6 +91,8 @@ export function InviteRegistrationPage() {
 
     try {
       // Krok 1: Rejestracja użytkownika
+      // autoSignIn jest włączone w konfiguracji Better-Auth
+      // requireEmailVerificationOnInvitation wymaga weryfikacji email przed akceptacją
       const signUpResult = await authClient.signUp.email({
         email,
         password,
@@ -92,13 +103,17 @@ export function InviteRegistrationPage() {
         throw new Error("Nie udało się utworzyć konta");
       }
 
-      // Krok 2: Akceptacja zaproszenia do organizacji
-      await authClient.organization.acceptInvitation({
-        invitationId: invitationId,
-      });
+      // Zapisz invitationId w localStorage na wypadek gdyby callbackURL nie zadziałał
+      localStorage.setItem('pending-invitation-id', invitationId);
 
-      toast.success(`Konto utworzone! Dołączyłeś do organizacji ${orgName}`);
-      navigate("/login");
+      toast.success(
+        "Konto utworzone! Sprawdź swoją skrzynkę email i kliknij w link weryfikacyjny.",
+        { duration: 6000 }
+      );
+      
+      // Po weryfikacji email, Better-Auth automatycznie zaloguje użytkownika
+      // i przekieruje na /accept-invitation/:invitationId (sprawdzane przez backend)
+      // gdzie zaakceptujemy zaproszenie
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Wystąpił błąd podczas rejestracji";
       toast.error(errorMessage);

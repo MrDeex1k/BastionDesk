@@ -11,7 +11,7 @@ import { signIn } from "@/lib/auth-client";
 interface LoginFormProps {
   onBack: () => void;
   onForgotPassword: () => void;
-  onLoginSuccess: (role: string) => void;
+  onLoginSuccess: () => void;
 }
 
 export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFormProps) {
@@ -94,9 +94,8 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
     onSuccess: () => {
       toast.success("Zalogowano pomyślnie!");
       
-      // AuthContext automatycznie pobierze rolę przez organization.getActiveMember()
-      // więc przekazujemy placeholder - rzeczywista rola będzie dostępna w useAuth()
-      onLoginSuccess("employee");
+      // AuthContext automatycznie pobierze rolę i przekieruje użytkownika
+      onLoginSuccess();
     },
     onError: (error: Error) => {
       setPasswordError(error.message);
@@ -117,8 +116,8 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
     onSuccess: () => {
       toast.success("Zalogowano pomyślnie używając PassKey");
       
-      // AuthContext automatycznie pobierze rolę przez organization.getActiveMember()
-      onLoginSuccess("employee");
+      // AuthContext automatycznie pobierze rolę i przekieruje użytkownika
+      onLoginSuccess();
     },
     onError: (error: Error) => {
       toast.error(`Błąd logowania PassKey: ${error.message}`);

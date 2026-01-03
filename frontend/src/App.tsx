@@ -19,37 +19,39 @@ import { WaitingForOrganizationPage } from "./pages/WaitingForOrganizationPage";
 import { CreateOrganizationPage } from "./pages/CreateOrganizationPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { InviteRegistrationPage } from "./pages/InviteRegistrationPage";
+import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
+import { useEffect } from "react";
 
 import './App.css'
 
 const queryClient = new QueryClient();
 
 function AppContent() {
-  const { role, session } = useAuth();
+  const { role, session, isLoading } = useAuth();
   const navigate = useNavigate();
 
   /**
    * Przekierowanie użytkownika do odpowiedniego dashboardu po zalogowaniu
-   * Better-Auth automatycznie zarządza sesją, więc nie potrzebujemy setUserRole
+   * Czekamy aż sesja będzie dostępna i rola zostanie pobrana
    */
-  const handleLogin = (userRole: string) => {
-    // Normalizacja roli
-    const normalizedRole = userRole === "analyst" ? "analityk" : userRole;
-    
-    switch (normalizedRole) {
-      case "admin":
-        navigate("/admin-dashboard");
-        break;
-      case "analityk":
-        navigate("/analyst-dashboard");
-        break;
-      case "pracownik":
-        navigate("/employee-dashboard");
-        break;
-      default:
-        navigate("/");
+  useEffect(() => {
+    if (session && role && !isLoading) {
+      switch (role) {
+        case "admin":
+          navigate("/admin-dashboard");
+          break;
+        case "analityk":
+          navigate("/analyst-dashboard");
+          break;
+        case "pracownik":
+          navigate("/employee-dashboard");
+          break;
+        default:
+          // Jeśli rola nie jest rozpoznana, przekieruj na stronę główną
+          navigate("/");
+      }
     }
-  };
+  }, [session, role, isLoading, navigate]);
 
   /**
    * Wylogowanie użytkownika przez Better-Auth
@@ -110,7 +112,10 @@ function AppContent() {
           <Route path="/waiting-for-organization" element={<WaitingForOrganizationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/accept-invitation/:invitationId" element={<InviteRegistrationPage />} />
+          {/* Route dla formularza rejestracji z zaproszenia */}
+          <Route path="/invite/:invitationId" element={<InviteRegistrationPage />} />
+          {/* Route dla automatycznej akceptacji zaproszenia po weryfikacji email */}
+          <Route path="/accept-invitation/:invitationId" element={<AcceptInvitationPage />} />
           
           <Route 
             path="/admin-dashboard" 
