@@ -1,0 +1,225 @@
+/**
+ * Email Service - Główny serwis wysyłki emaili
+ *
+ * Funkcje do wysyłki emaili w ramach Better-Auth:
+ * - Weryfikacja adresu email
+ * - Reset hasła
+ * - Zaproszenia do organizacji
+ */
+
+import {
+	generateVerificationEmailHtml,
+	getVerificationEmailSubject,
+	type VerificationEmailData,
+} from "../templates/email-verification";
+import {
+	generateInvitationEmailHtml,
+	getInvitationEmailSubject,
+	type InvitationEmailData,
+} from "../templates/invitation";
+import {
+	generatePasswordResetEmailHtml,
+	getPasswordResetEmailSubject,
+	type PasswordResetEmailData,
+} from "../templates/password-reset";
+import { sendEmail } from "../utils/email-sender";
+
+// Types
+
+/**
+ * User data przekazywane przez Better-Auth
+ */
+interface BetterAuthUser {
+	id: string;
+	email: string;
+	name: string;
+	emailVerified: boolean;
+	image?: string | null;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+/**
+ * Parametry dla sendVerificationEmail
+ */
+export interface SendVerificationEmailParams {
+	user: BetterAuthUser;
+	url: string;
+	token: string;
+}
+
+/**
+ * Parametry dla sendResetPasswordEmail
+ */
+export interface SendResetPasswordEmailParams {
+	user: BetterAuthUser;
+	url: string;
+	token: string;
+}
+
+/**
+ * Parametry dla sendOrganizationInvitation
+ */
+export interface SendOrganizationInvitationParams {
+	email: string;
+	inviterName: string;
+	invitedByEmail: string;
+	organizationName: string;
+	inviteUrl: string;
+	role?: string;
+}
+
+// Email Functions
+
+/**
+ * Wysyła email weryfikacyjny po rejestracji
+ *
+ * WAŻNE: Funkcja jest wywoływana przez Better-Auth z `void` aby uniknąć timing attacks.
+ * Better-Auth nie czeka na zakończenie wysyłki emaila.
+ */
+export async function sendVerificationEmail(
+	params: SendVerificationEmailParams,
+): Promise<void> {
+	const { user, url, token } = params;
+
+	try {
+		const emailData: VerificationEmailData = {
+			userName: user.name || "Użytkowniku",
+			userEmail: user.email,
+			verificationUrl: url,
+			token,
+		};
+
+		const html = generateVerificationEmailHtml(emailData);
+		const subject = getVerificationEmailSubject();
+
+		const result = await sendEmail({
+			to: user.email,
+			subject,
+			html,
+		});
+
+		if (!result.success) {
+			console.error(
+				`Nie udało się wysłać emaila weryfikacyjnego do ${user.email}:`,
+				result.error,
+			);
+		}
+	} catch (error) {
+		console.error(
+			`Błąd podczas wysyłki emaila weryfikacyjnego do ${user.email}:`,
+			error,
+		);
+	}
+}
+
+/**
+ * Wysyła email z linkiem do resetowania hasła
+ *
+ * WAŻNE: Funkcja jest wywoływana przez Better-Auth z `void` aby uniknąć timing attacks.
+ * Better-Auth nie czeka na zakończenie wysyłki emaila.
+ */
+export async function sendResetPasswordEmail(
+	params: SendResetPasswordEmailParams,
+): Promise<void> {
+	const { user, url, token } = params;
+
+	try {
+		const emailData: PasswordResetEmailData = {
+			userName: user.name || "Użytkowniku",
+			userEmail: user.email,
+			resetUrl: url,
+			token,
+		};
+
+		const html = generatePasswordResetEmailHtml(emailData);
+		const subject = getPasswordResetEmailSubject();
+
+		const result = await sendEmail({
+			to: user.email,
+			subject,
+			html,
+		});
+
+		if (!result.success) {
+			console.error(
+				`Nie udało się wysłać emaila resetującego hasło do ${user.email}:`,
+				result.error,
+			);
+		}
+	} catch (error) {
+		console.error(
+			`Błąd podczas wysyłki emaila resetującego hasło do ${user.email}:`,
+			error,
+		);
+	}
+}
+
+/**
+ * Wysyła zaproszenie do organizacji
+ *
+ * UWAGA: Ta funkcja jest wywoływana normalnie (bez `void`),
+ * ponieważ to nie jest funkcja związana z bezpieczeństwem/timing attacks.
+ */
+export async function sendOrganizationInvitation(
+	params: SendOrganizationInvitationParams,
+): Promise<void> {
+	const {
+		email,
+		inviterName,
+		invitedByEmail,
+		organizationName,
+		inviteUrl,
+		role = "członek",
+	} = params;
+
+	try {
+		const emailData: InvitationEmailData = {
+			recipientEmail: email,
+			inviterName: inviterName || "Administrator",
+			inviterEmail: invitedByEmail,
+			organizationName,
+			inviteUrl,
+			role,
+		};
+
+		const html = generateInvitationEmailHtml(emailData);
+		const subject = getInvitationEmailSubject(organizationName);
+
+		const result = await sendEmail({
+			to: email,
+			subject,
+			html,
+		});
+
+		if (!result.success) {
+			console.error(
+				`Nie udało się wysłać zaproszenia do organizacji do ${email}:`,
+				result.error,
+			);
+			// Możesz rzucić wyjątek jeśli chcesz, aby Better-Auth wiedział o błędzie
+			throw new Error(`Failed to send invitation email: ${result.error}`);
+		}
+	} catch (error) {
+		console.error(
+			`Błąd podczas wysyłki zaproszenia do organizacji do ${email}:`,
+			error,
+		);
+		throw error; // Rzuć błąd dalej, aby Better-Auth mógł go obsłużyć
+	}
+}
+
+// Helper Functions
+
+/**
+ * Testuje połączenie email (użyteczne do healthcheck)
+ */
+export async function testEmailConnection(): Promise<boolean> {
+	try {
+		const { verifyEmailConnection } = await import("../utils/email-sender");
+		return await verifyEmailConnection();
+	} catch (error) {
+		console.error("Błąd podczas testowania połączenia email:", error);
+		return false;
+	}
+}

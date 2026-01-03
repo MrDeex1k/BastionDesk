@@ -1,11 +1,11 @@
 /**
  * Custom Better-Auth Plugin: PassKey Check
- * 
+ *
  * Plugin sprawdzający czy dla danego emaila są zarejestrowane klucze PassKey.
  */
 
-import { createAuthEndpoint } from "better-auth/api";
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint } from "better-auth/api";
 import { z } from "zod";
 
 type UserRow = {
@@ -18,7 +18,7 @@ export const passkeyCheckPlugin = () => {
 		endpoints: {
 			/**
 			 * POST /api/auth/passkey/check-availability
-			 * 
+			 *
 			 * Sprawdza czy dla podanego emaila istnieją zarejestrowane klucze PassKey.
 			 * Endpoint publiczny (nie wymaga sesji).
 			 */

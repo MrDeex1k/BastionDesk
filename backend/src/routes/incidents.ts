@@ -7,32 +7,33 @@
  * - Admin: przeglądanie wszystkich, statystyki
  */
 
-import { Router } from "express";
 import type { Response } from "express";
-import { requireAuth, requireRole, type AuthenticatedRequest } from "../middleware/auth.middleware";
+import { Router } from "express";
+import { getDb, query, queryOne } from "../lib/database";
+import { getObjectBuffer, presignObject, storageClient } from "../lib/storage";
+import {
+	type AuthenticatedRequest,
+	requireAuth,
+	requireRole,
+} from "../middleware/auth.middleware";
 import { asyncHandler } from "../middleware/error.middleware";
+import type { FileMetadata, Incident } from "../types";
 import {
-	validate,
-	validateMultiple,
-	createIncidentSchema,
-	updateIncidentStatusSchema,
-	updateIncidentNoteSchema,
-	resolveIncidentSchema,
-	paginationSchema,
-	uuidSchema,
-} from "../utils/validation";
-import {
+	generateStorageKey,
 	parseMultipartFormData,
 	validateFile,
-	generateStorageKey,
 } from "../utils/file.helper";
-import { getDb, queryOne, query } from "../lib/database";
-import { storageClient, presignObject } from "../lib/storage";
-import type { Incident, FileMetadata } from "../types";
-import { z } from "zod";
+import {
+	createIncidentSchema,
+	paginationSchema,
+	resolveIncidentSchema,
+	updateIncidentNoteSchema,
+	updateIncidentStatusSchema,
+	uuidSchema,
+	validate,
+} from "../utils/validation";
 
 const router = Router();
-
 
 /**
  * POST /api/incidents
@@ -56,7 +57,7 @@ router.post(
 			userDescription: fields.userDescription,
 		});
 
-		const db = getDb();
+		const _db = getDb();
 		const incidentId = crypto.randomUUID();
 
 		// Przygotuj dane dla plików
@@ -139,7 +140,6 @@ router.post(
 	}),
 );
 
-
 /**
  * GET /api/incidents/my
  * Pobieranie listy własnych incydentów
@@ -155,7 +155,10 @@ router.get(
 	requireRole(["pracownik", "analityk", "admin"]),
 	validate(paginationSchema, "query"),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { page, limit } = req.query as unknown as { page: number; limit: number };
+		const { page, limit } = req.query as unknown as {
+			page: number;
+			limit: number;
+		};
 		const offset = (page - 1) * limit;
 
 		// Pobierz incydenty
@@ -188,7 +191,6 @@ router.get(
 		});
 	}),
 );
-
 
 /**
  * GET /api/incidents/:id
@@ -240,7 +242,6 @@ router.get(
 	}),
 );
 
-
 /**
  * GET /api/incidents/analyst/assigned
  * Pobieranie incydentów przypisanych do zalogowanego analityka
@@ -251,7 +252,10 @@ router.get(
 	requireRole(["analityk", "admin"]),
 	validate(paginationSchema, "query"),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { page, limit } = req.query as unknown as { page: number; limit: number };
+		const { page, limit } = req.query as unknown as {
+			page: number;
+			limit: number;
+		};
 		const offset = (page - 1) * limit;
 
 		const incidents = await query<Incident>(
@@ -283,7 +287,6 @@ router.get(
 	}),
 );
 
-
 /**
  * GET /api/incidents/analyst/unassigned
  * Pobieranie incydentów nieprzypisanych do żadnego analityka
@@ -294,7 +297,10 @@ router.get(
 	requireRole(["analityk", "admin"]),
 	validate(paginationSchema, "query"),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { page, limit } = req.query as unknown as { page: number; limit: number };
+		const { page, limit } = req.query as unknown as {
+			page: number;
+			limit: number;
+		};
 		const offset = (page - 1) * limit;
 
 		const incidents = await query<Incident>(
@@ -325,7 +331,6 @@ router.get(
 		});
 	}),
 );
-
 
 /**
  * POST /api/incidents/:id/assign
@@ -364,7 +369,6 @@ router.post(
 	}),
 );
 
-
 /**
  * POST /api/incidents/:id/unassign
  * Usunięcie przypisania incydentu (tylko jeśli jest przypisany do mnie)
@@ -390,7 +394,8 @@ router.post(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message:
+						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -401,7 +406,6 @@ router.post(
 		});
 	}),
 );
-
 
 /**
  * PATCH /api/incidents/:id/status
@@ -442,7 +446,8 @@ router.patch(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message:
+						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -453,7 +458,6 @@ router.patch(
 		});
 	}),
 );
-
 
 /**
  * PATCH /api/incidents/:id/note
@@ -493,7 +497,8 @@ router.patch(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message:
+						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -504,7 +509,6 @@ router.patch(
 		});
 	}),
 );
-
 
 /**
  * PATCH /api/incidents/:id/resolve
@@ -545,7 +549,8 @@ router.patch(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message:
+						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -556,7 +561,6 @@ router.patch(
 		});
 	}),
 );
-
 
 /**
  * POST /api/incidents/:id/report
@@ -619,11 +623,7 @@ router.post(
 				"analystReportData" = now()
 			WHERE ${whereClause}
 			RETURNING *`,
-			[
-				...params,
-				reportPath,
-				JSON.stringify(files.report.metadata),
-			],
+			[...params, reportPath, JSON.stringify(files.report.metadata)],
 		);
 
 		if (!incident) {
@@ -634,7 +634,8 @@ router.post(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message:
+						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -645,7 +646,6 @@ router.post(
 		});
 	}),
 );
-
 
 /**
  * POST /api/incidents/:id/statement
@@ -708,11 +708,7 @@ router.post(
 				"analystStatementData" = now()
 			WHERE ${whereClause}
 			RETURNING *`,
-			[
-				...params,
-				statementPath,
-				JSON.stringify(files.statement.metadata),
-			],
+			[...params, statementPath, JSON.stringify(files.statement.metadata)],
 		);
 
 		if (!incident) {
@@ -723,7 +719,8 @@ router.post(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message:
+						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -734,7 +731,6 @@ router.post(
 		});
 	}),
 );
-
 
 /**
  * GET /api/incidents/:id/files/:fileType/download
@@ -751,7 +747,9 @@ router.get(
 		const fileType = req.params.fileType!;
 		uuidSchema.parse(id);
 
-		if (!["screenshot", "attachment", "report", "statement"].includes(fileType)) {
+		if (
+			!["screenshot", "attachment", "report", "statement"].includes(fileType)
+		) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -839,7 +837,6 @@ router.get(
 	}),
 );
 
-
 /**
  * GET /api/incidents/admin/all
  * Pobieranie wszystkich incydentów w organizacji
@@ -850,7 +847,10 @@ router.get(
 	requireRole(["admin"]),
 	validate(paginationSchema, "query"),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { page, limit } = req.query as unknown as { page: number; limit: number };
+		const { page, limit } = req.query as unknown as {
+			page: number;
+			limit: number;
+		};
 		const offset = (page - 1) * limit;
 
 		const incidents = await query<Incident>(
@@ -881,7 +881,6 @@ router.get(
 		});
 	}),
 );
-
 
 /**
  * GET /api/incidents/admin/stats
@@ -949,6 +948,189 @@ router.get(
 			},
 		});
 	}),
+);
+
+/**
+ * GET /api/incidents/:id/files/:type/:filename
+ * Pobieranie plików z własnych incydentów przez pracownika
+ */
+async function downloadFile(req: Request, res: Response) {
+	try {
+		const authReq = req as AuthenticatedRequest;
+		const { id, type, filename } = req.params;
+		const userId = authReq.user.id;
+		const organizationId = authReq.organizationId!;
+
+		// Sprawdź wymagane parametry
+		if (!id || !type || !filename) {
+			return res.status(400).json({
+				success: false,
+				error: {
+					code: "MISSING_PARAMETERS",
+					message: "Brak wymaganych parametrów",
+				},
+			});
+		}
+
+		// Walidacja typu pliku
+		if (
+			!["screenshots", "attachments", "reports", "statements"].includes(type)
+		) {
+			return res.status(400).json({
+				success: false,
+				error: {
+					code: "INVALID_FILE_TYPE",
+					message: "Nieprawidłowy typ pliku",
+				},
+			});
+		}
+
+		// Sprawdź czy incydent należy do użytkownika
+		const incident = await queryOne<{
+			organizationId: string;
+			userId: string;
+		}>(
+			`
+			SELECT "organizationId", "userId" FROM incidents
+			WHERE id = $1 AND "organizationId" = $2 AND "userId" = $3
+		`,
+			[id, organizationId, userId],
+		);
+
+		if (!incident) {
+			return res.status(404).json({
+				success: false,
+				error: {
+					code: "INCIDENT_NOT_FOUND",
+					message: "Zgłoszenie nie zostało znalezione lub nie masz do niego dostępu",
+				},
+			});
+		}
+
+		// Określ kolumny do pobrania na podstawie typu pliku
+		const metadataColumn =
+			type === "screenshots"
+				? "userScreenshotMetadata"
+				: type === "attachments"
+					? "userAttachmentMetadata"
+					: type === "reports"
+						? "analystReportMetadata"
+						: "analystStatementMetadata";
+
+		const pathColumn =
+			type === "screenshots"
+				? "userScreenshotPath"
+				: type === "attachments"
+					? "userAttachmentPath"
+					: type === "reports"
+						? "analystReportPath"
+						: "analystStatementPath";
+
+		const fileData = await queryOne<{ metadata: any; path: string }>(
+			`
+			SELECT "${metadataColumn}" as metadata, "${pathColumn}" as path FROM incidents
+			WHERE id = $1 AND "organizationId" = $2 AND "userId" = $3
+		`,
+			[id, organizationId, userId],
+		);
+
+		if (!fileData?.metadata || !fileData?.path) {
+			return res.status(404).json({
+				success: false,
+				error: {
+					code: "FILE_NOT_FOUND",
+					message: "Plik nie został znaleziony",
+				},
+			});
+		}
+
+		// Parsuj metadata jeśli jest stringiem JSON
+		let parsedMetadata = fileData.metadata;
+		if (typeof fileData.metadata === "string") {
+			try {
+				parsedMetadata = JSON.parse(fileData.metadata);
+			} catch (e) {
+				return res.status(500).json({
+					success: false,
+					error: {
+						code: "METADATA_PARSE_ERROR",
+						message: "Błąd parsowania metadanych pliku",
+					},
+				});
+			}
+		}
+
+		// Znajdź plik w metadanych
+		let fileMetadata = null;
+		let filePath = null;
+
+		if (Array.isArray(parsedMetadata)) {
+			// Dla wielu plików
+			fileMetadata = parsedMetadata.find(
+				(f: any) => f.filename === filename || f.originalName === filename,
+			);
+			filePath = fileMetadata?.path;
+		} else if (typeof parsedMetadata === "object") {
+			// Dla pojedynczych plików
+			fileMetadata = parsedMetadata;
+			filePath = fileData.path;
+		}
+
+		if (!fileMetadata || !filePath) {
+			return res.status(404).json({
+				success: false,
+				error: {
+					code: "FILE_NOT_FOUND",
+					message: "Plik nie został znaleziony w metadanych",
+				},
+			});
+		}
+
+		// Pobierz plik z storage
+		const fileBuffer = await getObjectBuffer(filePath);
+
+		if (!fileBuffer) {
+			return res.status(404).json({
+				success: false,
+				error: {
+					code: "FILE_NOT_FOUND",
+					message: "Plik nie jest dostępny w storage",
+				},
+			});
+		}
+
+		// Ustaw odpowiednie nagłówki i zwróć plik
+		res.setHeader(
+			"Content-Type",
+			fileMetadata.mimeType || "application/octet-stream",
+		);
+
+		const realFilename = fileMetadata.filename || fileMetadata.originalName || filename;
+		const encodedFilename = encodeURIComponent(realFilename);
+		res.setHeader(
+			"Content-Disposition",
+			`attachment; filename="${realFilename.replace(/[^\x00-\x7F]/g, "_")}"; filename*=UTF-8''${encodedFilename}`,
+		);
+
+		res.setHeader("Content-Length", fileBuffer.length);
+		res.send(fileBuffer);
+	} catch (error) {
+		console.error("[EMPLOYEE] Download file error:", error);
+		res.status(500).json({
+			success: false,
+			error: {
+				code: "DOWNLOAD_ERROR",
+				message: "Nie udało się pobrać pliku",
+			},
+		});
+	}
+}
+
+router.get(
+	"/:id/files/:type/:filename",
+	requireAuth,
+	requireRole(["pracownik", "analityk", "admin"]),
+	asyncHandler(downloadFile),
 );
 
 export default router;

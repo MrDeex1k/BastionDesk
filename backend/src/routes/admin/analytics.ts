@@ -1,14 +1,11 @@
-import { Router } from 'express';
-import type { Request, Response } from 'express';
-import { query, queryOne } from '../../lib/database.js';
-import { requireAuth, requireRole } from '../../middleware/auth.middleware.js';
-import type { AuthenticatedRequest } from '../../middleware/auth.middleware.js';
+import type { Request, Response } from "express";
+import { Router } from "express";
+import { query, queryOne } from "../../lib/database.js";
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 const router = Router();
 
-// Wszystkie endpointy wymagają autoryzacji administratora
-router.use(requireAuth);
-router.use(requireRole(['admin']));
+// Autoryzacja i sprawdzanie roli admin są już zrobione w admin/index.ts
 
 /**
  * Pobierz podstawowe statystyki incydentów dla organizacji administratora
@@ -19,30 +16,40 @@ async function getIncidentStats(req: Request, res: Response) {
 		const organizationId = authReq.organizationId!;
 
 		// Pobierz całkowitą liczbę incydentów
-		const totalResult = await queryOne<{ count: number }>(`
+		const totalResult = await queryOne<{ count: number }>(
+			`
 			SELECT COUNT(*) as count FROM incidents WHERE "organizationId" = $1
-		`, [organizationId]);
+		`,
+			[organizationId],
+		);
 
 		const totalIncidents = totalResult?.count || 0;
 
 		// Pobierz liczbę rozwiązanych incydentów
-		const resolvedResult = await queryOne<{ count: number }>(`
+		const resolvedResult = await queryOne<{ count: number }>(
+			`
 			SELECT COUNT(*) as count FROM incidents
 			WHERE "organizationId" = $1 AND "czyRozwiazany" = true
-		`, [organizationId]);
+		`,
+			[organizationId],
+		);
 
 		const resolvedIncidents = resolvedResult?.count || 0;
 
 		// Oblicz procent rozwiązanych
-		const resolvedPercentage = totalIncidents > 0 ? (resolvedIncidents / totalIncidents) * 100 : 0;
+		const resolvedPercentage =
+			totalIncidents > 0 ? (resolvedIncidents / totalIncidents) * 100 : 0;
 
 		// Pobierz średni czas rozwiązywania w sekundach
-		const avgTimeResult = await queryOne<{ avg_time_seconds: number | null }>(`
+		const avgTimeResult = await queryOne<{ avg_time_seconds: number | null }>(
+			`
 			SELECT
 				AVG(EXTRACT(EPOCH FROM ("dataRozwiazania" - "dataZgloszenia"))) as avg_time_seconds
 			FROM incidents
 			WHERE "organizationId" = $1 AND "czyRozwiazany" = true AND "dataRozwiazania" IS NOT NULL
-		`, [organizationId]);
+		`,
+			[organizationId],
+		);
 
 		let avgResolutionTime = null;
 		if (avgTimeResult?.avg_time_seconds) {
@@ -57,27 +64,33 @@ async function getIncidentStats(req: Request, res: Response) {
 				hours,
 				minutes,
 				seconds,
-				totalSeconds
+				totalSeconds,
 			};
 		}
 
 		// Pobierz rozkład po statusach
-		const statusStats = await query<{ status: string; count: number }>(`
+		const statusStats = await query<{ status: string; count: number }>(
+			`
 			SELECT status, COUNT(*) as count
 			FROM incidents
 			WHERE "organizationId" = $1
 			GROUP BY status
 			ORDER BY count DESC
-		`, [organizationId]);
+		`,
+			[organizationId],
+		);
 
 		// Pobierz rozkład po kategoriach LLM
-		const categoryStats = await query<{ category: string; count: number }>(`
+		const categoryStats = await query<{ category: string; count: number }>(
+			`
 			SELECT "llmCategory" as category, COUNT(*) as count
 			FROM incidents
 			WHERE "organizationId" = $1 AND "llmCategory" IS NOT NULL
 			GROUP BY "llmCategory"
 			ORDER BY count DESC
-		`, [organizationId]);
+		`,
+			[organizationId],
+		);
 
 		res.json({
 			success: true,
@@ -91,12 +104,12 @@ async function getIncidentStats(req: Request, res: Response) {
 			},
 		});
 	} catch (error) {
-		console.error('[ADMIN] Get incident stats error:', error);
+		console.error("[ADMIN] Get incident stats error:", error);
 		res.status(500).json({
 			success: false,
 			error: {
-				code: 'GET_STATS_ERROR',
-				message: 'Nie udało się pobrać statystyk',
+				code: "GET_STATS_ERROR",
+				message: "Nie udało się pobrać statystyk",
 			},
 		});
 	}
@@ -109,15 +122,15 @@ async function getIncidentMetrics(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const organizationId = authReq.organizationId!;
-		const period = (req.query.period as string) || '30'; // Domyślnie 30 dni
+		const period = (req.query.period as string) || "30"; // Domyślnie 30 dni
 		const days = parseInt(period, 10);
 
-		if (isNaN(days) || days < 1 || days > 365) {
+		if (Number.isNaN(days) || days < 1 || days > 365) {
 			return res.status(400).json({
 				success: false,
 				error: {
-					code: 'INVALID_PERIOD',
-					message: 'Okres musi być liczbą między 1 a 365 dni',
+					code: "INVALID_PERIOD",
+					message: "Okres musi być liczbą między 1 a 365 dni",
 				},
 			});
 		}
@@ -126,7 +139,8 @@ async function getIncidentMetrics(req: Request, res: Response) {
 		cutoffDate.setDate(cutoffDate.getDate() - days);
 
 		// Incydenty w okresie czasu
-		const periodStats = await query<{ date: string; count: number }>(`
+		const periodStats = await query<{ date: string; count: number }>(
+			`
 			SELECT
 				DATE("createdAt") as date,
 				COUNT(*) as count
@@ -134,10 +148,13 @@ async function getIncidentMetrics(req: Request, res: Response) {
 			WHERE "organizationId" = $1 AND "createdAt" >= $2
 			GROUP BY DATE("createdAt")
 			ORDER BY date
-		`, [organizationId, cutoffDate.toISOString()]);
+		`,
+			[organizationId, cutoffDate.toISOString()],
+		);
 
 		// Rozwiązania w okresie czasu
-		const resolutionStats = await query<{ date: string; count: number }>(`
+		const resolutionStats = await query<{ date: string; count: number }>(
+			`
 			SELECT
 				DATE("dataRozwiazania") as date,
 				COUNT(*) as count
@@ -145,10 +162,13 @@ async function getIncidentMetrics(req: Request, res: Response) {
 			WHERE "organizationId" = $1 AND "dataRozwiazania" >= $2
 			GROUP BY DATE("dataRozwiazania")
 			ORDER BY date
-		`, [organizationId, cutoffDate.toISOString()]);
+		`,
+			[organizationId, cutoffDate.toISOString()],
+		);
 
 		// Średni czas rozwiązywania dziennie
-		const dailyAvgTime = await query<{ date: string; avg_time_hours: number }>(`
+		const dailyAvgTime = await query<{ date: string; avg_time_hours: number }>(
+			`
 			SELECT
 				DATE("dataRozwiazania") as date,
 				AVG(EXTRACT(EPOCH FROM ("dataRozwiazania" - "dataZgloszenia")) / 3600) as avg_time_hours
@@ -156,10 +176,17 @@ async function getIncidentMetrics(req: Request, res: Response) {
 			WHERE "organizationId" = $1 AND "dataRozwiazania" >= $2 AND "czyRozwiazany" = true
 			GROUP BY DATE("dataRozwiazania")
 			ORDER BY date
-		`, [organizationId, cutoffDate.toISOString()]);
+		`,
+			[organizationId, cutoffDate.toISOString()],
+		);
 
 		// Statystyki po użytkownikach (top reporterzy)
-		const userStats = await query<{ userId: string; userName: string; count: number }>(`
+		const userStats = await query<{
+			userId: string;
+			userName: string;
+			count: number;
+		}>(
+			`
 			SELECT
 				i."userId",
 				u.name as "userName",
@@ -170,10 +197,17 @@ async function getIncidentMetrics(req: Request, res: Response) {
 			GROUP BY i."userId", u.name
 			ORDER BY count DESC
 			LIMIT 10
-		`, [organizationId, cutoffDate.toISOString()]);
+		`,
+			[organizationId, cutoffDate.toISOString()],
+		);
 
 		// Statystyki po analitykach (top rozwiązywacze)
-		const analystStats = await query<{ analystId: string; analystName: string; resolved: number }>(`
+		const analystStats = await query<{
+			analystId: string;
+			analystName: string;
+			resolved: number;
+		}>(
+			`
 			SELECT
 				i."analystId",
 				a.name as "analystName",
@@ -184,7 +218,9 @@ async function getIncidentMetrics(req: Request, res: Response) {
 			GROUP BY i."analystId", a.name
 			ORDER BY resolved DESC
 			LIMIT 10
-		`, [organizationId, cutoffDate.toISOString()]);
+		`,
+			[organizationId, cutoffDate.toISOString()],
+		);
 
 		res.json({
 			success: true,
@@ -203,19 +239,19 @@ async function getIncidentMetrics(req: Request, res: Response) {
 			},
 		});
 	} catch (error) {
-		console.error('[ADMIN] Get incident metrics error:', error);
+		console.error("[ADMIN] Get incident metrics error:", error);
 		res.status(500).json({
 			success: false,
 			error: {
-				code: 'GET_METRICS_ERROR',
-				message: 'Nie udało się pobrać metryk',
+				code: "GET_METRICS_ERROR",
+				message: "Nie udało się pobrać metryk",
 			},
 		});
 	}
 }
 
 // Routes
-router.get('/stats', getIncidentStats);
-router.get('/metrics', getIncidentMetrics);
+router.get("/stats", getIncidentStats);
+router.get("/metrics", getIncidentMetrics);
 
 export default router;

@@ -1,10 +1,11 @@
 //Schematy walidacji Zod dla danych wejściowych API
 
+import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
 
-
-export const uuidSchema = z.string().uuid({ message: "Nieprawidłowy format UUID" });
+export const uuidSchema = z
+	.string()
+	.uuid({ message: "Nieprawidłowy format UUID" });
 
 export const emailSchema = z
 	.string()
@@ -15,7 +16,7 @@ export const emailSchema = z
 // Password validation (zgodne z Better-Auth config)
 export const passwordSchema = z
 	.string()
-	.min(12, { message: "Hasło musi mieć co najmniej 12 znaków" })
+	.min(10, { message: "Hasło musi mieć co najmniej 10 znaków" })
 	.max(128, { message: "Hasło może mieć maksymalnie 128 znaków" });
 
 // Pagination schemas
@@ -23,7 +24,6 @@ export const paginationSchema = z.object({
 	page: z.coerce.number().int().min(1).default(1),
 	limit: z.coerce.number().int().min(1).max(100).default(20),
 });
-
 
 // Zgodne z 03-create-app.sql: incident_status ENUM
 export const incidentStatusSchema = z.enum([
@@ -36,11 +36,7 @@ export const incidentStatusSchema = z.enum([
 ]);
 
 // Zgodne z 03-create-app.sql: incident_category ENUM
-export const incidentCategorySchema = z.enum([
-	"Czerwony",
-	"Żółty",
-	"Zielony",
-]);
+export const incidentCategorySchema = z.enum(["Czerwony", "Żółty", "Zielony"]);
 
 // Schemat dla tworzenia incydentu (multipart/form-data)
 // Pliki będą obsługiwane oddzielnie przez file middleware
@@ -69,7 +65,6 @@ export const resolveIncidentSchema = z.object({
 	resolved: z.boolean(),
 });
 
-
 export const userRoleSchema = z.enum(["admin", "analityk", "pracownik"]);
 
 export const createOrganizationSchema = z.object({
@@ -81,10 +76,9 @@ export const createOrganizationSchema = z.object({
 		.string()
 		.min(2, { message: "Slug musi mieć co najmniej 2 znaki" })
 		.max(50, { message: "Slug może mieć maksymalnie 50 znaków" })
-		.regex(
-			/^[a-z0-9-]+$/,
-			{ message: "Slug może zawierać tylko małe litery, cyfry i myślniki" },
-		),
+		.regex(/^[a-z0-9-]+$/, {
+			message: "Slug może zawierać tylko małe litery, cyfry i myślniki",
+		}),
 	logo: z.string().url({ message: "Nieprawidłowy URL logo" }).optional(),
 });
 
@@ -93,14 +87,12 @@ export const inviteMemberSchema = z.object({
 	role: userRoleSchema.default("pracownik"),
 });
 
-
 export const incidentQuerySchema = paginationSchema.extend({
 	status: incidentStatusSchema.optional(),
 	userId: uuidSchema.optional(),
 	sortBy: z.enum(["createdAt", "updatedAt", "status"]).default("createdAt"),
 	sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
-
 
 type ValidateTarget = "body" | "query" | "params";
 
@@ -124,7 +116,7 @@ export function validate<T extends z.ZodTypeAny>(
 			const result = schema.parse(data);
 
 			// Zastąp oryginalne dane zwalidowanymi (z transformacjami i defaults)
-			req[target] = result;
+			Object.assign(req[target], result);
 
 			next();
 		} catch (error) {
@@ -206,9 +198,10 @@ export function validateMultiple(schemas: {
 	};
 }
 
-
 export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
-export type UpdateIncidentStatusInput = z.infer<typeof updateIncidentStatusSchema>;
+export type UpdateIncidentStatusInput = z.infer<
+	typeof updateIncidentStatusSchema
+>;
 export type UpdateIncidentNoteInput = z.infer<typeof updateIncidentNoteSchema>;
 export type ResolveIncidentInput = z.infer<typeof resolveIncidentSchema>;
 export type IncidentQueryInput = z.infer<typeof incidentQuerySchema>;

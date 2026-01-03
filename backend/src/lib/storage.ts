@@ -1,11 +1,10 @@
 /**
- * Storage (S3/MinIO) - Bun native S3 client
+ * Storage (S3/MinIO) - AWS SDK S3 client
  *
- * Wykorzystuje natywny sterownik S3 w Bun (S3Client).
- * Obsługuje MinIO (S3-compatible) działające w serwisie `storage`.
+ * Wykorzystuje AWS SDK S3 client dla kompatybilności z MinIO.
  */
 
-import { S3Client, write } from "bun";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { env } from "./env";
 
 // Singleton klienta S3
@@ -16,9 +15,11 @@ function getClient(): S3Client {
 		s3Client = new S3Client({
 			endpoint: env.S3_ENDPOINT,
 			region: env.S3_REGION,
-			accessKeyId: env.S3_ACCESS_KEY,
-			secretAccessKey: env.S3_SECRET_KEY,
-			bucket: env.S3_BUCKET,
+			credentials: {
+				accessKeyId: env.S3_ACCESS_KEY,
+				secretAccessKey: env.S3_SECRET_KEY,
+			},
+			forcePathStyle: true, // Wymagane dla MinIO
 		});
 	}
 	return s3Client;
@@ -36,11 +37,17 @@ export interface PutObjectOptions {
 export async function putObject(
 	key: string,
 	data: Blob | Buffer | ArrayBuffer | string,
-	options: PutObjectOptions = {},
+	_options: PutObjectOptions = {},
 ) {
 	const client = getClient();
-	const file = client.file(key) as any;
-	await write(file, data as any);
+	const command = new PutObjectCommand({
+		Bucket: env.S3_BUCKET,
+		Key: key,
+		Body: data,
+		ContentType: _options.contentType,
+		ACL: _options.acl,
+	});
+	await client.send(command);
 	return { key };
 }
 
@@ -49,24 +56,37 @@ export async function putObject(
  */
 export async function getObjectBuffer(key: string): Promise<Buffer | null> {
 	const client = getClient();
-	const file = client.file(key) as any;
-	if (file.exists && !(await file.exists())) return null;
-	const ab: ArrayBuffer | undefined =
-		(typeof file.arrayBuffer === "function" && (await file.arrayBuffer())) ||
-		(undefined as any);
-	if (!ab) return null;
-	return Buffer.from(ab);
+	const command = new GetObjectCommand({
+		Bucket: env.S3_BUCKET,
+		Key: key,
+	});
+	try {
+		const response = await client.send(command);
+		if (response.Body) {
+			const chunks: Uint8Array[] = [];
+			const reader = response.Body.transformToByteArray();
+			return Buffer.from(await reader);
+		}
+		return null;
+	} catch (error) {
+		if ((error as any).name === 'NoSuchKey') return null;
+		throw error;
+	}
 }
 
 /**
  * Pobierz obiekt jako JSON
  */
-export async function getObjectJson<T = unknown>(key: string): Promise<T | null> {
-	const client = getClient();
-	const file = client.file(key) as any;
-	if (file.exists && !(await file.exists())) return null;
-	if (typeof file.json !== "function") return null;
-	return (await file.json()) as T;
+export async function getObjectJson<T = unknown>(
+	key: string,
+): Promise<T | null> {
+	const buffer = await getObjectBuffer(key);
+	if (!buffer) return null;
+	try {
+		return JSON.parse(buffer.toString()) as T;
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -74,10 +94,11 @@ export async function getObjectJson<T = unknown>(key: string): Promise<T | null>
  */
 export async function deleteObject(key: string): Promise<void> {
 	const client = getClient();
-	const file = client.file(key) as any;
-	if (typeof file.delete === "function") {
-		await file.delete();
-	}
+	const command = new DeleteObjectCommand({
+		Bucket: env.S3_BUCKET,
+		Key: key,
+	});
+	await client.send(command);
 }
 
 /**
@@ -93,18 +114,8 @@ export function presignObject(
 		acl?: "private" | "public-read";
 	} = {},
 ): string {
-	const client = getClient();
-	const file = client.file(key) as any;
-	return file.presign({
-		expiresIn,
-		acl,
-	});
+	throw new Error("Presigned URLs not implemented yet");
 }
-
-/**
- * Prostą ścieżkę klucza można zbudować tak:
- * const key = `incidents/${incidentId}/${fileName}`;
- */
 
 export const storageClient = {
 	putObject,
@@ -113,4 +124,3 @@ export const storageClient = {
 	deleteObject,
 	presignObject,
 };
-

@@ -1,6 +1,6 @@
 //Obsługa błędów dla całej aplikacji
 
-import type { Request, Response, NextFunction } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { env } from "../lib/env";
 
@@ -61,9 +61,7 @@ export class RateLimitError extends AppError {
 	}
 }
 
-// =============================================================================
 // Error Handler Middleware
-// =============================================================================
 
 /**
  * Główny middleware do obsługi błędów
@@ -168,17 +166,13 @@ export function errorHandler(
 		error: {
 			code: "INTERNAL_ERROR",
 			message:
-				env.NODE_ENV === "development"
-					? err.message
-					: "Wystąpił błąd serwera",
+				env.NODE_ENV === "development" ? err.message : "Wystąpił błąd serwera",
 			...(env.NODE_ENV === "development" ? { stack: err.stack } : {}),
 		},
 	});
 }
 
-// =============================================================================
 // Async Handler Wrapper
-// =============================================================================
 
 /**
  * Wrapper dla async route handlers - automatycznie przekazuje błędy do error middleware
@@ -197,9 +191,7 @@ export function asyncHandler<T extends Request = Request>(
 	};
 }
 
-// =============================================================================
 // Not Found Handler
-// =============================================================================
 
 /**
  * Middleware dla nieznalezionych tras (404)

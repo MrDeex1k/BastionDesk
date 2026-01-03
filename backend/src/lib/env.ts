@@ -25,58 +25,63 @@ function getEnvNumber(key: string, defaultValue: number): number {
 	return parsed;
 }
 
+function getEnvBoolean(key: string, defaultValue: boolean): boolean {
+	const value = process.env[key];
+	if (value === undefined) return defaultValue;
+	return value.toLowerCase() === "true" || value === "1";
+}
+
 //Konfiguracja zmiennych środowiskowych
 export const env = {
 	// Server
 	PORT: getEnvNumber("PORT", 3333),
-	NODE_ENV: getEnvVar("NODE_ENV", "development"),
+	NODE_ENV: getEnvVar("NODE_ENV"),
 
 	// Database
-	DATABASE_URL: getEnvVar(
-		"DATABASE_URL",
-		"postgresql://bastiondesk_superadmin:bastiondesk_securedesk@localhost:54328/bastiondesk_db",
-	),
+	DATABASE_URL: getEnvVar("DATABASE_URL"),
 
 	// Better-Auth
-	BETTER_AUTH_SECRET: getEnvVar(
-		"BETTER_AUTH_SECRET",
-		"dev-secret-key-change-in-production-min-32-chars",
-	),
-	BETTER_AUTH_URL: getEnvVar("BETTER_AUTH_URL", "http://localhost:3333"),
-	BETTER_AUTH_TRUSTED_ORIGINS: getEnvVar(
-		"BETTER_AUTH_TRUSTED_ORIGINS",
-		"http://localhost:5173,http://localhost:4444",
-	),
+	BETTER_AUTH_SECRET: getEnvVar("BETTER_AUTH_SECRET"),
+	BETTER_AUTH_URL: getEnvVar("BETTER_AUTH_URL"),
+	BETTER_AUTH_TRUSTED_ORIGINS: getEnvVar("BETTER_AUTH_TRUSTED_ORIGINS"),
 
 	// WebAuthn / PassKeys
-	WEBAUTHN_RP_ID: getEnvVar("WEBAUTHN_RP_ID", "localhost"),
-	WEBAUTHN_RP_NAME: getEnvVar("WEBAUTHN_RP_NAME", "BastionDesk"),
-	WEBAUTHN_ORIGIN: getEnvVar("WEBAUTHN_ORIGIN", "http://localhost:3333"),
+	WEBAUTHN_RP_ID: getEnvVar("WEBAUTHN_RP_ID"),
+	WEBAUTHN_RP_NAME: getEnvVar("WEBAUTHN_RP_NAME"),
+	WEBAUTHN_ORIGIN: getEnvVar("WEBAUTHN_ORIGIN"),
 
 	// CORS
-	CORS_ORIGIN: getEnvVar("CORS_ORIGIN", "http://localhost:5173"),
+	CORS_ORIGIN: getEnvVar("CORS_ORIGIN"),
 
 	// LLM Service
-	LLM_SERVICE_URL: getEnvVar("LLM_SERVICE_URL", "http://localhost:8888"),
+	LLM_SERVICE_URL: getEnvVar("LLM_SERVICE_URL"),
 
 	// Rate Limiting
 	RATE_LIMIT_WINDOW_MS: getEnvNumber("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
 	RATE_LIMIT_MAX_REQUESTS: getEnvNumber("RATE_LIMIT_MAX_REQUESTS", 100),
 
 	// Storage (S3 / MinIO)
-	S3_ENDPOINT: getEnvVar("S3_ENDPOINT", "http://storage-1:9000"),
-	S3_REGION: getEnvVar("S3_REGION", "us-east-1"),
-	S3_ACCESS_KEY: getEnvVar("S3_ACCESS_KEY", "minioadmin"),
-	S3_SECRET_KEY: getEnvVar("S3_SECRET_KEY", "minioadmin"),
-	S3_BUCKET: getEnvVar("S3_BUCKET", "bastiondesk"),
+	S3_ENDPOINT: getEnvVar("S3_ENDPOINT"),
+	S3_REGION: getEnvVar("S3_REGION"),
+	S3_ACCESS_KEY: getEnvVar("S3_ACCESS_KEY"),
+	S3_SECRET_KEY: getEnvVar("S3_SECRET_KEY"),
+	S3_BUCKET: getEnvVar("S3_BUCKET"),
+
+	// Email / SMTP Configuration
+	SMTP_HOST: getEnvVar("SMTP_HOST"),
+	SMTP_PORT: getEnvNumber("SMTP_PORT", 587),
+	SMTP_SECURE: getEnvBoolean("SMTP_SECURE", false),
+	SMTP_USER: getEnvVar("SMTP_USER"),
+	SMTP_APP_PASSWORD: getEnvVar("SMTP_APP_PASSWORD"),
+	EMAIL_FROM_NAME: getEnvVar("EMAIL_FROM_NAME"),
+	EMAIL_FROM_ADDRESS: getEnvVar("EMAIL_FROM_ADDRESS"),
+	FRONTEND_URL: getEnvVar("FRONTEND_URL"),
 } as const;
 
 // Tryb produkcyjny
 if (env.NODE_ENV === "production") {
 	if (env.BETTER_AUTH_SECRET.includes("dev-secret")) {
-		throw new Error(
-			"BETTER_AUTH_SECRET must be changed in production!",
-		);
+		throw new Error("BETTER_AUTH_SECRET must be changed in production!");
 	}
 	if (env.BETTER_AUTH_SECRET.length < 32) {
 		throw new Error(

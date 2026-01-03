@@ -4,24 +4,28 @@
  * Serwer Express z Better-Auth dla autoryzacji i autentykacji
  */
 
-import express from "express";
-import cors from "cors";
-import helmet from "helmet";
 import { toNodeHandler } from "better-auth/node";
+import cors from "cors";
+import express from "express";
+import helmet from "helmet";
 import { auth } from "./lib/auth";
+import { checkDatabaseConnection, closeDatabase } from "./lib/database";
+import { testEmailConnection } from "./lib/email";
 import { env } from "./lib/env";
-import { closeDatabase, checkDatabaseConnection } from "./lib/database";
-import { errorHandler, notFoundHandler, apiRateLimiter } from "./middleware";
+import { apiRateLimiter, errorHandler, notFoundHandler } from "./middleware";
+import signUpWithOrganizationRouter from "./routes/auth/sign-up-with-organization";
 
 const app = express();
 
+// Trust proxy - wymagane dla express-rate-limit z nginx
+app.set("trust proxy", 1);
 
 // Security Headers
 app.use(
 	helmet({
 		// Wyłącz HSTS - aplikacja działa tylko na localhost bez HTTPS
 		hsts: false,
-		
+
 		// Content Security Policy - dostosowany do aplikacji
 		contentSecurityPolicy: {
 			directives: {
@@ -36,24 +40,23 @@ app.use(
 				frameSrc: ["'none'"],
 			},
 		},
-		
+
 		// Zapobiega clickjacking
 		frameguard: { action: "deny" },
-		
+
 		// Zapobiega MIME-type sniffing
 		noSniff: true,
-		
+
 		// Włącza wbudowany filtr XSS przeglądarki
 		xssFilter: true,
-		
+
 		// Kontroluje informacje wysyłane w Referer
 		referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-		
+
 		// Wyłącza nagłówek X-Powered-By (ukrywa Express)
 		hidePoweredBy: true,
 	}),
 );
-
 
 // CORS Configuration
 app.use(
@@ -65,30 +68,53 @@ app.use(
 	}),
 );
 
+// Middleware
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Custom auth routes
+app.use("/api/auth", signUpWithOrganizationRouter);
 
 // Better-Auth Handler
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
+// Root route - przekierowanie do frontendu
+app.get("/", (_req, res) => {
+	res.redirect(302, env.FRONTEND_URL);
+});
 
-// Middleware
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
-
-
-// Health Check (z weryfikacją bazy danych)
+// Health Check (z weryfikacją bazy danych i email)
 app.get("/health", async (_req, res) => {
 	const dbConnected = await checkDatabaseConnection();
+	const emailConnected = await testEmailConnection();
 
-	res.status(dbConnected ? 200 : 503).json({
-		status: dbConnected ? "ok" : "degraded",
+	const allHealthy = dbConnected && emailConnected;
+
+	res.status(allHealthy ? 200 : 503).json({
+		status: allHealthy ? "ok" : "degraded",
 		timestamp: new Date().toISOString(),
 		service: "bastiondesk-backend",
 		checks: {
 			database: dbConnected ? "connected" : "disconnected",
+			email: emailConnected ? "connected" : "disconnected",
 		},
 	});
 });
 
+// Email Health Check
+app.get("/api/email/health", async (_req, res) => {
+	const emailConnected = await testEmailConnection();
+
+	res.status(emailConnected ? 200 : 503).json({
+		status: emailConnected ? "ok" : "error",
+		smtp: {
+			connected: emailConnected,
+			host: env.SMTP_HOST,
+			port: env.SMTP_PORT,
+		},
+		timestamp: new Date().toISOString(),
+	});
+});
 
 // API Info
 app.get("/api", (_req, res) => {
@@ -101,10 +127,10 @@ app.get("/api", (_req, res) => {
 			analyst: "/api/analyst/*",
 			admin: "/api/admin/*",
 			health: "/health",
+			emailHealth: "/api/email/health",
 		},
 	});
 });
-
 
 import incidentsRouter from "./routes/incidents";
 import apiRoutes from "./routes/index";
@@ -115,10 +141,8 @@ app.use("/api/admin", apiRateLimiter);
 app.use("/api/analyst", apiRateLimiter);
 app.use("/api", apiRoutes); // Podłącza /api/admin/* i /api/analyst/*
 
-
 app.use(notFoundHandler);
 app.use(errorHandler);
-
 
 // Start Server
 const server = app.listen(env.PORT, () => {
@@ -133,7 +157,6 @@ const server = app.listen(env.PORT, () => {
 	/health - Health check
   `);
 });
-
 
 // Graceful Shutdown
 async function gracefulShutdown(signal: string) {

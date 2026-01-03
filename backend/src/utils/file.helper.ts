@@ -1,6 +1,6 @@
 /**
  * File Helper - Natywna obsługa plików w Bun
- * 
+ *
  * Wykorzystuje Web API FormData i Blob do parsowania multipart/form-data
  */
 
@@ -60,7 +60,7 @@ export interface ParsedFormData {
 
 /**
  * Parsuje multipart/form-data z requestu Express używając natywnego API Bun
- * 
+ *
  * UWAGA: Wymaga aby Express nie używał body-parsera dla tego endpointa!
  */
 export async function parseMultipartFormData(
@@ -69,22 +69,24 @@ export async function parseMultipartFormData(
 	const contentType = req.headers["content-type"];
 
 	if (!contentType || !contentType.includes("multipart/form-data")) {
-		throw new AppError(400, "INVALID_CONTENT_TYPE", "Content-Type musi być multipart/form-data");
+		throw new AppError(
+			400,
+			"INVALID_CONTENT_TYPE",
+			"Content-Type musi być multipart/form-data",
+		);
 	}
 
 	try {
 		// Express przekazuje surowy request z Node.js
 		// Musimy stworzyć Web API Request z surowego Node.js request
-		const webRequest = new Request(
-			`http://localhost${req.url}`,
-			{
-				method: req.method,
-				headers: req.headers as Record<string, string>,
-				body: req as any, // Express req jest ReadableStream-compatible
-				// @ts-ignore - Bun rozszerza Request API
-				duplex: "half",
-			},
-		);
+		const webRequest = new Request(`http://localhost${req.url}`, {
+			method: req.method,
+			headers: req.headers as Record<string, string>,
+		// biome-ignore lint/suspicious/noExplicitAny: Express req jest ReadableStream-compatible
+		body: req as any,
+		// biome-ignore lint/suspicious/noExplicitAny: Bun rozszerza Request API
+		duplex: "half" as any,
+		});
 
 		// Użyj natywnego parsowania FormData
 		const formData = await webRequest.formData();
@@ -128,10 +130,7 @@ export async function parseMultipartFormData(
 /**
  * Waliduje plik pod kątem rozmiaru i typu MIME
  */
-export function validateFile(
-	parsedFile: ParsedFile,
-	fileType: FileType,
-): void {
+export function validateFile(parsedFile: ParsedFile, fileType: FileType): void {
 	const { size, mimeType } = parsedFile.metadata;
 
 	// Sprawdź rozmiar
@@ -164,7 +163,7 @@ export function generateStorageKey(
 	originalName: string,
 ): string {
 	const timestamp = Date.now();
-	const extension = originalName.split(".").pop() || "bin";
+	const _extension = originalName.split(".").pop() || "bin";
 	const sanitizedName = originalName
 		.replace(/[^a-zA-Z0-9.-]/g, "_")
 		.substring(0, 50);

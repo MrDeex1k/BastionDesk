@@ -1,13 +1,11 @@
 //Middleware do weryfikacji sesji i ról użytkowników
 
-import type { Request, Response, NextFunction } from "express";
-import { auth } from "../lib/auth";
 import { fromNodeHeaders } from "better-auth/node";
+import type { NextFunction, Request, Response } from "express";
+import { auth } from "../lib/auth";
 import type { UserRole } from "../types";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 export interface AuthenticatedUser {
 	id: string;
@@ -35,9 +33,7 @@ export interface AuthenticatedRequest extends Request {
 	memberRole?: UserRole;
 }
 
-// =============================================================================
 // Session Helper
-// =============================================================================
 
 /**
  * Pobierz sesję użytkownika z requestu
@@ -54,9 +50,7 @@ export async function getSessionFromRequest(req: Request) {
 	}
 }
 
-// =============================================================================
 // Authentication Middleware
-// =============================================================================
 
 /**
  * Middleware wymagający zalogowanego użytkownika
@@ -69,6 +63,12 @@ export function requireAuth(
 ): void {
 	getSessionFromRequest(req)
 		.then((sessionData) => {
+			console.log("[AUTH] Session data:", {
+				hasSession: !!sessionData?.session,
+				hasUser: !!sessionData?.user,
+				cookies: req.headers.cookie,
+			});
+			
 			if (!sessionData?.session || !sessionData?.user) {
 				res.status(401).json({
 					success: false,
@@ -81,7 +81,8 @@ export function requireAuth(
 			}
 
 			// Dodaj dane użytkownika i sesji do requestu
-			(req as AuthenticatedRequest).user = sessionData.user as AuthenticatedUser;
+			(req as AuthenticatedRequest).user =
+				sessionData.user as AuthenticatedUser;
 			(req as AuthenticatedRequest).session =
 				sessionData.session as AuthenticatedSession;
 
@@ -105,7 +106,7 @@ export function requireAuth(
  */
 export function optionalAuth(
 	req: Request,
-	res: Response,
+	_res: Response,
 	next: NextFunction,
 ): void {
 	getSessionFromRequest(req)
@@ -125,9 +126,7 @@ export function optionalAuth(
 		});
 }
 
-// =============================================================================
 // Role-based Authorization Middleware
-// =============================================================================
 
 /**
  * Middleware wymagający określonej roli użytkownika
@@ -276,9 +275,7 @@ export function requireOrganization(
 		});
 }
 
-// =============================================================================
 // Utility Middleware
-// =============================================================================
 
 /**
  * Middleware sprawdzający czy użytkownik jest właścicielem zasobu

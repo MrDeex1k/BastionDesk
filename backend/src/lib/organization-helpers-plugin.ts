@@ -1,12 +1,12 @@
 /**
  * Custom Better-Auth Plugin: Organization Helpers
- * 
+ *
  * Rozszerzenie pluginu organizacji o dodatkowe endpointy:
  * - Dodawanie użytkownika po adresie email (zamiast userId)
  */
 
-import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 
@@ -34,7 +34,7 @@ export const organizationHelpersPlugin = () => {
 		endpoints: {
 			/**
 			 * POST /api/auth/organization/add-member-by-email
-			 * 
+			 *
 			 * Dodaje użytkownika do organizacji na podstawie adresu email.
 			 * Znajduje userId automatycznie, a następnie dodaje do organizacji.
 			 */
@@ -63,7 +63,8 @@ export const organizationHelpersPlugin = () => {
 							{
 								error: {
 									code: "USER_NOT_FOUND",
-									message: "Użytkownik o podanym adresie email nie istnieje w systemie",
+									message:
+										"Użytkownik o podanym adresie email nie istnieje w systemie",
 								},
 							},
 							{ status: 404 },
@@ -80,7 +81,7 @@ export const organizationHelpersPlugin = () => {
 						session?.activeOrganizationId ??
 						session?.session?.activeOrganizationId ??
 						null;
-					
+
 					if (!targetOrgId) {
 						return ctx.json(
 							{

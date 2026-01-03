@@ -144,4 +144,3 @@ export interface ExtendedSession {
 	createdAt: Date;
 	updatedAt: Date;
 }
-

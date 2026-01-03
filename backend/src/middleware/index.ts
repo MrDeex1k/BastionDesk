@@ -1,28 +1,28 @@
 // Export Middleware
 
 export {
-	requireAuth,
+	type AuthenticatedRequest,
+	type AuthenticatedSession,
+	type AuthenticatedUser,
+	getSessionFromRequest,
 	optionalAuth,
-	requireRole,
+	requireAuth,
 	requireOrganization,
 	requireOwnership,
-	getSessionFromRequest,
-	type AuthenticatedRequest,
-	type AuthenticatedUser,
-	type AuthenticatedSession,
+	requireRole,
 } from "./auth.middleware";
 
 export {
-	errorHandler,
-	notFoundHandler,
-	asyncHandler,
 	AppError,
-	ValidationError,
-	NotFoundError,
-	UnauthorizedError,
-	ForbiddenError,
+	asyncHandler,
 	ConflictError,
+	errorHandler,
+	ForbiddenError,
+	NotFoundError,
+	notFoundHandler,
 	RateLimitError,
+	UnauthorizedError,
+	ValidationError,
 } from "./error.middleware";
 
 export { apiRateLimiter, strictRateLimiter } from "./rate-limit.middleware";

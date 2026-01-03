@@ -8,9 +8,7 @@
 import { SQL } from "bun";
 import { env } from "./env";
 
-// =============================================================================
 // Bun SQL Instance (lazy singleton)
-// =============================================================================
 let _sql: SQL | null = null;
 
 /**
@@ -60,9 +58,7 @@ export async function closeDatabase(): Promise<void> {
 	}
 }
 
-// =============================================================================
 // Helper Functions - dla kompatybilności z istniejącym kodem
-// =============================================================================
 
 /**
  * Wykonaj zapytanie SQL i zwróć wyniki
@@ -95,9 +91,7 @@ export async function queryOne<T>(
 	return rows[0] ?? null;
 }
 
-// =============================================================================
 // Transaction Support
-// =============================================================================
 
 /**
  * Wykonaj operacje w transakcji
