@@ -18,16 +18,7 @@ const MAX_FILE_SIZE = {
 // Dozwolone typy MIME
 const ALLOWED_MIME_TYPES = {
 	screenshot: ["image/png", "image/jpeg", "image/jpg", "image/webp"],
-	attachment: [
-		"image/png",
-		"image/jpeg",
-		"image/jpg",
-		"image/webp",
-		"application/pdf",
-		"application/zip",
-		"text/plain",
-		"text/csv",
-	],
+	attachment: ["*"], // Wszystkie typy plików dozwolone dla załączników
 	report: [
 		"application/pdf",
 		"application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
@@ -145,7 +136,7 @@ export function validateFile(parsedFile: ParsedFile, fileType: FileType): void {
 
 	// Sprawdź typ MIME
 	const allowedTypes = ALLOWED_MIME_TYPES[fileType];
-	if (!allowedTypes.includes(mimeType)) {
+	if (!allowedTypes.includes("*") && !allowedTypes.includes(mimeType)) {
 		throw new AppError(
 			400,
 			"INVALID_FILE_TYPE",

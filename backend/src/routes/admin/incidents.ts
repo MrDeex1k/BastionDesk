@@ -122,6 +122,38 @@ async function getAllIncidents(req: Request, res: Response) {
 			[...params, limit, offset],
 		);
 
+		// Parsuj metadata z JSON stringów do obiektów
+		incidents.forEach((incident) => {
+			if (typeof incident.userScreenshotMetadata === 'string') {
+				try {
+					incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+				} catch (e) {
+					console.error('[ADMIN] Failed to parse userScreenshotMetadata:', e);
+				}
+			}
+			if (typeof incident.userAttachmentMetadata === 'string') {
+				try {
+					incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+				} catch (e) {
+					console.error('[ADMIN] Failed to parse userAttachmentMetadata:', e);
+				}
+			}
+			if (typeof incident.analystReportMetadata === 'string') {
+				try {
+					incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+				} catch (e) {
+					console.error('[ADMIN] Failed to parse analystReportMetadata:', e);
+				}
+			}
+			if (typeof incident.analystStatementMetadata === 'string') {
+				try {
+					incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+				} catch (e) {
+					console.error('[ADMIN] Failed to parse analystStatementMetadata:', e);
+				}
+			}
+		});
+
 		// Pobierz całkowitą liczbę
 		const countResult = await queryOne<{ count: number }>(
 			`
@@ -238,6 +270,36 @@ async function getIncidentDetails(req: Request, res: Response) {
 			});
 		}
 
+		// Parsuj metadata z JSON stringów do obiektów
+		if (typeof incident.userScreenshotMetadata === 'string') {
+			try {
+				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+			} catch (e) {
+				console.error('[ADMIN] Failed to parse userScreenshotMetadata:', e);
+			}
+		}
+		if (typeof incident.userAttachmentMetadata === 'string') {
+			try {
+				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+			} catch (e) {
+				console.error('[ADMIN] Failed to parse userAttachmentMetadata:', e);
+			}
+		}
+		if (typeof incident.analystReportMetadata === 'string') {
+			try {
+				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+			} catch (e) {
+				console.error('[ADMIN] Failed to parse analystReportMetadata:', e);
+			}
+		}
+		if (typeof incident.analystStatementMetadata === 'string') {
+			try {
+				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+			} catch (e) {
+				console.error('[ADMIN] Failed to parse analystStatementMetadata:', e);
+			}
+		}
+
 		res.json({
 			success: true,
 			data: incident,
@@ -347,10 +409,27 @@ async function downloadFile(req: Request, res: Response) {
 			});
 		}
 
-		// Sprawdź czy filename się zgadza (dla pojedynczych plików)
-		const metadata = fileData.metadata ? JSON.parse(fileData.metadata) : null;
+		// Parsuj metadata
+		let parsedMetadata = fileData.metadata;
+		if (typeof fileData.metadata === 'string') {
+			try {
+				parsedMetadata = JSON.parse(fileData.metadata);
+			} catch (e) {
+				console.error('[ADMIN] Failed to parse metadata JSON:', e);
+				return res.status(500).json({
+					success: false,
+					error: {
+						code: "METADATA_PARSE_ERROR",
+						message: "Błąd parsowania metadanych pliku",
+					},
+				});
+			}
+		}
 
-		if (filename && metadata?.filename !== filename) {
+		// Sprawdź czy filename się zgadza z originalName lub filename w metadanych
+		// Screenshots i attachments używają originalName, reports i statements używają filename
+		const metadataFilename = parsedMetadata?.originalName || parsedMetadata?.filename;
+		if (filename && metadataFilename !== filename) {
 			return res.status(404).json({
 				success: false,
 				error: {
@@ -376,9 +455,15 @@ async function downloadFile(req: Request, res: Response) {
 		// Ustaw odpowiednie nagłówki i zwróć plik
 		res.setHeader(
 			"Content-Type",
-			metadata?.mimeType || "application/octet-stream",
+			parsedMetadata?.mimeType || "application/octet-stream",
 		);
-		res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+		
+		// RFC 5987: Encode filename for non-ASCII characters
+		const encodedFilename = encodeURIComponent(filename);
+		res.setHeader(
+			"Content-Disposition",
+			`attachment; filename="${filename.replace(/[^\x00-\x7F]/g, '_')}"; filename*=UTF-8''${encodedFilename}`
+		);
 		res.setHeader("Content-Length", fileBuffer.length);
 		res.send(fileBuffer);
 	} catch (error) {

@@ -241,7 +241,7 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
                       <div className="text-sm text-slate-400">
                         <span className="font-medium text-blue-400">Kliknij</span> lub upuść
                         <br />
-                        <span className="text-xs text-slate-500">PDF, ZIP, TXT, CSV (max 50MB)</span>
+                        <span className="text-xs text-slate-500">Dowolny plik (max 50MB)</span>
                       </div>
                     </>
                   )}
@@ -252,7 +252,7 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
 
           <Button 
             type="submit" 
-            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg shadow-blue-500/20"
+            className="w-full bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg shadow-blue-500/20"
             size="lg"
             disabled={incidentMutation.isPending}
           >

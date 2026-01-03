@@ -18,7 +18,7 @@ export function AdminDashboardPage() {
             <ShieldCheck className="size-16 text-green-400" />
           </div>
         </div>
-        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-400">
+        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-green-400 to-blue-400">
           Panel Administratorski
         </h1>
         <p className="text-slate-400 text-lg max-w-2xl mx-auto">

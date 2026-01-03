@@ -170,6 +170,38 @@ router.get(
 			[req.user.id, req.organizationId, limit, offset],
 		);
 
+		// Parsuj metadata z JSON strings do obiektów
+		incidents.forEach((incident) => {
+			if (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'string') {
+				try {
+					incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+				} catch (e) {
+					console.error('[INCIDENTS] Failed to parse userScreenshotMetadata:', e);
+				}
+			}
+			if (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'string') {
+				try {
+					incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+				} catch (e) {
+					console.error('[INCIDENTS] Failed to parse userAttachmentMetadata:', e);
+				}
+			}
+			if (incident.analystReportMetadata && typeof incident.analystReportMetadata === 'string') {
+				try {
+					incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+				} catch (e) {
+					console.error('[INCIDENTS] Failed to parse analystReportMetadata:', e);
+				}
+			}
+			if (incident.analystStatementMetadata && typeof incident.analystStatementMetadata === 'string') {
+				try {
+					incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+				} catch (e) {
+					console.error('[INCIDENTS] Failed to parse analystStatementMetadata:', e);
+				}
+			}
+		});
+
 		// Policz wszystkie incydenty użytkownika
 		const totalResult = await queryOne<{ count: string }>(
 			`SELECT COUNT(*)::text as count FROM incidents
@@ -233,6 +265,36 @@ router.get(
 					message: "Incydent nie został znaleziony",
 				},
 			});
+		}
+
+		// Parsuj metadata z JSON strings do obiektów
+		if (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'string') {
+			try {
+				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+			} catch (e) {
+				console.error('[INCIDENTS] Failed to parse userScreenshotMetadata:', e);
+			}
+		}
+		if (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'string') {
+			try {
+				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+			} catch (e) {
+				console.error('[INCIDENTS] Failed to parse userAttachmentMetadata:', e);
+			}
+		}
+		if (incident.analystReportMetadata && typeof incident.analystReportMetadata === 'string') {
+			try {
+				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+			} catch (e) {
+				console.error('[INCIDENTS] Failed to parse analystReportMetadata:', e);
+			}
+		}
+		if (incident.analystStatementMetadata && typeof incident.analystStatementMetadata === 'string') {
+			try {
+				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+			} catch (e) {
+				console.error('[INCIDENTS] Failed to parse analystStatementMetadata:', e);
+			}
 		}
 
 		res.json({

@@ -235,13 +235,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     onSuccess: (_data: unknown, variables) => {
       const newStatus = variables;
       toast.success(`Status zmieniony na: ${newStatus}`);
-      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
-        ...old,
-        data: {
-          ...old?.data,
-          status: newStatus
-        } as IncidentDetail
-      }));
+      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
@@ -261,16 +255,9 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
       
       return response.json();
     },
-    onSuccess: (responseData: { success: boolean; data: { dataRozwiazania: string } }) => {
+    onSuccess: () => {
       toast.success("Incydent oznaczony jako rozwiązany");
-      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
-        ...old,
-        data: {
-          ...old?.data,
-          czyRozwiazany: true,
-          dataRozwiazania: responseData.data.dataRozwiazania
-        } as IncidentDetail
-      }));
+      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
@@ -293,13 +280,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     },
     onSuccess: () => {
       toast.success("Notatka została zapisana");
-      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
-        ...old,
-        data: {
-          ...old?.data,
-          analystNote: noteContent
-        } as IncidentDetail
-      }));
+      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
     },
     onError: () => {
       toast.error("Nie udało się zapisać notatki");
@@ -395,17 +376,7 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
       setIsUploadDialogOpen(false);
       setSelectedFile(null);
       setUploadType(null);
-
-      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => {
-        const newData = { ...old?.data } as IncidentDetail;
-        
-        if (data?.data) {
-          // Aktualizacja na podstawie odpowiedzi z serwera/mocka
-          Object.assign(newData, data.data);
-        }
-
-        return { ...old, data: newData };
-      });
+      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
