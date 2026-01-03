@@ -17,7 +17,7 @@ import {
 	requireRole,
 } from "../middleware/auth.middleware";
 import { asyncHandler } from "../middleware/error.middleware";
-import type { FileMetadata, Incident } from "../types";
+import type { FileMetadata, Incident, IncidentCategory } from "../types";
 import {
 	generateStorageKey,
 	parseMultipartFormData,
@@ -32,6 +32,37 @@ import {
 	uuidSchema,
 	validate,
 } from "../utils/validation";
+
+/**
+ * Asynchroniczna analiza kategorii incydentu za pomocą LLM_SERVICE
+ */
+async function analyzeIncidentCategory(incidentId: string, description: string) {
+	try {
+		const response = await fetch("http://llm_service:8888/query_message", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ prompt: description }),
+		});
+
+		if (!response.ok) {
+			throw new Error(`LLM service responded with status ${response.status}`);
+		}
+
+		const data = await response.json() as { response: IncidentCategory };
+		const category: IncidentCategory = data.response;
+
+		// Aktualizuj kategorię w bazie danych
+		await query('UPDATE incidents SET "llmCategory" = $1 WHERE id = $2', [
+			category,
+			incidentId,
+		]);
+
+		console.log(`[LLM] Incident ${incidentId} categorized as ${category}`);
+	} catch (error) {
+		console.error("[LLM] Error analyzing incident:", error);
+		// W przypadku błędu, kategoria pozostaje null
+	}
+}
 
 const router = Router();
 
@@ -137,6 +168,11 @@ router.post(
 			success: true,
 			data: incident,
 		});
+
+		// Asynchroniczna analiza kategorii przez LLM_SERVICE
+		analyzeIncidentCategory(incident.id, validatedFields.userDescription).catch(
+			console.error,
+		);
 	}),
 );
 
