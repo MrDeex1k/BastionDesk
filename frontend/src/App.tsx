@@ -18,8 +18,6 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { WaitingForOrganizationPage } from "./pages/WaitingForOrganizationPage";
 import { CreateOrganizationPage } from "./pages/CreateOrganizationPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
-import { InviteRegistrationPage } from "./pages/InviteRegistrationPage";
-import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { useEffect } from "react";
 
 import './App.css'
@@ -120,10 +118,6 @@ function AppContent() {
           <Route path="/waiting-for-organization" element={<WaitingForOrganizationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          {/* Route dla formularza rejestracji z zaproszenia */}
-          <Route path="/invite/:invitationId" element={<InviteRegistrationPage />} />
-          {/* Route dla automatycznej akceptacji zaproszenia po weryfikacji email */}
-          <Route path="/accept-invitation/:invitationId" element={<AcceptInvitationPage />} />
           
           <Route 
             path="/admin-dashboard" 

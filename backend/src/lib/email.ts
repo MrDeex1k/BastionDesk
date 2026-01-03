@@ -13,11 +13,6 @@ import {
 	type VerificationEmailData,
 } from "../templates/email-verification";
 import {
-	generateInvitationEmailHtml,
-	getInvitationEmailSubject,
-	type InvitationEmailData,
-} from "../templates/invitation";
-import {
 	generatePasswordResetEmailHtml,
 	getPasswordResetEmailSubject,
 	type PasswordResetEmailData,
@@ -55,18 +50,6 @@ export interface SendResetPasswordEmailParams {
 	user: BetterAuthUser;
 	url: string;
 	token: string;
-}
-
-/**
- * Parametry dla sendOrganizationInvitation
- */
-export interface SendOrganizationInvitationParams {
-	email: string;
-	inviterName: string;
-	invitedByEmail: string;
-	organizationName: string;
-	inviteUrl: string;
-	role?: string;
 }
 
 // Email Functions
@@ -152,60 +135,6 @@ export async function sendResetPasswordEmail(
 			`Błąd podczas wysyłki emaila resetującego hasło do ${user.email}:`,
 			error,
 		);
-	}
-}
-
-/**
- * Wysyła zaproszenie do organizacji
- *
- * UWAGA: Ta funkcja jest wywoływana normalnie (bez `void`),
- * ponieważ to nie jest funkcja związana z bezpieczeństwem/timing attacks.
- */
-export async function sendOrganizationInvitation(
-	params: SendOrganizationInvitationParams,
-): Promise<void> {
-	const {
-		email,
-		inviterName,
-		invitedByEmail,
-		organizationName,
-		inviteUrl,
-		role = "członek",
-	} = params;
-
-	try {
-		const emailData: InvitationEmailData = {
-			recipientEmail: email,
-			inviterName: inviterName || "Administrator",
-			inviterEmail: invitedByEmail,
-			organizationName,
-			inviteUrl,
-			role,
-		};
-
-		const html = generateInvitationEmailHtml(emailData);
-		const subject = getInvitationEmailSubject(organizationName);
-
-		const result = await sendEmail({
-			to: email,
-			subject,
-			html,
-		});
-
-		if (!result.success) {
-			console.error(
-				`Nie udało się wysłać zaproszenia do organizacji do ${email}:`,
-				result.error,
-			);
-			// Możesz rzucić wyjątek jeśli chcesz, aby Better-Auth wiedział o błędzie
-			throw new Error(`Failed to send invitation email: ${result.error}`);
-		}
-	} catch (error) {
-		console.error(
-			`Błąd podczas wysyłki zaproszenia do organizacji do ${email}:`,
-			error,
-		);
-		throw error; // Rzuć błąd dalej, aby Better-Auth mógł go obsłużyć
 	}
 }
 

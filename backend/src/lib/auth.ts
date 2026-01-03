@@ -13,7 +13,6 @@ import { betterAuth } from "better-auth";
 import { haveIBeenPwned, organization } from "better-auth/plugins";
 import { Pool } from "pg";
 import {
-	sendOrganizationInvitation,
 	sendResetPasswordEmail,
 	sendVerificationEmail,
 } from "./email";
@@ -59,22 +58,7 @@ export const auth = betterAuth({
 		},
 		sendOnSignUp: true, // Automatycznie wysyłaj przy rejestracji
 		autoSignInAfterVerification: true, // Auto-login po weryfikacji
-		callbackURL: async ({ user }) => {
-			// Sprawdź czy użytkownik ma aktywne zaproszenie
-			try {
-				const result = await pool.query(
-					"SELECT id FROM invitation WHERE email = $1 AND status = 'pending' AND expires_at > NOW() LIMIT 1",
-					[user.email]
-				);
-				if (result.rows.length > 0) {
-					return `${env.FRONTEND_URL}/accept-invitation/${result.rows[0].id}`;
-				}
-			} catch (error) {
-				console.error("Error checking for pending invitation:", error);
-			}
-			// Domyślnie przekieruj na login
-			return `${env.FRONTEND_URL}/login`;
-		},
+		callbackURL: `${env.FRONTEND_URL}/login`,
 	},
 
 	// Session Configuration
@@ -121,21 +105,6 @@ export const auth = betterAuth({
 			allowUserToCreateOrganization: true,
 			organizationLimit: 5, // Max 5 organizacji na użytkownika
 			requireEmailVerificationOnInvitation: true, // Wymagaj weryfikacji przed akceptacją
-
-			// Email zaproszenia - wysyłka zaproszenia do organizacji
-			// Link wskazuje na /invite/:invitationId (formularz rejestracji)
-			// Po rejestracji i weryfikacji email, użytkownik zostanie przekierowany na /accept-invitation/:invitationId
-			async sendInvitationEmail(data) {
-				const inviteLink = `${env.FRONTEND_URL}/invite/${data.id}`;
-				await sendOrganizationInvitation({
-					email: data.email,
-					inviterName: data.inviter.user.name || "Administrator",
-					invitedByEmail: data.inviter.user.email,
-					organizationName: data.organization.name,
-					inviteUrl: inviteLink,
-					role: data.role || "członek",
-				});
-			},
 		}),
 
 		// Organization Helpers Plugin - rozszerzenia funkcjonalności organizacji

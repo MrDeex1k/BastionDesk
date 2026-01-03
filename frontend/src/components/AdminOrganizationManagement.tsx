@@ -163,7 +163,6 @@ const MOCK_MEMBERS: Member[] = [
 export function AdminOrganizationManagement() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("pracownik");
-  const [isLoadingInvite, setIsLoadingInvite] = useState(false);
   const [isLoadingAdd, setIsLoadingAdd] = useState(false);
 
   // Members list state
@@ -204,35 +203,6 @@ export function AdminOrganizationManagement() {
   useEffect(() => {
     fetchMembers();
   }, []);
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-
-    setIsLoadingInvite(true);
-    try {
-      const response = await fetch(
-        "/api/auth/organization/invite-member",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, role }),
-          credentials: 'include',
-        },
-      );
-
-      if (response.ok) {
-        toast.success(`Wysłano zaproszenie do ${email}`);
-        setEmail("");
-      } else {
-        toast.error("Nie udało się wysłać zaproszenia");
-      }
-    } catch {
-      toast.error("Wystąpił błąd podczas wysyłania zaproszenia");
-    } finally {
-      setIsLoadingInvite(false);
-    }
-  };
 
   const handleAddDirectly = async () => {
     if (!email) {
@@ -394,7 +364,7 @@ export function AdminOrganizationManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleInvite} className="space-y-4">
+          <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-slate-200">
@@ -454,24 +424,12 @@ export function AdminOrganizationManagement() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button
-                type="submit"
-                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-900/20"
-                disabled={isLoadingInvite || isLoadingAdd}
-              >
-                {isLoadingInvite ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Mail className="h-4 w-4 mr-2" />
-                )}
-                Wyślij zaproszenie
-              </Button>
+            <div className="pt-2">
               <Button
                 type="button"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20 border-0"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20 border-0"
                 onClick={handleAddDirectly}
-                disabled={isLoadingInvite || isLoadingAdd}
+                disabled={isLoadingAdd}
               >
                 {isLoadingAdd ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -482,11 +440,9 @@ export function AdminOrganizationManagement() {
               </Button>
             </div>
             <p className="text-xs text-slate-500 text-center">
-              "Wyślij zaproszenie" wyśle link aktywacyjny. "Dodaj
-              istniejącego" zadziała tylko jeśli użytkownik ma już konto w
-              systemie.
+              Dodaj istniejącego użytkownika do organizacji. Użytkownik musi już mieć konto w systemie.
             </p>
-          </form>
+          </div>
         </CardContent>
       </Card>
 

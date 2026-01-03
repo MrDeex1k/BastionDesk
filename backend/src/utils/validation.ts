@@ -82,11 +82,6 @@ export const createOrganizationSchema = z.object({
 	logo: z.string().url({ message: "Nieprawidłowy URL logo" }).optional(),
 });
 
-export const inviteMemberSchema = z.object({
-	email: emailSchema,
-	role: userRoleSchema.default("pracownik"),
-});
-
 export const incidentQuerySchema = paginationSchema.extend({
 	status: incidentStatusSchema.optional(),
 	userId: uuidSchema.optional(),
@@ -206,5 +201,4 @@ export type UpdateIncidentNoteInput = z.infer<typeof updateIncidentNoteSchema>;
 export type ResolveIncidentInput = z.infer<typeof resolveIncidentSchema>;
 export type IncidentQueryInput = z.infer<typeof incidentQuerySchema>;
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
-export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 export type PaginationInput = z.infer<typeof paginationSchema>;

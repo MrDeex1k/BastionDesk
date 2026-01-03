@@ -18,8 +18,6 @@ const statement = {
 	member: ["create", "read", "update", "delete"],
 	// Zespoły
 	team: ["create", "read", "update", "delete"],
-	// Zaproszenia
-	invitation: ["create", "read", "update", "delete", "cancel"],
 	// Raporty
 	reports: ["create", "read", "update", "delete"],
 	// Analityka
@@ -45,7 +43,6 @@ export const admin = ac.newRole({
 	organization: ["create", "read", "update", "delete"],
 	member: ["create", "read", "update", "delete"],
 	team: ["create", "read", "update", "delete"],
-	invitation: ["create", "read", "update", "delete", "cancel"],
 	reports: ["create", "read", "update", "delete"],
 	analytics: ["create", "read", "update", "delete"],
 	incident: ["create", "read", "update", "delete", "analyze"],
@@ -58,7 +55,6 @@ export const analityk = ac.newRole({
 	organization: ["read"],
 	member: ["read"],
 	team: ["read"],
-	invitation: ["read"],
 	reports: ["create", "read", "update", "delete"],
 	analytics: ["create", "read", "update"],
 	incident: ["read", "update", "analyze"],
