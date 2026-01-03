@@ -386,7 +386,7 @@ CREATE OR REPLACE FUNCTION create_default_organization_roles(org_id text)
 RETURNS void AS $$
 BEGIN
 	-- Rola: admin (właściciel - pełne uprawnienia)
-	INSERT INTO organization_role (id, organizationId, role, permission)
+	INSERT INTO organization_role (id, "organizationId", role, permission)
 	VALUES (
 		uuidv7()::text,
 		org_id,
@@ -399,10 +399,10 @@ BEGIN
 			"reports": ["create", "read", "update", "delete"],
 			"analytics": ["create", "read", "update", "delete"]
 		}'::jsonb
-	) ON CONFLICT (organizationId, role) DO NOTHING;
+	) ON CONFLICT ("organizationId", role) DO NOTHING;
 	
 	-- Rola: analityk (dostęp do raportów i analityk)
-	INSERT INTO organization_role (id, organizationId, role, permission)
+	INSERT INTO organization_role (id, "organizationId", role, permission)
 	VALUES (
 		uuidv7()::text,
 		org_id,
@@ -414,10 +414,10 @@ BEGIN
 			"reports": ["create", "read", "update", "delete"],
 			"analytics": ["create", "read", "update"]
 		}'::jsonb
-	) ON CONFLICT (organizationId, role) DO NOTHING;
+	) ON CONFLICT ("organizationId", role) DO NOTHING;
 
 	-- Rola: pracownik (podstawowy dostęp)
-	INSERT INTO organization_role (id, organizationId, role, permission)
+	INSERT INTO organization_role (id, "organizationId", role, permission)
 	VALUES (
 		uuidv7()::text,
 		org_id,
@@ -427,7 +427,7 @@ BEGIN
 			"member": ["read"],
 			"team": ["read"]
 		}'::jsonb
-	) ON CONFLICT (organizationId, role) DO NOTHING;
+	) ON CONFLICT ("organizationId", role) DO NOTHING;
 END;
 $$ LANGUAGE plpgsql;
 

@@ -84,8 +84,8 @@ CREATE TABLE IF NOT EXISTS incident_audit_log (
     "changedBy" text,
 
     -- Rejestracja zmiany statusu
-    "oldStatus" incident_status,
-    "newStatus" incident_status,
+    "oldStatus" "IncidentStatus",
+    "newStatus" "IncidentStatus",
 
     -- Kiedy nastąpiła zmiana
     "changedAt" timestamp NOT NULL DEFAULT now()
