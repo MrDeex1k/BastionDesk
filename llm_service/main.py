@@ -66,7 +66,7 @@ async def query_message(request: QueryRequest) -> dict:
 	try:
 		response = run_inference(request.prompt)
 	except Exception as exc:
-		response = None
+		response = "Zielony"
 	return {"response": response}
 
 

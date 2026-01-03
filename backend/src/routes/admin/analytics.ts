@@ -16,17 +16,17 @@ async function getIncidentStats(req: Request, res: Response) {
 		const organizationId = authReq.organizationId!;
 
 		// Pobierz całkowitą liczbę incydentów
-		const totalResult = await queryOne<{ count: number }>(
+		const totalResult = await queryOne<{ count: string }>(
 			`
 			SELECT COUNT(*) as count FROM incidents WHERE "organizationId" = $1
 		`,
 			[organizationId],
 		);
 
-		const totalIncidents = totalResult?.count || 0;
+		const totalIncidents = parseInt(totalResult?.count || "0", 10);
 
 		// Pobierz liczbę rozwiązanych incydentów
-		const resolvedResult = await queryOne<{ count: number }>(
+		const resolvedResult = await queryOne<{ count: string }>(
 			`
 			SELECT COUNT(*) as count FROM incidents
 			WHERE "organizationId" = $1 AND "czyRozwiazany" = true
@@ -34,7 +34,7 @@ async function getIncidentStats(req: Request, res: Response) {
 			[organizationId],
 		);
 
-		const resolvedIncidents = resolvedResult?.count || 0;
+		const resolvedIncidents = parseInt(resolvedResult?.count || "0", 10);
 
 		// Oblicz procent rozwiązanych
 		const resolvedPercentage =
@@ -69,7 +69,7 @@ async function getIncidentStats(req: Request, res: Response) {
 		}
 
 		// Pobierz rozkład po statusach
-		const statusStats = await query<{ status: string; count: number }>(
+		const statusStatsRaw = await query<{ status: string; count: string }>(
 			`
 			SELECT status, COUNT(*) as count
 			FROM incidents
@@ -80,8 +80,13 @@ async function getIncidentStats(req: Request, res: Response) {
 			[organizationId],
 		);
 
+		const statusStats = statusStatsRaw.map(stat => ({
+			status: stat.status,
+			count: parseInt(stat.count, 10),
+		}));
+
 		// Pobierz rozkład po kategoriach LLM
-		const categoryStats = await query<{ category: string; count: number }>(
+		const categoryStatsRaw = await query<{ category: string; count: string }>(
 			`
 			SELECT "llmCategory" as category, COUNT(*) as count
 			FROM incidents
@@ -91,6 +96,11 @@ async function getIncidentStats(req: Request, res: Response) {
 		`,
 			[organizationId],
 		);
+
+		const categoryStats = categoryStatsRaw.map(stat => ({
+			category: stat.category,
+			count: parseInt(stat.count, 10),
+		}));
 
 		res.json({
 			success: true,
