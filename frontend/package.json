@@ -10,10 +10,10 @@
     "preview": "bunx --bun vite preview"
   },
   "dependencies": {
-    "@better-auth/passkey": "^1.4.9",
+    "@better-auth/passkey": "^1.4.10",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "^5.90.16",
-    "better-auth": "^1.4.9",
+    "better-auth": "^1.4.10",
     "bun-plugin-tailwind": "^0.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -27,7 +27,7 @@
     "react-day-picker": "^9.13.0",
     "react-dom": "^19.2.3",
     "react-hook-form": "^7.69.0",
-    "react-resizable-panels": "^4.1.0",
+    "react-resizable-panels": "^4.2.0",
     "react-router-dom": "^7.11.0",
     "recharts": "^3.6.0",
     "root": "tanstack/react-query",
