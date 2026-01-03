@@ -63,6 +63,14 @@ function AppContent() {
   };
 
   /**
+   * Callback po pomyślnym zalogowaniu
+   * Logika przekierowania jest obsługiwana przez useEffect, który monitoruje sesję i rolę
+   */
+  const handleLogin = () => {
+    // Przekierowanie jest obsługiwane automatycznie przez useEffect
+  };
+
+  /**
    * Przekierowanie do dashboardu na podstawie aktualnej roli
    */
   const handleDashboardClick = () => {
