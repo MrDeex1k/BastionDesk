@@ -101,9 +101,10 @@ services:
           wget --spider --quiet http://localhost:9000/minio/health/ready && break
           sleep 2
         done
-        if [ "$${BOOTSTRAP_NODE:-false}" = "true" ]; then
+        if [ "$${BOOTSTRAP_NODE}" = "true" ]; then
           mc alias set minio http://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
           mc mb --ignore-existing minio/"$${S3_BUCKET}"
+          sleep 5  # Czekaj na synchronizację bucketa w distributed MinIO
           mc version enable minio/"$${S3_BUCKET}" || true
         fi
         wait $pid
