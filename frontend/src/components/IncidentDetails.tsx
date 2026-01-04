@@ -289,8 +289,6 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
 
   const downloadFile = async (type: 'reports' | 'statements' | 'screenshots' | 'attachments', filename: string) => {
     try {
-      console.log('[FRONTEND] Downloading file:', { type, filename, incident: incident, mode });
-      
       // Wybierz odpowiedni endpoint w zależności od trybu
       let url = '';
       if (mode === 'admin') {
@@ -302,16 +300,13 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
         url = `/api/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
       }
       
-      console.log('[FRONTEND] URL:', url);
-      
       const response = await fetch(url, {
         credentials: 'include',
       });
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[FRONTEND] Download failed:', response.status, errorText);
-        throw new Error('Failed to download file');
+        throw new Error(`Failed to download file: ${errorText}`);
       }
       
       const blob = await response.blob();
@@ -325,7 +320,6 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
       document.body.removeChild(a);
       toast.success('Plik został pobrany');
     } catch (error) {
-      console.error('Download error:', error);
       toast.error('Nie udało się pobrać pliku');
     }
   };

@@ -66,7 +66,6 @@ export function SettingsDialog() {
       const { data } = await authClient.passkey.listUserPasskeys();
       setPassKeys(data || []);
     } catch (error) {
-      console.error("Error fetching passkeys:", error);
       toast.error("Nie udało się pobrać listy kluczy");
     } finally {
       setIsLoadingPassKeys(false);
@@ -84,13 +83,11 @@ export function SettingsDialog() {
 
       if (error) {
         toast.error("Nie udało się dodać klucza PassKey");
-        console.error("PassKey add error:", error);
       } else {
         toast.success("Klucz PassKey został dodany");
         fetchPassKeys();
       }
     } catch (error) {
-      console.error("Error adding passkey:", error);
       toast.error("Wystąpił błąd podczas dodawania klucza");
     } finally {
       setIsLoadingPassKeys(false);
@@ -108,13 +105,11 @@ export function SettingsDialog() {
 
       if (error) {
         toast.error("Nie udało się usunąć klucza");
-        console.error("PassKey delete error:", error);
       } else {
         toast.success("Klucz PassKey został usunięty");
         fetchPassKeys();
       }
     } catch (error) {
-      console.error("Error deleting passkey:", error);
       toast.error("Wystąpił błąd podczas usuwania klucza");
     } finally {
       setIsLoadingPassKeys(false);

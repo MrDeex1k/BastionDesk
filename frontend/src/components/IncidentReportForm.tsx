@@ -54,7 +54,6 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
       setTimeout(() => setShowSuccess(false), 5000);
     },
     onError: (error) => {
-      console.error("Failed to submit incident", error);
       toast.error("Nie udało się wysłać zgłoszenia", {
         description: error.message
       });

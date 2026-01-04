@@ -68,7 +68,6 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
           setStep("password");
         }
       } catch (error) {
-        console.error("Error checking passkey availability", error);
         // W przypadku błędu API, fallback do hasła
         setStep("password");
       } finally {

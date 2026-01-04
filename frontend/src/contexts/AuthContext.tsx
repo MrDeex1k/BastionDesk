@@ -95,7 +95,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
         } catch (error) {
-          console.error("Failed to set active organization:", error);
         }
         setRole(null);
         return;
@@ -112,7 +111,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole(null);
         }
       } catch (err) {
-        console.error("Failed to fetch user role:", err);
         setRole(null);
       } finally {
         setIsLoadingRole(false);
