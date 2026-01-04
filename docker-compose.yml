@@ -92,11 +92,7 @@ services:
       - |
         mkdir -p /data/backups/postgres
         #Docker
-        minio server --address :9000 --console-address :9001 \
-          http://storage-1:9000/data \
-          http://storage-2:9000/data \
-          http://storage-3:9000/data \
-          http://storage-4:9000/data &
+        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
         #Podman
         #minio server --address :9000 --console-address :9001 /data &
         pid=$!
@@ -138,17 +134,7 @@ services:
       - -c
       - |
         mkdir -p /data/backups/postgres
-        minio server --address :9000 --console-address :9001 \
-          #Docker
-          http://storage-1:9000/data \
-          http://storage-2:9000/data \
-          http://storage-3:9000/data \
-          http://storage-4:9000/data &
-          #Podman
-          #http://bastiondesk-storage-1:9000/data \
-          #http://bastiondesk-storage-2:9000/data \
-          #http://bastiondesk-storage-3:9000/data \
-          #http://bastiondesk-storage-4:9000/data &
+        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
         pid=$!
         for i in $(seq 1 20); do
           wget --spider --quiet http://localhost:9000/minio/health/ready && break
@@ -179,17 +165,7 @@ services:
       - -c
       - |
         mkdir -p /data/backups/postgres
-        minio server --address :9000 --console-address :9001 \
-          #Docker
-          http://storage-1:9000/data \
-          http://storage-2:9000/data \
-          http://storage-3:9000/data \
-          http://storage-4:9000/data &
-          #Podman
-          #http://bastiondesk-storage-1:9000/data \
-          #http://bastiondesk-storage-2:9000/data \
-          #http://bastiondesk-storage-3:9000/data \
-          #http://bastiondesk-storage-4:9000/data &
+        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
         pid=$!
         for i in $(seq 1 20); do
           wget --spider --quiet http://localhost:9000/minio/health/ready && break
@@ -220,17 +196,7 @@ services:
       - -c
       - |
         mkdir -p /data/backups/postgres
-        minio server --address :9000 --console-address :9001 \
-          #Docker
-          http://storage-1:9000/data \
-          http://storage-2:9000/data \
-          http://storage-3:9000/data \
-          http://storage-4:9000/data &
-          #Podman
-          #http://bastiondesk-storage-1:9000/data \
-          #http://bastiondesk-storage-2:9000/data \
-          #http://bastiondesk-storage-3:9000/data \
-          #http://bastiondesk-storage-4:9000/data &
+        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
         pid=$!
         for i in $(seq 1 20); do
           wget --spider --quiet http://localhost:9000/minio/health/ready && break
