@@ -4,7 +4,7 @@ import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { Clock, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Loader2, ArrowRight } from "lucide-react";
+import { Clock, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Loader2, ArrowRight, BrainCircuit } from "lucide-react";
 import { IncidentDetails } from "./IncidentDetails";
 
 interface Incident {
@@ -90,6 +90,14 @@ const getStatusIcon = (status: string) => {
   return <AlertCircle className="h-4 w-4" />;
 };
 
+const getLLMCategoryColor = (category: string) => {
+  const lowerCategory = category.toLowerCase();
+  if (lowerCategory === 'czerwony') return "bg-red-500/20 text-red-400 border-red-500/50";
+  if (lowerCategory === 'żółty') return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
+  if (lowerCategory === 'zielony') return "bg-green-500/20 text-green-400 border-green-500/50";
+  return "bg-slate-500/20 text-slate-400 border-slate-500/50";
+};
+
 export function MyIncidentsList() {
   const [page, setPage] = useState(1);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
@@ -139,11 +147,18 @@ export function MyIncidentsList() {
                   className="group cursor-pointer p-4 rounded-lg bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-slate-900/80 transition-all duration-200 relative"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className={`${getStatusColor(incident.status)} gap-1`}>
                         {getStatusIcon(incident.status)}
                         {incident.status}
                       </Badge>
+
+                      {incident.llmCategory && (
+                        <Badge variant="outline" className={`${getLLMCategoryColor(incident.llmCategory)} gap-1`}>
+                          <BrainCircuit className="h-3 w-3" />
+                          {incident.llmCategory}
+                        </Badge>
+                      )}
                     </div>
                     <span className="text-xs text-slate-500">
                       {new Date(incident.dataZgloszenia).toLocaleDateString("pl-PL", {
