@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.5-alpine AS builder
+FROM oven/bun:1.3.8-alpine AS builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY . .
 RUN if [ -f bun.lockb ]; then bun install --ci --frozen-lockfile; else bun install --ci; fi
 RUN bun run build
 
-FROM nginx:1.29.4-alpine
+FROM nginx:1.29.5-alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

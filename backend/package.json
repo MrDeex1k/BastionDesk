@@ -1,6 +1,6 @@
 {
   "name": "bastiondesk-backend",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "BastionDesk backend with Better-Auth",
   "module": "src/index.ts",
   "type": "module",
@@ -24,15 +24,15 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@better-auth/passkey": "^1.4.17",
-    "better-auth": "^1.4.17",
+    "@better-auth/passkey": "^1.4.18",
+    "better-auth": "^1.4.18",
     "cors": "^2.8.6",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "nodemailer": "^7.0.13",
-    "pg": "^8.17.2",
+    "pg": "^8.18.0",
     "uuidv7": "^1.1.0",
     "zod": "^4.3.6"
   }
