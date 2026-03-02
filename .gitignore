@@ -1,9 +1,10 @@
+*.md
 .env
 dist
 tests
 .env.*
 db.sql
 *.lock
-node_modules
 .DS_Store
-example_user.md
+node_modules
+/frontend/.agents
