@@ -1,4 +1,10 @@
-import { useState, useEffect } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useReducer,
+  useState,
+} from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,75 +14,112 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "./ui/tabs";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { toast } from "sonner";
-import {
-  Settings,
-  Key,
-  Lock,
-  Trash2,
-  Fingerprint,
-  Loader2,
-  Plus,
-} from "lucide-react";
+import { Settings, Trash2 } from "lucide-react";
+import type { PassKey } from "@/ApiModel";
 import { authClient } from "../lib/auth-client";
+import { validatePassword } from "@/lib/validation";
+import { DangerZoneSection } from "./settings-dialog/DangerZoneSection";
+import { PassKeysSection } from "./settings-dialog/PassKeysSection";
+import { PasswordChangeSection } from "./settings-dialog/PasswordChangeSection";
 
-interface PassKey {
-  id: string;
-  name?: string;
-  createdAt: Date | string;
+interface SettingsState {
+  confirmPassword: string;
+  isLoadingPassKeys: boolean;
+  newPassword: string;
+  oldPassword: string;
+  passKeys: PassKey[];
+  pendingAction: "delete" | "password" | null;
+}
+
+type SettingsAction =
+  | { type: "setConfirmPassword"; value: string }
+  | { type: "setIsLoadingPassKeys"; value: boolean }
+  | { type: "setNewPassword"; value: string }
+  | { type: "setOldPassword"; value: string }
+  | { type: "setPassKeys"; value: PassKey[] }
+  | { type: "setPendingAction"; value: SettingsState["pendingAction"] }
+  | { type: "resetPasswordForm" };
+
+const initialSettingsState: SettingsState = {
+  confirmPassword: "",
+  isLoadingPassKeys: false,
+  newPassword: "",
+  oldPassword: "",
+  passKeys: [],
+  pendingAction: null,
+};
+
+function settingsReducer(
+  state: SettingsState,
+  action: SettingsAction,
+): SettingsState {
+  switch (action.type) {
+    case "setConfirmPassword":
+      return { ...state, confirmPassword: action.value };
+    case "setIsLoadingPassKeys":
+      return { ...state, isLoadingPassKeys: action.value };
+    case "setNewPassword":
+      return { ...state, newPassword: action.value };
+    case "setOldPassword":
+      return { ...state, oldPassword: action.value };
+    case "setPassKeys":
+      return { ...state, passKeys: action.value };
+    case "setPendingAction":
+      return { ...state, pendingAction: action.value };
+    case "resetPasswordForm":
+      return {
+        ...state,
+        confirmPassword: "",
+        newPassword: "",
+        oldPassword: "",
+      };
+    default:
+      return state;
+  }
 }
 
 export function SettingsDialog() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [state, dispatch] = useReducer(
+    settingsReducer,
+    initialSettingsState,
+  );
 
-  // Password Change State
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  // PassKeys State
-  const [passKeys, setPassKeys] = useState<PassKey[]>([]);
-  const [isLoadingPassKeys, setIsLoadingPassKeys] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchPassKeys();
-    }
-  }, [isOpen]);
-
-  const fetchPassKeys = async () => {
-    setIsLoadingPassKeys(true);
+  const fetchPassKeys = useCallback(async () => {
+    dispatch({ type: "setIsLoadingPassKeys", value: true });
     try {
       const { data } = await authClient.passkey.listUserPasskeys();
-      setPassKeys(data || []);
-    } catch (error) {
+      dispatch({ type: "setPassKeys", value: data || [] });
+    } catch {
       toast.error("Nie udało się pobrać listy kluczy");
     } finally {
-      setIsLoadingPassKeys(false);
+      dispatch({ type: "setIsLoadingPassKeys", value: false });
     }
-  };
+  }, []);
 
-  const handleAddPassKey = async () => {
-    setIsLoadingPassKeys(true);
+  const loadPassKeys = useEffectEvent(() => {
+    void fetchPassKeys();
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      loadPassKeys();
+    });
+  }, [isOpen]);
+
+  const handleAddPassKey = useCallback(async () => {
+    dispatch({ type: "setIsLoadingPassKeys", value: true });
     try {
-      const newKeyName = `Klucz ${new Date().toLocaleDateString('pl-PL')} ${new Date().toLocaleTimeString('pl-PL')}`;
-      
+      const newKeyName = `Klucz ${new Date().toLocaleDateString(
+        "pl-PL",
+      )} ${new Date().toLocaleTimeString("pl-PL")}`;
+
       const { error } = await authClient.passkey.addPasskey({
         name: newKeyName,
       });
@@ -85,56 +128,78 @@ export function SettingsDialog() {
         toast.error("Nie udało się dodać klucza PassKey");
       } else {
         toast.success("Klucz PassKey został dodany");
-        fetchPassKeys();
+        await fetchPassKeys();
       }
-    } catch (error) {
+    } catch {
       toast.error("Wystąpił błąd podczas dodawania klucza");
     } finally {
-      setIsLoadingPassKeys(false);
+      dispatch({ type: "setIsLoadingPassKeys", value: false });
     }
-  };
+  }, [fetchPassKeys]);
 
-  const handleDeletePassKey = async (id: string) => {
-    if (!confirm("Czy na pewno chcesz usunąć ten klucz?")) return;
-    
-    setIsLoadingPassKeys(true);
-    try {
-      const { error } = await authClient.passkey.deletePasskey({
-        id,
-      });
+  const handleDeletePassKey = useCallback(
+    async (id: string) => {
+      if (!confirm("Czy na pewno chcesz usunąć ten klucz?")) return;
 
-      if (error) {
-        toast.error("Nie udało się usunąć klucza");
-      } else {
-        toast.success("Klucz PassKey został usunięty");
-        fetchPassKeys();
+      dispatch({ type: "setIsLoadingPassKeys", value: true });
+      try {
+        const { error } = await authClient.passkey.deletePasskey({ id });
+
+        if (error) {
+          toast.error("Nie udało się usunąć klucza");
+        } else {
+          toast.success("Klucz PassKey został usunięty");
+          await fetchPassKeys();
+        }
+      } catch {
+        toast.error("Wystąpił błąd podczas usuwania klucza");
+      } finally {
+        dispatch({ type: "setIsLoadingPassKeys", value: false });
       }
-    } catch (error) {
-      toast.error("Wystąpił błąd podczas usuwania klucza");
-    } finally {
-      setIsLoadingPassKeys(false);
-    }
-  };
+    },
+    [fetchPassKeys],
+  );
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      toast.error("Nowe hasła nie są identyczne");
-      return;
-    }
+  const handleChangePassword = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
 
-    setIsLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsLoading(false);
+      const passwordError = validatePassword(state.newPassword);
+      if (passwordError) {
+        toast.error(passwordError);
+        return;
+      }
 
-    toast.success("Hasło zostało zmienione pomyślnie");
-    setOldPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-  };
+      if (state.newPassword !== state.confirmPassword) {
+        toast.error("Nowe hasła nie są identyczne");
+        return;
+      }
 
-  const handleDeleteAccount = async () => {
+      dispatch({ type: "setPendingAction", value: "password" });
+      try {
+        const { error } = await authClient.changePassword({
+          currentPassword: state.oldPassword,
+          newPassword: state.newPassword,
+          revokeOtherSessions: true,
+        });
+
+        if (error) {
+          toast.error(error.message || "Nie udało się zmienić hasła");
+          return;
+        }
+
+        toast.success("Hasło zostało zmienione pomyślnie");
+        dispatch({ type: "resetPasswordForm" });
+      } catch {
+        toast.error("Nie udało się zmienić hasła");
+      } finally {
+        dispatch({ type: "setPendingAction", value: null });
+      }
+    },
+    [state.confirmPassword, state.newPassword, state.oldPassword],
+  );
+
+  const handleDeleteAccount = useCallback(async () => {
     if (
       !window.confirm(
         "Czy na pewno chcesz usunąć swoje konto? Ta operacja jest nieodwracalna.",
@@ -143,15 +208,26 @@ export function SettingsDialog() {
       return;
     }
 
-    setIsLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsLoading(false);
+    dispatch({ type: "setPendingAction", value: "delete" });
+    try {
+      const { error } = await authClient.deleteUser({
+        callbackURL: window.location.origin,
+      });
 
-    toast.error("Konto zostało usunięte (Symulacja)");
-    setIsOpen(false);
-    // In real app: logout and redirect
-  };
+      if (error) {
+        toast.error(error.message || "Nie udało się usunąć konta");
+        return;
+      }
+
+      toast.success("Konto zostało usunięte");
+      setIsOpen(false);
+      window.location.href = "/";
+    } catch {
+      toast.error("Nie udało się usunąć konta");
+    } finally {
+      dispatch({ type: "setPendingAction", value: null });
+    }
+  }, []);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -159,250 +235,71 @@ export function SettingsDialog() {
         <Button
           variant="ghost"
           size="icon"
-          className="text-slate-400 hover:text-white hover:bg-white/5"
+          className="text-zinc-400 hover:bg-white/5 hover:text-white"
         >
-          <Settings className="h-5 w-5" />
+          <Settings className="size-5" />
           <span className="sr-only">Ustawienia</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] bg-slate-950 border-slate-700 text-slate-100 shadow-2xl shadow-black/50">
+      <DialogContent className="border-zinc-700 bg-zinc-950 text-zinc-100 shadow-2xl shadow-black/50 sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl text-white">
-            <Settings className="h-5 w-5 text-blue-400" />
+            <Settings className="size-5 text-blue-400" />
             Ustawienia konta
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Zarządzaj bezpieczeństwem i preferencjami swojego
-            konta.
+          <DialogDescription className="text-zinc-400">
+            Zarządzaj bezpieczeństwem i preferencjami swojego konta.
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="security" className="w-full mt-4">
-          <TabsList className="grid w-full grid-cols-2 bg-slate-900 border border-slate-700">
+          <TabsList className="grid w-full grid-cols-2 border border-zinc-700 bg-zinc-900">
             <TabsTrigger
               value="security"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400"
+              className="text-white/85 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
             >
-              <ShieldIcon className="h-4 w-4 mr-2" />
+              <ShieldIcon className="mr-2 size-4" />
               Bezpieczeństwo
             </TabsTrigger>
             <TabsTrigger
               value="danger"
-              className="data-[state=active]:bg-red-600 data-[state=active]:text-white text-slate-400"
+              className="text-white/85 data-[state=active]:bg-red-600 data-[state=active]:text-white"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
+              <Trash2 className="mr-2 size-4" />
               Usunięcie konta
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent
-            value="security"
-            className="space-y-4 mt-4"
-          >
-            {/* PassKeys Section */}
-            <Card className="bg-slate-900 border-slate-700 shadow-sm">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                    <div>
-                        <CardTitle className="text-lg flex items-center gap-2 text-slate-100">
-                        <Fingerprint className="h-5 w-5 text-purple-400" />
-                        PassKeys
-                        </CardTitle>
-                        <CardDescription className="text-slate-400 mt-1">
-                        Zarządzaj kluczami sprzętowymi i biometrią.
-                        </CardDescription>
-                    </div>
-                    <Button 
-                        onClick={handleAddPassKey} 
-                        disabled={isLoadingPassKeys}
-                        size="sm"
-                        className="bg-purple-600 hover:bg-purple-700 text-white"
-                    >
-                        {isLoadingPassKeys ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Dodaj klucz
-                            </>
-                        )}
-                    </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                    {passKeys.length > 0 ? (
-                        passKeys.map((pk) => (
-                            <div key={pk.id} className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-purple-500/10 rounded-full">
-                                        <Fingerprint className="h-4 w-4 text-purple-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-slate-200">{pk.name}</p>
-                                        <p className="text-xs text-slate-500">
-                                            Dodano: {new Date(pk.createdAt).toLocaleDateString('pl-PL')}
-                                        </p>
-                                    </div>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-slate-400 hover:text-red-400 hover:bg-red-950/30"
-                                  onClick={() => handleDeletePassKey(pk.id)}
-                                  disabled={isLoadingPassKeys}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="text-center py-6 text-slate-500 bg-slate-950/50 rounded-lg border border-slate-800 border-dashed">
-                            {isLoadingPassKeys ? (
-                                <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
-                            ) : (
-                                <>
-                                    <Fingerprint className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                    <p>Brak skonfigurowanych kluczy PassKey</p>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Change Password Section */}
-            <Card className="bg-slate-900 border-slate-700 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2 text-slate-100">
-                  <Key className="h-5 w-5 text-blue-400" />
-                  Zmiana hasła
-                </CardTitle>
-                <CardDescription className="text-slate-400">
-                  Pamiętaj o używaniu silnego i unikalnego
-                  hasła.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form
-                  onSubmit={handleChangePassword}
-                  className="space-y-4"
-                >
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="current-password"
-                      className="text-slate-200"
-                    >
-                      Obecne hasło
-                    </Label>
-                    <Input
-                      id="current-password"
-                      type="password"
-                      value={oldPassword}
-                      onChange={(e) =>
-                        setOldPassword(e.target.value)
-                      }
-                      className="bg-slate-950 border-slate-600 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 text-white"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="new-password"
-                        className="text-slate-200"
-                      >
-                        Nowe hasło
-                      </Label>
-                      <Input
-                        id="new-password"
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) =>
-                          setNewPassword(e.target.value)
-                        }
-                        className="bg-slate-950 border-slate-600 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 text-white"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="confirm-password"
-                        className="text-slate-200"
-                      >
-                        Potwierdź nowe hasło
-                      </Label>
-                      <Input
-                        id="confirm-password"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) =>
-                          setConfirmPassword(e.target.value)
-                        }
-                        className="bg-slate-950 border-slate-600 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 text-white"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      type="submit"
-                      className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <Lock className="h-4 w-4 mr-2" />
-                      )}
-                      Zmień hasło
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+          <TabsContent value="security" className="space-y-4 mt-4">
+            <PassKeysSection
+              passKeys={state.passKeys}
+              isLoadingPassKeys={state.isLoadingPassKeys}
+              onAddPassKey={handleAddPassKey}
+              onDeletePassKey={handleDeletePassKey}
+            />
+            <PasswordChangeSection
+              oldPassword={state.oldPassword}
+              newPassword={state.newPassword}
+              confirmPassword={state.confirmPassword}
+              isLoading={state.pendingAction === "password"}
+              onOldPasswordChange={(value) =>
+                dispatch({ type: "setOldPassword", value })
+              }
+              onNewPasswordChange={(value) =>
+                dispatch({ type: "setNewPassword", value })
+              }
+              onConfirmPasswordChange={(value) =>
+                dispatch({ type: "setConfirmPassword", value })
+              }
+              onSubmit={handleChangePassword}
+            />
           </TabsContent>
 
           <TabsContent value="danger" className="mt-4">
-            <Card className="bg-red-950/20 border-red-900/50 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg text-red-400 flex items-center gap-2">
-                  <Trash2 className="h-5 w-5" />
-                  Usuwanie konta
-                </CardTitle>
-                <CardDescription className="text-red-300/60">
-                  Ta operacja jest nieodwracalna. Wszystkie
-                  Twoje dane zostaną trwale usunięte po 30
-                  dniach.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-red-950/40 p-4 rounded-lg border border-red-900/40 text-sm text-red-200 mb-4 shadow-inner">
-                  <p>Co zostanie usunięte:</p>
-                  <ul className="list-disc list-inside mt-2 space-y-1 text-red-200/80">
-                    <li>Twoje dane profilowe</li>
-                    <li>
-                      Historia Twoich zgłoszeń (anonimizacja)
-                    </li>
-                    <li>Wszystkie ustawienia personalne</li>
-                  </ul>
-                </div>
-                <Button
-                  variant="destructive"
-                  className="w-full bg-red-600 hover:bg-red-700 text-white"
-                  onClick={handleDeleteAccount}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Trash2 className="h-4 w-4 mr-2" />
-                  )}
-                  Usuń konto trwale
-                </Button>
-              </CardContent>
-            </Card>
+            <DangerZoneSection
+              isLoading={state.pendingAction === "delete"}
+              onDeleteAccount={handleDeleteAccount}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>

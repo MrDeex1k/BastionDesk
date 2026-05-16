@@ -1,69 +1,117 @@
+import { useReducer } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card } from "./ui/card";
-import { UserPlus, Mail, KeyRound, User, ArrowLeft, Loader2 } from "lucide-react";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import {
+  UserPlus,
+  Mail,
+  KeyRound,
+  User,
+  ArrowLeft,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { signUp } from "@/lib/auth-client";
+import {
+  validateEmail,
+  validateFullName,
+  validatePassword,
+} from "@/lib/validation";
 
 interface RegisterFormProps {
   onBack: () => void;
   onRegisterSuccess: () => void;
 }
 
+interface RegisterFormState {
+  email: string;
+  password: string;
+  fullName: string;
+  emailError: string;
+  passwordError: string;
+  fullNameError: string;
+}
+
+type RegisterFormAction =
+  | {
+      type: "set-field";
+      field: "email" | "password" | "fullName";
+      value: string;
+    }
+  | {
+      type: "set-errors";
+      errors: Pick<
+        RegisterFormState,
+        "emailError" | "passwordError" | "fullNameError"
+      >;
+    }
+  | {
+      type: "reset";
+    };
+
+const initialRegisterFormState: RegisterFormState = {
+  email: "",
+  password: "",
+  fullName: "",
+  emailError: "",
+  passwordError: "",
+  fullNameError: "",
+};
+
+function registerFormReducer(
+  state: RegisterFormState,
+  action: RegisterFormAction,
+): RegisterFormState {
+  switch (action.type) {
+    case "set-field":
+      return {
+        ...state,
+        [action.field]: action.value,
+      };
+    case "set-errors":
+      return {
+        ...state,
+        ...action.errors,
+      };
+    case "reset":
+      return initialRegisterFormState;
+    default:
+      return state;
+  }
+}
+
 export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [fullNameError, setFullNameError] = useState("");
+  const [state, dispatch] = useReducer(
+    registerFormReducer,
+    initialRegisterFormState,
+  );
+  const queryClient = useQueryClient();
 
   const validateForm = () => {
-    let isValid = true;
+    const nextEmailError = validateEmail(state.email);
+    const nextPasswordError = validatePassword(state.password);
+    const nextFullNameError = validateFullName(state.fullName);
 
-    if (!email.includes("@")) {
-      setEmailError("Adres email musi zawierać znak @");
-      isValid = false;
-    } else if (!email.trim()) {
-      setEmailError("Adres email jest wymagany");
-      isValid = false;
-    } else {
-      setEmailError("");
-    }
+    dispatch({
+      type: "set-errors",
+      errors: {
+        emailError: nextEmailError,
+        passwordError: nextPasswordError,
+        fullNameError: nextFullNameError,
+      },
+    });
 
-    if (password.length < 10) {
-      setPasswordError("Hasło musi mieć co najmniej 10 znaków");
-      isValid = false;
-    } else if (!password.trim()) {
-      setPasswordError("Hasło jest wymagane");
-      isValid = false;
-    } else {
-      setPasswordError("");
-    }
-
-    const nameParts = fullName.trim().split(/\s+/);
-    if (nameParts.length < 2) {
-      setFullNameError("Proszę podać imię i nazwisko");
-      isValid = false;
-    } else if (!fullName.trim()) {
-      setFullNameError("Imię i nazwisko jest wymagane");
-      isValid = false;
-    } else {
-      setFullNameError("");
-    }
-
-    return isValid;
+    return !nextEmailError && !nextPasswordError && !nextFullNameError;
   };
 
   const registerMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await signUp.email({
-        email,
-        password,
-        name: fullName,
+        email: state.email,
+        password: state.password,
+        name: state.fullName,
       });
 
       if (error) {
@@ -73,18 +121,27 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
       return data;
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
+      dispatch({ type: "reset" });
       toast.success("Rejestracja zakończona pomyślnie!");
       onRegisterSuccess();
     },
     onError: (error: Error) => {
       toast.error(error.message);
-      setFullNameError(error.message);
-    }
+      dispatch({
+        type: "set-errors",
+        errors: {
+          emailError: "",
+          passwordError: "",
+          fullNameError: error.message,
+        },
+      });
+    },
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (validateForm()) {
       registerMutation.mutate();
     }
@@ -92,78 +149,98 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
 
   return (
     <div className="flex items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md bg-linear-to-br from-slate-800/90 to-slate-700/90 border-cyan-900/50 p-8">
+      <Card className="w-full max-w-md border-cyan-900/50 bg-linear-to-br from-zinc-800/90 to-zinc-700/90 p-8">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 mb-4">
             <UserPlus className="size-12 text-cyan-400" />
           </div>
-          <h2 className="text-3xl mb-2 text-cyan-300">
-            Dołącz do nas
-          </h2>
-          <p className="text-slate-400">
-            Wypełnij formularz, aby utworzyć konto
-          </p>
+          <h2 className="mb-2 text-3xl text-cyan-300">Dołącz do nas</h2>
+          <p className="text-zinc-400">Wypełnij formularz, aby utworzyć konto</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="fullName" className="text-slate-300">
+            <Label htmlFor="fullName" className="text-zinc-300">
               Imię i nazwisko
             </Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
+              <User className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-zinc-400" />
               <Input
                 id="fullName"
                 type="text"
                 placeholder="Jan Kowalski"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="pl-10 bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-cyan-500/20"
+                value={state.fullName}
+                onChange={(e) =>
+                  dispatch({
+                    type: "set-field",
+                    field: "fullName",
+                    value: e.target.value,
+                  })
+                }
+                className="border-zinc-700 bg-zinc-900/50 pl-10 text-white placeholder:text-zinc-500 focus:border-cyan-500 focus:ring-cyan-500/20"
                 required
                 disabled={registerMutation.isPending}
               />
             </div>
-            {fullNameError && <p className="text-red-500 text-sm">{fullNameError}</p>}
+            {state.fullNameError && (
+              <p className="text-sm text-red-500">{state.fullNameError}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-slate-300">
+            <Label htmlFor="email" className="text-zinc-300">
               Adres e-mail
             </Label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
+              <Mail className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-zinc-400" />
               <Input
                 id="email"
                 type="email"
                 placeholder="twoj@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-cyan-500/20"
+                value={state.email}
+                onChange={(e) =>
+                  dispatch({
+                    type: "set-field",
+                    field: "email",
+                    value: e.target.value,
+                  })
+                }
+                className="border-zinc-700 bg-zinc-900/50 pl-10 text-white placeholder:text-zinc-500 focus:border-cyan-500 focus:ring-cyan-500/20"
                 required
                 disabled={registerMutation.isPending}
               />
             </div>
-            {emailError && <p className="text-red-500 text-sm">{emailError}</p>}
+            {state.emailError && (
+              <p className="text-sm text-red-500">{state.emailError}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-slate-300">
+            <Label htmlFor="password" className="text-zinc-300">
               Hasło
             </Label>
             <div className="relative">
-              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
+              <KeyRound className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-zinc-400" />
               <Input
                 id="password"
                 type="password"
                 placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-cyan-500/20"
+                value={state.password}
+                onChange={(e) =>
+                  dispatch({
+                    type: "set-field",
+                    field: "password",
+                    value: e.target.value,
+                  })
+                }
+                className="border-zinc-700 bg-zinc-900/50 pl-10 text-white placeholder:text-zinc-500 focus:border-cyan-500 focus:ring-cyan-500/20"
                 required
                 disabled={registerMutation.isPending}
               />
             </div>
-            {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
+            {state.passwordError && (
+              <p className="text-sm text-red-500">{state.passwordError}</p>
+            )}
           </div>
 
           <Button
@@ -174,8 +251,8 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
           >
             {registerMutation.isPending ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Rejestracja...
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Rejestracja…
               </>
             ) : (
               "Utwórz konto"
@@ -186,7 +263,7 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
             type="button"
             onClick={onBack}
             variant="ghost"
-            className="w-full text-slate-400 hover:text-cyan-400 hover:bg-slate-700/50"
+            className="w-full text-zinc-400 hover:bg-zinc-700/50 hover:text-cyan-400"
             size="lg"
             disabled={registerMutation.isPending}
           >

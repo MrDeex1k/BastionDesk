@@ -1,18 +1,28 @@
-FROM oven/bun:1.3.10-alpine AS builder
+FROM oven/bun:1.3.14-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package.json ./
+COPY bun.lock ./
+COPY bunfig.toml ./
+RUN bun install --frozen-lockfile
 COPY . .
-
-RUN if [ -f bun.lockb ]; then bun install --ci --frozen-lockfile; else bun install --ci; fi
 RUN bun run build
 
-FROM nginx:1.29.5-alpine
+FROM nginx:1.31.0-alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+RUN sed -i 's#pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
+    && mkdir -p /var/cache/nginx /tmp/nginx /var/log/nginx \
+    && chown -R nginx:nginx /usr/share/nginx/html /etc/nginx/conf.d /var/cache/nginx /tmp/nginx /var/log/nginx
+
+USER nginx
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --spider --quiet http://127.0.0.1:8080/healthz || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

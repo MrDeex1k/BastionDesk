@@ -33,6 +33,24 @@ export interface AuthenticatedRequest extends Request {
 	memberRole?: UserRole;
 }
 
+export function getRequiredOrganizationId(
+	req: AuthenticatedRequest,
+	res: Response,
+): string | null {
+	if (req.organizationId) {
+		return req.organizationId;
+	}
+
+	res.status(403).json({
+		success: false,
+		error: {
+			code: "NO_ORGANIZATION",
+			message: "Użytkownik nie należy do żadnej organizacji",
+		},
+	});
+	return null;
+}
+
 // Session Helper
 
 /**
@@ -68,7 +86,7 @@ export function requireAuth(
 				hasUser: !!sessionData?.user,
 				cookies: req.headers.cookie,
 			});
-			
+
 			if (!sessionData?.session || !sessionData?.user) {
 				res.status(401).json({
 					success: false,

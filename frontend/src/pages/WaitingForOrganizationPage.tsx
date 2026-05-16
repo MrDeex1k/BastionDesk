@@ -6,24 +6,24 @@ export function WaitingForOrganizationPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 px-4">
-      <div className="p-8 rounded-full bg-green-500/10 border border-green-500/20 animate-pulse">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-8 px-4 text-center">
+      <div className="animate-pulse rounded-full border border-green-500/20 bg-green-500/10 p-8">
         <ShieldCheck className="size-24 text-green-400" />
       </div>
-      
-      <div className="space-y-4 max-w-2xl">
-        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
+
+      <div className="max-w-2xl">
+        <h1 className="text-4xl font-semibold tracking-tight text-zinc-100">
           Dziękujemy za rejestrację
         </h1>
-        <p className="text-slate-300 text-xl leading-relaxed">
+        <p className="mt-4 text-xl leading-relaxed text-zinc-300">
           Teraz dołącz do organizacji, która będzie mogła zarządzać twoim bezpieczeństwem.
         </p>
       </div>
 
       <div className="pt-8">
-        <Button 
+        <Button
           onClick={() => navigate("/")}
-          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+          className="border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
           size="lg"
         >
           Wróć do strony głównej

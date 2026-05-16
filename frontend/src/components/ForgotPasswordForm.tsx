@@ -4,7 +4,9 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card } from "./ui/card";
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch, readJsonError } from "@/lib/api";
+import { validateEmail as getEmailError } from "@/lib/validation";
 
 interface ForgotPasswordFormProps {
   onBack: () => void;
@@ -14,25 +16,21 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const queryClient = useQueryClient();
 
   const validateEmail = (value: string) => {
-    if (!value.includes("@")) {
-      setEmailError("Adres email musi zawierać znak @");
-      return false;
-    }
-    setEmailError("");
-    return true;
+    const error = getEmailError(value);
+    setEmailError(error);
+    return !error;
   };
 
   const forgotPasswordMutation = useMutation({
     mutationFn: async () => {
       // Wywołanie Better-Auth API do resetu hasła
       // UWAGA: System emailowy nie jest jeszcze skonfigurowany na backendzie
-      const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3333";
-      const response = await fetch(`${baseURL}/api/auth/forget-password`, {
+      const response = await apiFetch("/api/auth/forget-password", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           email,
           redirectTo: `${window.location.origin}/reset-password`,
@@ -40,13 +38,15 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Błąd wysyłania żądania resetu");
+        throw new Error(
+          await readJsonError(response, "Błąd wysyłania żądania resetu"),
+        );
       }
 
       return response.json();
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
       setMessage({
         type: "success",
         text: "Jeśli e-mail jest poprawny, w ciągu paru minut otrzymasz link do resetu hasła!",
@@ -76,33 +76,31 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
 
   return (
     <div className="flex items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md bg-linear-to-br from-slate-800/90 to-slate-700/90 border-blue-900/50 p-8">
+      <Card className="w-full max-w-md border-blue-900/50 bg-linear-to-br from-zinc-800/90 to-zinc-700/90 p-8">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 mb-4">
             <KeyRound className="size-12 text-purple-400" />
           </div>
-          <h2 className="text-3xl mb-2 text-purple-300">
-            Resetuj hasło
-          </h2>
-          <p className="text-slate-400">
+          <h2 className="mb-2 text-3xl text-purple-300">Resetuj hasło</h2>
+          <p className="text-zinc-400">
             Podaj swój adres e-mail, aby otrzymać link do resetu hasła
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-slate-300">
+            <Label htmlFor="email" className="text-zinc-300">
               Adres e-mail
             </Label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
+              <Mail className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-zinc-400" />
               <Input
                 id="email"
                 type="email"
                 placeholder="twoj@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-purple-500 focus:ring-purple-500/20"
+                className="border-zinc-700 bg-zinc-900/50 pl-10 text-white placeholder:text-zinc-500 focus:border-purple-500 focus:ring-purple-500/20"
                 required
                 disabled={forgotPasswordMutation.isPending}
               />
@@ -132,8 +130,8 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
           >
             {forgotPasswordMutation.isPending ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Wysyłanie...
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Wysyłanie…
               </>
             ) : (
               "Wyślij link resetujący"
@@ -144,7 +142,7 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
             type="button"
             onClick={onBack}
             variant="ghost"
-            className="w-full text-slate-400 hover:text-purple-400 hover:bg-slate-700/50"
+            className="w-full text-zinc-400 hover:bg-zinc-700/50 hover:text-purple-400"
             size="lg"
             disabled={forgotPasswordMutation.isPending}
           >

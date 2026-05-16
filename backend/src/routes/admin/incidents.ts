@@ -2,8 +2,17 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { query, queryOne } from "../../lib/database.js";
 import { getObjectBuffer } from "../../lib/storage.js";
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
+import {
+	type AuthenticatedRequest,
+	getRequiredOrganizationId,
+} from "../../middleware/auth.middleware.js";
 import type { Incident } from "../../types/index.js";
+import {
+	createContentDispositionHeader,
+	findStoredFileMetadata,
+	parseStoredFileMetadata,
+	type StoredFileMetadataPayload,
+} from "../shared/file-metadata.js";
 
 const router = Router();
 
@@ -13,7 +22,8 @@ const router = Router();
 async function getAllIncidents(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 		const page = Number(req.query.page) || 1;
 		const limit = Number(req.query.limit) || 20;
 		const status = req.query.status as string | undefined;
@@ -124,32 +134,40 @@ async function getAllIncidents(req: Request, res: Response) {
 
 		// Parsuj metadata z JSON stringów do obiektów
 		incidents.forEach((incident) => {
-			if (typeof incident.userScreenshotMetadata === 'string') {
+			if (typeof incident.userScreenshotMetadata === "string") {
 				try {
-					incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+					incident.userScreenshotMetadata = JSON.parse(
+						incident.userScreenshotMetadata,
+					);
 				} catch (e) {
-					console.error('[ADMIN] Failed to parse userScreenshotMetadata:', e);
+					console.error("[ADMIN] Failed to parse userScreenshotMetadata:", e);
 				}
 			}
-			if (typeof incident.userAttachmentMetadata === 'string') {
+			if (typeof incident.userAttachmentMetadata === "string") {
 				try {
-					incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+					incident.userAttachmentMetadata = JSON.parse(
+						incident.userAttachmentMetadata,
+					);
 				} catch (e) {
-					console.error('[ADMIN] Failed to parse userAttachmentMetadata:', e);
+					console.error("[ADMIN] Failed to parse userAttachmentMetadata:", e);
 				}
 			}
-			if (typeof incident.analystReportMetadata === 'string') {
+			if (typeof incident.analystReportMetadata === "string") {
 				try {
-					incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+					incident.analystReportMetadata = JSON.parse(
+						incident.analystReportMetadata,
+					);
 				} catch (e) {
-					console.error('[ADMIN] Failed to parse analystReportMetadata:', e);
+					console.error("[ADMIN] Failed to parse analystReportMetadata:", e);
 				}
 			}
-			if (typeof incident.analystStatementMetadata === 'string') {
+			if (typeof incident.analystStatementMetadata === "string") {
 				try {
-					incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+					incident.analystStatementMetadata = JSON.parse(
+						incident.analystStatementMetadata,
+					);
 				} catch (e) {
-					console.error('[ADMIN] Failed to parse analystStatementMetadata:', e);
+					console.error("[ADMIN] Failed to parse analystStatementMetadata:", e);
 				}
 			}
 		});
@@ -193,7 +211,8 @@ async function getAllIncidents(req: Request, res: Response) {
 async function getIncidentDetails(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 		const { id } = req.params;
 
 		if (!id) {
@@ -271,32 +290,40 @@ async function getIncidentDetails(req: Request, res: Response) {
 		}
 
 		// Parsuj metadata z JSON stringów do obiektów
-		if (typeof incident.userScreenshotMetadata === 'string') {
+		if (typeof incident.userScreenshotMetadata === "string") {
 			try {
-				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+				incident.userScreenshotMetadata = JSON.parse(
+					incident.userScreenshotMetadata,
+				);
 			} catch (e) {
-				console.error('[ADMIN] Failed to parse userScreenshotMetadata:', e);
+				console.error("[ADMIN] Failed to parse userScreenshotMetadata:", e);
 			}
 		}
-		if (typeof incident.userAttachmentMetadata === 'string') {
+		if (typeof incident.userAttachmentMetadata === "string") {
 			try {
-				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+				incident.userAttachmentMetadata = JSON.parse(
+					incident.userAttachmentMetadata,
+				);
 			} catch (e) {
-				console.error('[ADMIN] Failed to parse userAttachmentMetadata:', e);
+				console.error("[ADMIN] Failed to parse userAttachmentMetadata:", e);
 			}
 		}
-		if (typeof incident.analystReportMetadata === 'string') {
+		if (typeof incident.analystReportMetadata === "string") {
 			try {
-				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+				incident.analystReportMetadata = JSON.parse(
+					incident.analystReportMetadata,
+				);
 			} catch (e) {
-				console.error('[ADMIN] Failed to parse analystReportMetadata:', e);
+				console.error("[ADMIN] Failed to parse analystReportMetadata:", e);
 			}
 		}
-		if (typeof incident.analystStatementMetadata === 'string') {
+		if (typeof incident.analystStatementMetadata === "string") {
 			try {
-				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+				incident.analystStatementMetadata = JSON.parse(
+					incident.analystStatementMetadata,
+				);
 			} catch (e) {
-				console.error('[ADMIN] Failed to parse analystStatementMetadata:', e);
+				console.error("[ADMIN] Failed to parse analystStatementMetadata:", e);
 			}
 		}
 
@@ -327,7 +354,8 @@ async function downloadFile(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const { id, type, filename } = req.params;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id || !type || !filename) {
@@ -391,7 +419,7 @@ async function downloadFile(req: Request, res: Response) {
 						? "analystReportMetadata"
 						: "analystStatementMetadata";
 
-		const fileData = await queryOne<{ path: string; metadata: any }>(
+		const fileData = await queryOne<{ path: string; metadata: unknown }>(
 			`
 			SELECT "${pathColumn}" as path, "${metadataColumn}" as metadata FROM incidents
 			WHERE id = $1 AND "organizationId" = $2
@@ -409,27 +437,24 @@ async function downloadFile(req: Request, res: Response) {
 			});
 		}
 
-		// Parsuj metadata
-		let parsedMetadata = fileData.metadata;
-		if (typeof fileData.metadata === 'string') {
-			try {
-				parsedMetadata = JSON.parse(fileData.metadata);
-			} catch (e) {
-				console.error('[ADMIN] Failed to parse metadata JSON:', e);
-				return res.status(500).json({
-					success: false,
-					error: {
-						code: "METADATA_PARSE_ERROR",
-						message: "Błąd parsowania metadanych pliku",
-					},
-				});
-			}
+		let parsedMetadata: StoredFileMetadataPayload;
+		try {
+			parsedMetadata = parseStoredFileMetadata(fileData.metadata);
+		} catch (e) {
+			console.error("[ADMIN] Failed to parse metadata JSON:", e);
+			return res.status(500).json({
+				success: false,
+				error: {
+					code: "METADATA_PARSE_ERROR",
+					message: "Błąd parsowania metadanych pliku",
+				},
+			});
 		}
 
 		// Sprawdź czy filename się zgadza z originalName lub filename w metadanych
 		// Screenshots i attachments używają originalName, reports i statements używają filename
-		const metadataFilename = parsedMetadata?.originalName || parsedMetadata?.filename;
-		if (filename && metadataFilename !== filename) {
+		const fileMetadata = findStoredFileMetadata(parsedMetadata, filename);
+		if (!fileMetadata) {
 			return res.status(404).json({
 				success: false,
 				error: {
@@ -455,14 +480,12 @@ async function downloadFile(req: Request, res: Response) {
 		// Ustaw odpowiednie nagłówki i zwróć plik
 		res.setHeader(
 			"Content-Type",
-			parsedMetadata?.mimeType || "application/octet-stream",
+			fileMetadata.mimeType || "application/octet-stream",
 		);
-		
-		// RFC 5987: Encode filename for non-ASCII characters
-		const encodedFilename = encodeURIComponent(filename);
+
 		res.setHeader(
 			"Content-Disposition",
-			`attachment; filename="${filename.replace(/[^\x00-\x7F]/g, '_')}"; filename*=UTF-8''${encodedFilename}`
+			createContentDispositionHeader(filename),
 		);
 		res.setHeader("Content-Length", fileBuffer.length);
 		res.send(fileBuffer);
@@ -483,7 +506,8 @@ async function unassignIncident(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const { id } = req.params;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź czy incydent istnieje i należy do organizacji
 		const incident = await queryOne<Incident>(

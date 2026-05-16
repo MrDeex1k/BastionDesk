@@ -1,417 +1,668 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge } from "./ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card";
+import { useCallback, useMemo, useReducer } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { IncidentsResponse } from "@/ApiModel";
+import { apiFetch } from "@/lib/api";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  ChevronLeft, 
-  ChevronRight, 
-  Loader2, 
-  ArrowRight,
-  Filter,
-  X,
-  User,
-  ShieldAlert,
+import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
   FileText,
-  Plus
+  Filter,
+  Loader2,
+  Plus,
+  ShieldAlert,
+  X,
 } from "lucide-react";
 import { IncidentDetails } from "./IncidentDetails";
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "./ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
 import { IncidentReportForm } from "./IncidentReportForm";
+import { IncidentSummaryItem } from "./incident-list/IncidentSummaryItem";
 
-interface Incident {
-  id: string;
-  dataZgloszenia: string;
-  userId: string;
-  organizationId: string;
-  status: string;
-  userDescription: string;
-  userScreenshotPath: string | null;
-  userScreenshotMetadata: Record<string, unknown> | null;
-  userAttachmentPath: string | null;
-  userAttachmentMetadata: Record<string, unknown> | null;
-  analystId: string | null;
-  analystNote: string | null;
-  czyRozwiazany: boolean;
-  dataRozwiazania: string | null;
-  analystReportPath: string | null;
-  analystReportMetadata: Record<string, unknown> | null;
-  analystReportData: string | null;
-  analystStatementPath: string | null;
-  analystStatementMetadata: Record<string, unknown> | null;
-  analystStatementData: string | null;
-  llmCategory: string | null;
-  createdAt: string;
-  updatedAt: string;
-  userName: string | null;
-  analystName: string | null;
+const LIMIT = 10;
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "Wszystkie" },
+  { value: "Zgłoszony", label: "Zgłoszony" },
+  { value: "Raport w trakcie", label: "Raport w trakcie" },
+  { value: "Raport złożony", label: "Raport złożony" },
+  { value: "Sprawozdanie w trakcie", label: "Sprawozdanie w trakcie" },
+  { value: "Sprawozdanie złożone", label: "Sprawozdanie złożone" },
+  { value: "Odrzucone", label: "Odrzucone" },
+] as const;
+
+const ANALYST_FILTER_OPTIONS = [
+  { value: "all", label: "Wszyscy" },
+  { value: "unassigned", label: "Nieprzypisane" },
+  { value: "user_analyst001", label: "Tomasz Analityk" },
+  { value: "user_analyst002", label: "Katarzyna Bezpieczeństwo" },
+] as const;
+
+const SORT_BY_OPTIONS = [
+  { value: "createdAt", label: "Data utworzenia" },
+  { value: "updatedAt", label: "Data aktualizacji" },
+  { value: "status", label: "Status" },
+  { value: "dataZgloszenia", label: "Data zgłoszenia" },
+  { value: "userId", label: "Użytkownik" },
+  { value: "analystId", label: "Analityk" },
+] as const;
+
+const SORT_ORDER_OPTIONS = [
+  { value: "desc", label: "Malejąco" },
+  { value: "asc", label: "Rosnąco" },
+] as const;
+
+interface AdminIncidentListState {
+  page: number;
+  selectedIncidentId: string | null;
+  statusFilter: string;
+  userIdFilter: string;
+  analystFilter: string;
+  sortBy: string;
+  sortOrder: "asc" | "desc";
+  showFilters: boolean;
+  isCreateDialogOpen: boolean;
 }
 
-interface IncidentsResponse {
-  success: boolean;
-  data: Incident[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+type AdminIncidentListAction =
+  | { type: "set-page"; value: number }
+  | { type: "set-selected-incident-id"; value: string | null }
+  | { type: "set-status-filter"; value: string }
+  | { type: "set-user-id-filter"; value: string }
+  | { type: "set-analyst-filter"; value: string }
+  | { type: "set-sort-by"; value: string }
+  | { type: "set-sort-order"; value: "asc" | "desc" }
+  | { type: "set-show-filters"; value: boolean }
+  | { type: "set-create-dialog-open"; value: boolean }
+  | { type: "clear-filters" };
+
+const initialAdminIncidentListState: AdminIncidentListState = {
+  page: 1,
+  selectedIncidentId: null,
+  statusFilter: "all",
+  userIdFilter: "",
+  analystFilter: "all",
+  sortBy: "createdAt",
+  sortOrder: "desc",
+  showFilters: false,
+  isCreateDialogOpen: false,
+};
+
+function adminIncidentListReducer(
+  state: AdminIncidentListState,
+  action: AdminIncidentListAction,
+): AdminIncidentListState {
+  switch (action.type) {
+    case "set-page":
+      return { ...state, page: action.value };
+    case "set-selected-incident-id":
+      return { ...state, selectedIncidentId: action.value };
+    case "set-status-filter":
+      return { ...state, statusFilter: action.value, page: 1 };
+    case "set-user-id-filter":
+      return { ...state, userIdFilter: action.value, page: 1 };
+    case "set-analyst-filter":
+      return { ...state, analystFilter: action.value, page: 1 };
+    case "set-sort-by":
+      return { ...state, sortBy: action.value, page: 1 };
+    case "set-sort-order":
+      return { ...state, sortOrder: action.value, page: 1 };
+    case "set-show-filters":
+      return { ...state, showFilters: action.value };
+    case "set-create-dialog-open":
+      return { ...state, isCreateDialogOpen: action.value };
+    case "clear-filters":
+      return {
+        ...state,
+        page: 1,
+        statusFilter: "all",
+        userIdFilter: "",
+        analystFilter: "all",
+        sortBy: "createdAt",
+        sortOrder: "desc",
+      };
+    default:
+      return state;
+  }
 }
-
-const getStatusColor = (status: string) => {
-  const lowerStatus = status.toLowerCase();
-  if (lowerStatus.includes("zgłoszony") || lowerStatus.includes("nowe")) return "bg-blue-500/20 text-blue-400 border-blue-500/50";
-  if (lowerStatus.includes("trakcie") || lowerStatus.includes("analiza")) return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
-  if (lowerStatus.includes("rozwiązany") || lowerStatus.includes("zamknięte") || lowerStatus.includes("raport złożony") || lowerStatus.includes("sprawozdanie złożone")) return "bg-green-500/20 text-green-400 border-green-500/50";
-  if (lowerStatus.includes("odrzucone")) return "bg-red-500/20 text-red-400 border-red-500/50";
-  return "bg-slate-500/20 text-slate-400 border-slate-500/50";
-};
-
-const getStatusIcon = (status: string) => {
-  const lowerStatus = status.toLowerCase();
-  if (lowerStatus.includes("zgłoszony") || lowerStatus.includes("nowe")) return <AlertCircle className="h-4 w-4" />;
-  if (lowerStatus.includes("trakcie")) return <Clock className="h-4 w-4" />;
-  if (lowerStatus.includes("rozwiązany") || lowerStatus.includes("zamknięte") || lowerStatus.includes("złożon")) return <CheckCircle2 className="h-4 w-4" />;
-  return <AlertCircle className="h-4 w-4" />;
-};
-
-const getLlmCategoryColor = (category: string) => {
-  if (category === "Zielony") return "bg-green-500/20 text-green-400 border-green-500/50";
-  if (category === "Żółty") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
-  if (category === "Czerwony") return "bg-red-500/20 text-red-400 border-red-500/50";
-  return "bg-purple-500/20 text-purple-400 border-purple-500/50";
-};
 
 export function AdminIncidentList() {
-  const [page, setPage] = useState(1);
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [userIdFilter, setUserIdFilter] = useState<string>("");
-  const [analystFilter, setAnalystFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("createdAt");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [showFilters, setShowFilters] = useState(false);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [state, dispatch] = useReducer(
+    adminIncidentListReducer,
+    initialAdminIncidentListState,
+  );
   const queryClient = useQueryClient();
-  
-  const LIMIT = 10;
 
-  const { data, isLoading, isError } = useQuery<IncidentsResponse>({
-    queryKey: ["adminIncidents", page, statusFilter, userIdFilter, analystFilter, sortBy, sortOrder],
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams({
+      page: state.page.toString(),
+      limit: LIMIT.toString(),
+      sortBy: state.sortBy,
+      sortOrder: state.sortOrder,
+    });
+
+    if (state.statusFilter !== "all") {
+      params.append("status", state.statusFilter);
+    }
+    if (state.userIdFilter) {
+      params.append("userId", state.userIdFilter);
+    }
+    if (state.analystFilter !== "all") {
+      params.append(
+        "analystId",
+        state.analystFilter === "unassigned" ? "null" : state.analystFilter,
+      );
+    }
+
+    return params.toString();
+  }, [
+    state.analystFilter,
+    state.page,
+    state.sortBy,
+    state.sortOrder,
+    state.statusFilter,
+    state.userIdFilter,
+  ]);
+
+  const { data, isPending, isFetching, isError, isPlaceholderData } = useQuery<IncidentsResponse>({
+    queryKey: [
+      "adminIncidents",
+      state.page,
+      state.statusFilter,
+      state.userIdFilter,
+      state.analystFilter,
+      state.sortBy,
+      state.sortOrder,
+    ],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: LIMIT.toString(),
-        sortBy,
-        sortOrder
-      });
-      
-      if (statusFilter !== "all") params.append("status", statusFilter);
-      if (userIdFilter) params.append("userId", userIdFilter);
-      if (analystFilter !== "all") {
-        params.append("analystId", analystFilter === "unassigned" ? "null" : analystFilter);
-      }
+      const response = await apiFetch(`/api/admin/incidents?${queryString}`);
 
-      const response = await fetch(`/api/admin/incidents?${params.toString()}`, {
-        credentials: 'include',
-      });
-      
       if (!response.ok) {
         throw new Error("Failed to fetch incidents");
       }
-      
+
       return response.json() as Promise<IncidentsResponse>;
     },
-    placeholderData: (previousData) => previousData,
+    placeholderData: keepPreviousData,
   });
 
-  const handleClearFilters = () => {
-    setStatusFilter("all");
-    setUserIdFilter("");
-    setAnalystFilter("all");
-    setSortBy("createdAt");
-    setSortOrder("desc");
-    setPage(1);
-  };
+  const hasActiveFilters = useMemo(
+    () =>
+      state.statusFilter !== "all" ||
+      state.userIdFilter !== "" ||
+      state.analystFilter !== "all" ||
+      state.sortBy !== "createdAt" ||
+      state.sortOrder !== "desc",
+    [
+      state.analystFilter,
+      state.sortBy,
+      state.sortOrder,
+      state.statusFilter,
+      state.userIdFilter,
+    ],
+  );
 
-  const hasActiveFilters = statusFilter !== "all" || userIdFilter !== "" || analystFilter !== "all" || sortBy !== "createdAt" || sortOrder !== "desc";
+  const handleSelectIncident = useCallback((incidentId: string) => {
+    dispatch({ type: "set-selected-incident-id", value: incidentId });
+  }, []);
 
-  // Jeśli wybrano incydent, pokaż szczegóły
-  if (selectedIncidentId) {
-    return <IncidentDetails incidentId={selectedIncidentId} onBack={() => setSelectedIncidentId(null)} mode="admin" />;
+  const handleBackToList = useCallback(() => {
+    dispatch({ type: "set-selected-incident-id", value: null });
+  }, []);
+
+  const handleCreateDialogChange = useCallback((open: boolean) => {
+    dispatch({ type: "set-create-dialog-open", value: open });
+  }, []);
+
+  const handleCreateSuccess = useCallback(() => {
+    dispatch({ type: "set-create-dialog-open", value: false });
+    void queryClient.invalidateQueries({
+      queryKey: ["adminIncidents"],
+    });
+  }, [queryClient]);
+
+  const handleToggleFilters = useCallback(() => {
+    dispatch({
+      type: "set-show-filters",
+      value: !state.showFilters,
+    });
+  }, [state.showFilters]);
+
+  const handleClearFilters = useCallback(() => {
+    dispatch({ type: "clear-filters" });
+  }, []);
+
+  const handlePageChange = useCallback((page: number) => {
+    dispatch({ type: "set-page", value: page });
+  }, []);
+
+  const handleStatusFilterChange = useCallback((value: string) => {
+    dispatch({ type: "set-status-filter", value });
+  }, []);
+
+  const handleAnalystFilterChange = useCallback((value: string) => {
+    dispatch({ type: "set-analyst-filter", value });
+  }, []);
+
+  const handleSortByChange = useCallback((value: string) => {
+    dispatch({ type: "set-sort-by", value });
+  }, []);
+
+  const handleSortOrderChange = useCallback((value: "asc" | "desc") => {
+    dispatch({ type: "set-sort-order", value });
+  }, []);
+
+  const handleUserIdFilterChange = useCallback((value: string) => {
+    dispatch({ type: "set-user-id-filter", value });
+  }, []);
+
+  if (state.selectedIncidentId) {
+    return (
+      <IncidentDetails
+        incidentId={state.selectedIncidentId}
+        onBack={handleBackToList}
+        mode="admin"
+      />
+    );
   }
 
   return (
-    <Card className="w-full bg-slate-900/50 border-slate-800 shadow-xl flex flex-col h-[700px] animate-in fade-in duration-300">
-      <CardHeader className="border-b border-slate-800/50">
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle className="text-2xl text-slate-200 flex items-center gap-2">
-              <ShieldAlert className="h-6 w-6 text-green-400" />
-              Wszystkie incydenty w organizacji
-              {isLoading && <Loader2 className="h-5 w-5 animate-spin text-blue-400" />}
-            </CardTitle>
-            {data && (
-              <p className="text-sm text-slate-500 mt-1">
-                Wyświetlono {data.data.length} z {data.pagination.total} incydentów
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Zgłoś incydent
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-slate-950 border-slate-800 text-slate-200 max-w-2xl">
-                <DialogTitle className="sr-only">Zgłoś incydent</DialogTitle>
-                <DialogDescription className="sr-only">
-                  Formularz zgłaszania nowego incydentu bezpieczeństwa.
-                </DialogDescription>
-                <IncidentReportForm onSuccess={() => {
-                  setIsCreateDialogOpen(false);
-                  queryClient.invalidateQueries({ queryKey: ["adminIncidents"] });
-                }} />
-              </DialogContent>
-            </Dialog>
+    <Card className="flex h-[700px] w-full flex-col animate-in fade-in border-zinc-800 bg-zinc-900/50 shadow-xl duration-300">
+      <CardHeader className="border-b border-zinc-800/50">
+        <AdminIncidentListHeader
+          summary={{
+            incidentsCount: data?.data.length ?? 0,
+            totalCount: data?.pagination.total ?? 0,
+            isLoading: isFetching,
+          }}
+          createDialog={{
+            isOpen: state.isCreateDialogOpen,
+            onOpenChange: handleCreateDialogChange,
+            onSuccess: handleCreateSuccess,
+          }}
+          filters={{
+            hasActive: hasActiveFilters,
+            isVisible: state.showFilters,
+            onToggle: handleToggleFilters,
+          }}
+        />
 
-            <Button
-              variant={showFilters ? "default" : "outline"}
-              size="default"
-              onClick={() => setShowFilters(!showFilters)}
-              className={showFilters ? "bg-blue-600 hover:bg-blue-700" : "border-slate-700 text-slate-300"}
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Filtry
-              {hasActiveFilters && <span className="ml-2 px-1.5 py-0.5 bg-blue-500 rounded-full text-xs">●</span>}
-            </Button>
-          </div>
-        </div>
-
-        {showFilters && (
-          <div className="mt-4 p-4 bg-slate-950/50 rounded-lg border border-slate-800 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Status Filter */}
-              <div className="space-y-2">
-                <Label className="text-slate-400 text-xs">Status</Label>
-                <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(1); }}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-slate-300">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
-                    <SelectItem value="all" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Wszystkie</SelectItem>
-                    <SelectItem value="Zgłoszony" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Zgłoszony</SelectItem>
-                    <SelectItem value="Raport w trakcie" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Raport w trakcie</SelectItem>
-                    <SelectItem value="Raport złożony" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Raport złożony</SelectItem>
-                    <SelectItem value="Sprawozdanie w trakcie" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Sprawozdanie w trakcie</SelectItem>
-                    <SelectItem value="Sprawozdanie złożone" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Sprawozdanie złożone</SelectItem>
-                    <SelectItem value="Odrzucone" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Odrzucone</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Analyst Filter */}
-              <div className="space-y-2">
-                <Label className="text-slate-400 text-xs">Analityk</Label>
-                <Select value={analystFilter} onValueChange={(val) => { setAnalystFilter(val); setPage(1); }}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-slate-300">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
-                    <SelectItem value="all" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Wszyscy</SelectItem>
-                    <SelectItem value="unassigned" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Nieprzypisane</SelectItem>
-                    <SelectItem value="user_analyst001" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Tomasz Analityk</SelectItem>
-                    <SelectItem value="user_analyst002" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Katarzyna Bezpieczeństwo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Sort By */}
-              <div className="space-y-2">
-                <Label className="text-slate-400 text-xs">Sortuj po</Label>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-slate-300">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
-                    <SelectItem value="createdAt" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Data utworzenia</SelectItem>
-                    <SelectItem value="updatedAt" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Data aktualizacji</SelectItem>
-                    <SelectItem value="status" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Status</SelectItem>
-                    <SelectItem value="dataZgloszenia" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Data zgłoszenia</SelectItem>
-                    <SelectItem value="userId" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Użytkownik</SelectItem>
-                    <SelectItem value="analystId" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Analityk</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Sort Order */}
-              <div className="space-y-2">
-                <Label className="text-slate-400 text-xs">Kolejność</Label>
-                <Select value={sortOrder} onValueChange={(val) => setSortOrder(val as "asc" | "desc")}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-slate-300">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
-                    <SelectItem value="desc" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Malejąco</SelectItem>
-                    <SelectItem value="asc" className="text-slate-200 focus:bg-blue-500/20 focus:text-white">Rosnąco</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* User ID Search */}
-            <div className="space-y-2">
-              <Label className="text-slate-400 text-xs">Szukaj użytkownika (ID lub nazwa)</Label>
-              <Input
-                placeholder="Wpisz ID użytkownika lub nazwę..."
-                value={userIdFilter}
-                onChange={(e) => { setUserIdFilter(e.target.value); setPage(1); }}
-                className="bg-slate-900 border-slate-700 text-slate-300"
-              />
-            </div>
-
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearFilters}
-                className="text-slate-400 hover:text-white hover:bg-slate-800"
-              >
-                <X className="h-4 w-4 mr-2" />
-                Wyczyść filtry
-              </Button>
-            )}
-          </div>
+        {state.showFilters && (
+          <AdminIncidentFiltersPanel
+            statusFilter={state.statusFilter}
+            analystFilter={state.analystFilter}
+            sortBy={state.sortBy}
+            sortOrder={state.sortOrder}
+            userIdFilter={state.userIdFilter}
+            hasActiveFilters={hasActiveFilters}
+            onStatusFilterChange={handleStatusFilterChange}
+            onAnalystFilterChange={handleAnalystFilterChange}
+            onSortByChange={handleSortByChange}
+            onSortOrderChange={handleSortOrderChange}
+            onUserIdFilterChange={handleUserIdFilterChange}
+            onClearFilters={handleClearFilters}
+          />
         )}
       </CardHeader>
 
       <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-6">
-          {isError ? (
-            <div className="text-center text-red-400 py-8">
-              <AlertCircle className="h-12 w-12 mx-auto mb-4" />
-              <p>Wystąpił błąd podczas pobierania incydentów.</p>
-            </div>
-          ) : (
-            <div className="space-y-3 pb-4 pt-4">
-              {data?.data.map((incident) => (
-                <div
-                  key={incident.id}
-                  onClick={() => setSelectedIncidentId(incident.id)}
-                  className="group cursor-pointer p-4 rounded-lg bg-slate-950/50 border border-slate-800 hover:border-blue-500/50 hover:bg-slate-900/80 transition-all duration-200 relative"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={`${getStatusColor(incident.status)} gap-1`}>
-                        {getStatusIcon(incident.status)}
-                        {incident.status}
-                      </Badge>
-                      {incident.czyRozwiazany && (
-                        <Badge className="bg-green-500/20 text-green-400 border-green-500/50">
-                          Rozwiązany
-                        </Badge>
-                      )}
-                      {incident.llmCategory && (
-                        <Badge className={getLlmCategoryColor(incident.llmCategory)}>
-                          {incident.llmCategory}
-                        </Badge>
-                      )}
-                    </div>
-                    <span className="text-xs text-slate-500">
-                      {new Date(incident.dataZgloszenia).toLocaleDateString("pl-PL", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
-                    </span>
-                  </div>
-
-                  <p className="text-slate-300 text-sm line-clamp-2 pr-6 mb-3">
-                    {incident.userDescription}
-                  </p>
-
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <div className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      <span>{incident.userName || incident.userId.slice(0, 12)}</span>
-                    </div>
-                    {incident.analystName && (
-                      <div className="flex items-center gap-1">
-                        <ShieldAlert className="h-3 w-3 text-blue-400" />
-                        <span className="text-blue-400">{incident.analystName}</span>
-                      </div>
-                    )}
-                    {!incident.analystId && (
-                      <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/30 text-xs">
-                        Nieprzypisany
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Hover indicator */}
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400">
-                    <ArrowRight className="h-5 w-5" />
-                  </div>
-                </div>
-              ))}
-              {!isLoading && data?.data.length === 0 && (
-                <div className="text-center text-slate-500 py-12">
-                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">Brak incydentów spełniających kryteria.</p>
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleClearFilters}
-                      className="mt-4 text-blue-400 hover:text-blue-300"
-                    >
-                      Wyczyść filtry
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </ScrollArea>
+        <AdminIncidentResults
+          incidents={data?.data ?? []}
+          isError={isError}
+          isLoading={isPending}
+          hasActiveFilters={hasActiveFilters}
+          onClearFilters={handleClearFilters}
+          onSelectIncident={handleSelectIncident}
+        />
       </CardContent>
 
       {data && data.pagination.totalPages > 1 && (
-        <CardFooter className="flex justify-between border-t border-slate-800 p-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPage((old) => Math.max(old - 1, 1))}
-            disabled={page === 1 || isLoading}
-            className="text-slate-400 hover:text-white hover:bg-slate-800"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Poprzednia
-          </Button>
-          <span className="text-sm text-slate-500">
-            Strona {page} z {data.pagination.totalPages}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPage((old) => (data?.pagination.totalPages && old < data.pagination.totalPages ? old + 1 : old))}
-            disabled={page === data.pagination.totalPages || isLoading}
-            className="text-slate-400 hover:text-white hover:bg-slate-800"
-          >
-            Następna
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </CardFooter>
+        <AdminIncidentPagination
+          page={state.page}
+          totalPages={data.pagination.totalPages}
+          isLoading={isFetching || isPlaceholderData}
+          onPageChange={handlePageChange}
+        />
       )}
     </Card>
+  );
+}
+
+function AdminIncidentListHeader({
+  summary,
+  createDialog,
+  filters,
+}: {
+  summary: {
+    incidentsCount: number;
+    totalCount: number;
+    isLoading: boolean;
+  };
+  createDialog: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSuccess: () => void;
+  };
+  filters: {
+    hasActive: boolean;
+    isVisible: boolean;
+    onToggle: () => void;
+  };
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <CardTitle className="flex items-center gap-2 text-2xl text-zinc-200">
+          <ShieldAlert className="size-6 text-green-400" />
+          Wszystkie incydenty w organizacji
+          {summary.isLoading && (
+            <Loader2 className="size-5 animate-spin text-blue-400" />
+          )}
+        </CardTitle>
+        <p className="mt-1 text-sm text-zinc-500">
+          Wyświetlono {summary.incidentsCount} z {summary.totalCount} incydentów
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <CreateIncidentDialog
+          open={createDialog.isOpen}
+          onOpenChange={createDialog.onOpenChange}
+          onSuccess={createDialog.onSuccess}
+        />
+
+        <Button
+          variant={filters.isVisible ? "default" : "outline"}
+          size="default"
+          onClick={filters.onToggle}
+          className={
+            filters.isVisible
+              ? "bg-blue-600 hover:bg-blue-700"
+              : "border-zinc-700 text-zinc-300"
+          }
+        >
+          <Filter className="mr-2 size-4" />
+          Filtry
+          {filters.hasActive && (
+            <span className="ml-2 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs text-white">
+              ●
+            </span>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CreateIncidentDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button className="bg-green-600 text-white shadow-lg shadow-green-900/20 hover:bg-green-700">
+          <Plus className="mr-2 size-4" />
+          Zgłoś incydent
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-950 text-zinc-200">
+        <DialogTitle className="sr-only">Zgłoś incydent</DialogTitle>
+        <DialogDescription className="sr-only">
+          Formularz zgłaszania nowego incydentu bezpieczeństwa.
+        </DialogDescription>
+        <IncidentReportForm onSuccess={onSuccess} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AdminIncidentFiltersPanel({
+  statusFilter,
+  analystFilter,
+  sortBy,
+  sortOrder,
+  userIdFilter,
+  hasActiveFilters,
+  onStatusFilterChange,
+  onAnalystFilterChange,
+  onSortByChange,
+  onSortOrderChange,
+  onUserIdFilterChange,
+  onClearFilters,
+}: {
+  statusFilter: string;
+  analystFilter: string;
+  sortBy: string;
+  sortOrder: "asc" | "desc";
+  userIdFilter: string;
+  hasActiveFilters: boolean;
+  onStatusFilterChange: (value: string) => void;
+  onAnalystFilterChange: (value: string) => void;
+  onSortByChange: (value: string) => void;
+  onSortOrderChange: (value: "asc" | "desc") => void;
+  onUserIdFilterChange: (value: string) => void;
+  onClearFilters: () => void;
+}) {
+  return (
+    <div className="mt-4 space-y-4 rounded-lg border border-zinc-800 bg-zinc-950/50 p-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <FilterSelectField
+          label="Status"
+          options={STATUS_FILTER_OPTIONS}
+          value={statusFilter}
+          onValueChange={onStatusFilterChange}
+        />
+        <FilterSelectField
+          label="Analityk"
+          options={ANALYST_FILTER_OPTIONS}
+          value={analystFilter}
+          onValueChange={onAnalystFilterChange}
+        />
+        <FilterSelectField
+          label="Sortuj po"
+          options={SORT_BY_OPTIONS}
+          value={sortBy}
+          onValueChange={onSortByChange}
+        />
+        <FilterSelectField
+          label="Kolejność"
+          options={SORT_ORDER_OPTIONS}
+          value={sortOrder}
+          onValueChange={(value) => onSortOrderChange(value as "asc" | "desc")}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs text-zinc-400">
+          Szukaj użytkownika (ID lub nazwa)
+        </Label>
+        <Input
+          placeholder="Wpisz ID użytkownika lub nazwę..."
+          value={userIdFilter}
+          onChange={(event) => onUserIdFilterChange(event.target.value)}
+          className="border-zinc-700 bg-zinc-900 text-zinc-300"
+        />
+      </div>
+
+      {hasActiveFilters && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearFilters}
+          className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
+        >
+          <X className="mr-2 size-4" />
+          Wyczyść filtry
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function FilterSelectField({
+  label,
+  options,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  value: string;
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs text-zinc-400">{label}</Label>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="border-zinc-700 bg-zinc-900 text-zinc-300">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="border-zinc-700 bg-zinc-900 text-zinc-100">
+          {options.map((option) => (
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              className="text-white focus:bg-blue-500/20 focus:text-white"
+            >
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function AdminIncidentResults({
+  incidents,
+  isError,
+  isLoading,
+  hasActiveFilters,
+  onClearFilters,
+  onSelectIncident,
+}: {
+  incidents: IncidentsResponse["data"];
+  isError: boolean;
+  isLoading: boolean;
+  hasActiveFilters: boolean;
+  onClearFilters: () => void;
+  onSelectIncident: (incidentId: string) => void;
+}) {
+  return (
+    <ScrollArea className="h-full px-6">
+      {isError ? (
+        <div className="py-8 text-center text-red-400">
+          <AlertCircle className="mx-auto mb-4 size-12" />
+          <p>Wystąpił błąd podczas pobierania incydentów.</p>
+        </div>
+      ) : (
+        <div className="space-y-3 pb-4 pt-4">
+          {incidents.map((incident) => (
+            <IncidentSummaryItem
+              key={incident.id}
+              analystId={incident.analystId}
+              analystName={incident.analystName}
+              czyRozwiazany={incident.czyRozwiazany}
+              dataZgloszenia={incident.dataZgloszenia}
+              id={incident.id}
+              llmCategory={incident.llmCategory}
+              onSelect={onSelectIncident}
+              showAnalyst
+              showResolved
+              status={incident.status}
+              userDescription={incident.userDescription}
+              userId={incident.userId}
+              userName={incident.userName}
+            />
+          ))}
+          {!isLoading && incidents.length === 0 && (
+            <div className="py-12 text-center text-zinc-500">
+              <FileText className="mx-auto mb-4 size-12 opacity-50" />
+              <p className="text-lg">Brak incydentów spełniających kryteria.</p>
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClearFilters}
+                  className="mt-4 text-blue-400 hover:text-blue-300"
+                >
+                  Wyczyść filtry
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </ScrollArea>
+  );
+}
+
+function AdminIncidentPagination({
+  page,
+  totalPages,
+  isLoading,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  isLoading: boolean;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <CardFooter className="justify-between border-t border-zinc-800 p-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onPageChange(Math.max(page - 1, 1))}
+        disabled={page === 1 || isLoading}
+        className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
+      >
+        <ChevronLeft className="mr-1 size-4" />
+        Poprzednia
+      </Button>
+      <span className="text-sm text-zinc-500">
+        Strona {page} z {totalPages}
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() =>
+          onPageChange(page < totalPages ? page + 1 : page)
+        }
+        disabled={page === totalPages || isLoading}
+        className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
+      >
+        Następna
+        <ChevronRight className="ml-1 size-4" />
+      </Button>
+    </CardFooter>
   );
 }

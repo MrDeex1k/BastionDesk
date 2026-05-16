@@ -11,37 +11,37 @@ import {
 
 export function AdminDashboardPage() {
   return (
-    <div className="flex flex-col items-center space-y-8">
-      <div className="text-center space-y-4">
+    <div className="flex flex-col items-center gap-8">
+      <div className="text-center">
         <div className="flex items-center justify-center">
-          <div className="p-6 rounded-full bg-green-500/10 border border-green-500/20">
+          <div className="rounded-full border border-green-500/20 bg-green-500/10 p-6">
             <ShieldCheck className="size-16 text-green-400" />
           </div>
         </div>
-        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-green-400 to-blue-400">
+        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-100">
           Panel Administratorski
         </h1>
-        <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+        <p className="mx-auto mt-3 max-w-2xl text-lg text-zinc-400">
           Zarządzanie bezpieczeństwem i strukturą organizacji
         </p>
       </div>
 
       <div className="w-full max-w-7xl">
-        <Tabs defaultValue="stats" className="w-full space-y-8">
+        <Tabs defaultValue="stats" className="w-full gap-8">
           <div className="flex justify-center">
-            <TabsList className="grid w-full max-w-md grid-cols-2 bg-slate-900 border border-slate-800">
-              <TabsTrigger 
+            <TabsList className="grid w-full max-w-md grid-cols-2 border border-zinc-800 bg-zinc-950/80">
+              <TabsTrigger
                 value="stats"
-                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400"
+                className="text-white/85 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
               >
-                <Activity className="h-4 w-4 mr-2" />
+                <Activity className="mr-2 size-4" />
                 Statystyki i Incydenty
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="organization"
-                className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-400"
+                className="text-white/85 data-[state=active]:bg-emerald-600 data-[state=active]:text-white"
               >
-                <Building2 className="h-4 w-4 mr-2" />
+                <Building2 className="mr-2 size-4" />
                 Zarządzanie Organizacją
               </TabsTrigger>
             </TabsList>

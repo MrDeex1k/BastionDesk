@@ -1,10 +1,11 @@
-*.md
 .env
 dist
-tests
 .env.*
+!.env.example
 db.sql
-*.lock
 .DS_Store
 node_modules
 /frontend/.agents
+infra/tls/dev/
+__pycache__/
+.maintainer/

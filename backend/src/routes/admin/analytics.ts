@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
 import { Router } from "express";
 import { query, queryOne } from "../../lib/database.js";
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
+import {
+	type AuthenticatedRequest,
+	getRequiredOrganizationId,
+} from "../../middleware/auth.middleware.js";
 
 const router = Router();
 
@@ -13,7 +16,8 @@ const router = Router();
 async function getIncidentStats(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Pobierz całkowitą liczbę incydentów
 		const totalResult = await queryOne<{ count: string }>(
@@ -80,7 +84,7 @@ async function getIncidentStats(req: Request, res: Response) {
 			[organizationId],
 		);
 
-		const statusStats = statusStatsRaw.map(stat => ({
+		const statusStats = statusStatsRaw.map((stat) => ({
 			status: stat.status,
 			count: parseInt(stat.count, 10),
 		}));
@@ -97,7 +101,7 @@ async function getIncidentStats(req: Request, res: Response) {
 			[organizationId],
 		);
 
-		const categoryStats = categoryStatsRaw.map(stat => ({
+		const categoryStats = categoryStatsRaw.map((stat) => ({
 			category: stat.category,
 			count: parseInt(stat.count, 10),
 		}));
@@ -131,7 +135,8 @@ async function getIncidentStats(req: Request, res: Response) {
 async function getIncidentMetrics(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 		const period = (req.query.period as string) || "30"; // Domyślnie 30 dni
 		const days = parseInt(period, 10);
 

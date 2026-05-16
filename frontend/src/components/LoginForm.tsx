@@ -1,12 +1,17 @@
-import { Lock, Mail, KeyRound, ArrowLeft, Loader2, Fingerprint } from "lucide-react";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Card } from "./ui/card";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { Fingerprint, Lock } from "lucide-react";
+import { useReducer } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { signIn } from "@/lib/auth-client";
+import { apiFetch } from "@/lib/api";
+import {
+  validateEmail as getEmailError,
+  validatePassword as getPasswordError,
+} from "@/lib/validation";
+import { Card } from "./ui/card";
+import { EmailStep } from "./login-form/EmailStep";
+import { PasskeyStep } from "./login-form/PasskeyStep";
+import { PasswordStep } from "./login-form/PasswordStep";
 
 interface LoginFormProps {
   onBack: () => void;
@@ -14,92 +19,191 @@ interface LoginFormProps {
   onLoginSuccess: () => void;
 }
 
-export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFormProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [step, setStep] = useState<"email" | "password" | "passkey">("email");
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+type LoginStep = "email" | "password" | "passkey";
+
+interface LoginFormState {
+  email: string;
+  password: string;
+  emailError: string;
+  passwordError: string;
+  step: LoginStep;
+  isCheckingEmail: boolean;
+}
+
+type LoginFormAction =
+  | {
+      type: "set-field";
+      field: "email" | "password";
+      value: string;
+    }
+  | {
+      type: "set-error";
+      field: "emailError" | "passwordError";
+      value: string;
+    }
+  | {
+      type: "set-step";
+      value: LoginStep;
+    }
+  | {
+      type: "set-is-checking-email";
+      value: boolean;
+    }
+  | {
+      type: "reset-password-step";
+    };
+
+const initialLoginFormState: LoginFormState = {
+  email: "",
+  password: "",
+  emailError: "",
+  passwordError: "",
+  step: "email",
+  isCheckingEmail: false,
+};
+
+function loginFormReducer(
+  state: LoginFormState,
+  action: LoginFormAction,
+): LoginFormState {
+  switch (action.type) {
+    case "set-field":
+      return {
+        ...state,
+        [action.field]: action.value,
+      };
+    case "set-error":
+      return {
+        ...state,
+        [action.field]: action.value,
+      };
+    case "set-step":
+      return {
+        ...state,
+        step: action.value,
+      };
+    case "set-is-checking-email":
+      return {
+        ...state,
+        isCheckingEmail: action.value,
+      };
+    case "reset-password-step":
+      return {
+        ...state,
+        step: "email",
+        password: "",
+        passwordError: "",
+      };
+    default:
+      return state;
+  }
+}
+
+export function LoginForm({
+  onBack,
+  onForgotPassword,
+  onLoginSuccess,
+}: LoginFormProps) {
+  const [state, dispatch] = useReducer(loginFormReducer, initialLoginFormState);
+  const queryClient = useQueryClient();
+
+  const getAuthErrorMessage = (authError: unknown, fallbackMessage: string) => {
+    if (!authError || typeof authError !== "object") {
+      return fallbackMessage;
+    }
+
+    const message = "message" in authError ? authError.message : undefined;
+
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+
+    if (
+      message &&
+      typeof message === "object" &&
+      "message" in message &&
+      typeof message.message === "string" &&
+      message.message.trim().length > 0
+    ) {
+      return message.message;
+    }
+
+    return fallbackMessage;
+  };
 
   const validateEmail = (value: string) => {
-    if (!value.includes("@")) {
-      setEmailError("Adres email musi zawierać znak @");
-      return false;
-    }
-    setEmailError("");
-    return true;
+    const error = getEmailError(value);
+    dispatch({ type: "set-error", field: "emailError", value: error });
+    return !error;
   };
 
   const validatePassword = (value: string) => {
-    if (value.length < 8) {
-      setPasswordError("Hasło musi mieć co najmniej 8 znaków");
-      return false;
-    }
-    setPasswordError("");
-    return true;
+    const error = getPasswordError(value, 8);
+    dispatch({ type: "set-error", field: "passwordError", value: error });
+    return !error;
   };
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (validateEmail(email)) {
-      setIsCheckingEmail(true);
+  const handleEmailSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
-      try {
-        // Sprawdź czy użytkownik ma zarejestrowane PassKeys
-        // Używamy standardowego fetch ponieważ Better-Auth nie ma metody checkAvailability
-        const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3333";
-        const response = await fetch(`${baseURL}/api/auth/passkey/check-availability`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
+    if (!validateEmail(state.email)) {
+      return;
+    }
+
+    dispatch({ type: "set-is-checking-email", value: true });
+
+    try {
+      const response = await apiFetch("/api/auth/passkey/check-availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: state.email }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        dispatch({
+          type: "set-step",
+          value: data.hasPasskeys ? "passkey" : "password",
         });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.hasPasskeys) {
-            setStep("passkey");
-          } else {
-            setStep("password");
-          }
-        } else {
-          // W przypadku błędu API, fallback do hasła
-          setStep("password");
-        }
-      } catch (error) {
-        // W przypadku błędu API, fallback do hasła
-        setStep("password");
-      } finally {
-        setIsCheckingEmail(false);
+      } else {
+        dispatch({ type: "set-step", value: "password" });
       }
+    } catch {
+      dispatch({ type: "set-step", value: "password" });
+    } finally {
+      dispatch({ type: "set-is-checking-email", value: false });
     }
   };
 
   const loginMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await signIn.email({
-        email,
-        password,
-        callbackURL: "/", // Better-Auth automatycznie przekieruje
+        email: state.email,
+        password: state.password,
+        callbackURL: "/",
       });
 
       if (error) {
-        throw new Error(error.message || "Nieprawidłowy adres email lub hasło");
+        throw new Error(
+          getAuthErrorMessage(error, "Nieprawidłowy adres email lub hasło"),
+        );
       }
 
       return data;
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
       toast.success("Zalogowano pomyślnie!");
-      
-      // AuthContext automatycznie pobierze rolę i przekieruje użytkownika
       onLoginSuccess();
     },
     onError: (error: Error) => {
-      setPasswordError(error.message);
+      dispatch({
+        type: "set-error",
+        field: "passwordError",
+        value: error.message,
+      });
       toast.error("Błąd logowania");
-    }
+    },
   });
 
   const passkeyLoginMutation = useMutation({
@@ -107,243 +211,87 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
       const { data, error } = await signIn.passkey();
 
       if (error) {
-        throw new Error(error.message || "Błąd logowania PassKey");
+        throw new Error(getAuthErrorMessage(error, "Błąd logowania PassKey"));
       }
 
       return data;
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
       toast.success("Zalogowano pomyślnie używając PassKey");
-      
-      // AuthContext automatycznie pobierze rolę i przekieruje użytkownika
       onLoginSuccess();
     },
     onError: (error: Error) => {
       toast.error(`Błąd logowania PassKey: ${error.message}`);
-    }
+    },
   });
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (validatePassword(password)) {
+  const handlePasswordSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (validatePassword(state.password)) {
       loginMutation.mutate();
     }
   };
 
-  const handlePasskeyLogin = () => {
-    passkeyLoginMutation.mutate();
-  };
-
   const handleBackToEmail = () => {
-    setStep("email");
-    setPassword("");
-    setPasswordError("");
+    dispatch({ type: "reset-password-step" });
   };
 
   return (
     <div className="flex items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md bg-linear-to-br from-slate-800/90 to-slate-700/90 border-blue-900/50 p-8">
+      <Card className="w-full max-w-md border-blue-900/50 bg-linear-to-br from-zinc-800/90 to-zinc-700/90 p-8">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 mb-4">
-            {step === "passkey" ? (
+            {state.step === "passkey" ? (
               <Fingerprint className="size-12 text-purple-400" />
             ) : (
               <Lock className="size-12 text-blue-400" />
             )}
           </div>
           <h2 className="text-3xl mb-2 text-blue-300">
-            {step === "passkey" ? "Witaj ponownie" : "Zaloguj się"}
+            {state.step === "passkey" ? "Witaj ponownie" : "Zaloguj się"}
           </h2>
-          <p className="text-slate-400">
-            {step === "email" && "Wprowadź swój adres e-mail"}
-            {step === "password" && "Wprowadź hasło do swojego konta"}
-            {step === "passkey" && "Użyj klucza PassKey aby się zalogować"}
+          <p className="text-zinc-400">
+            {state.step === "email" && "Wprowadź swój adres e-mail"}
+            {state.step === "password" && "Wprowadź hasło do swojego konta"}
+            {state.step === "passkey" && "Użyj klucza PassKey aby się zalogować"}
           </p>
         </div>
 
-        {step === "email" && (
-          <form onSubmit={handleEmailSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-300">
-                Adres e-mail
-              </Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="twoj@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20"
-                  required
-                  autoFocus
-                  disabled={isCheckingEmail}
-                />
-              </div>
-              {emailError && <p className="text-red-500 text-sm">{emailError}</p>}
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
-              size="lg"
-              disabled={isCheckingEmail}
-            >
-              {isCheckingEmail ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sprawdzanie...
-                </>
-              ) : (
-                "Dalej"
-              )}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={onBack}
-              variant="ghost"
-              className="w-full text-slate-400 hover:text-blue-400 hover:bg-slate-700/50"
-              size="lg"
-            >
-              <ArrowLeft className="size-4 mr-2" />
-              Powrót do strony głównej
-            </Button>
-          </form>
+        {state.step === "email" && (
+          <EmailStep
+            email={state.email}
+            emailError={state.emailError}
+            isCheckingEmail={state.isCheckingEmail}
+            onEmailChange={(value) =>
+              dispatch({ type: "set-field", field: "email", value })
+            }
+            onSubmit={handleEmailSubmit}
+            onBack={onBack}
+          />
         )}
-
-        {step === "passkey" && (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label className="text-slate-300">
-                Adres e-mail
-              </Label>
-              <div className="flex items-center justify-between bg-slate-900/30 border border-slate-700 rounded-md px-3 py-2">
-                <span className="text-slate-300 text-sm">{email}</span>
-                <button
-                  type="button"
-                  onClick={handleBackToEmail}
-                  className="text-blue-400 hover:text-blue-300 text-sm"
-                >
-                  Zmień
-                </button>
-              </div>
-            </div>
-
-            <Button
-              onClick={handlePasskeyLogin}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20"
-              size="lg"
-              disabled={passkeyLoginMutation.isPending}
-            >
-              {passkeyLoginMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Uwierzytelnianie...
-                </>
-              ) : (
-                <>
-                  <Fingerprint className="mr-2 h-5 w-5" />
-                  Zaloguj używając PassKey
-                </>
-              )}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleBackToEmail}
-              variant="ghost"
-              className="w-full text-slate-400 hover:text-blue-400 hover:bg-slate-700/50"
-              size="lg"
-            >
-              <ArrowLeft className="size-4 mr-2" />
-              Wróć
-            </Button>
-          </div>
+        {state.step === "passkey" && (
+          <PasskeyStep
+            email={state.email}
+            isPending={passkeyLoginMutation.isPending}
+            onLogin={() => passkeyLoginMutation.mutate()}
+            onBackToEmail={handleBackToEmail}
+          />
         )}
-
-        {step === "password" && (
-          <form onSubmit={handlePasswordSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label className="text-slate-300">
-                Adres e-mail
-              </Label>
-              <div className="flex items-center justify-between bg-slate-900/30 border border-slate-700 rounded-md px-3 py-2">
-                <span className="text-slate-300 text-sm">{email}</span>
-                <button
-                  type="button"
-                  onClick={handleBackToEmail}
-                  className="text-blue-400 hover:text-blue-300 text-sm"
-                >
-                  Zmień
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label
-                htmlFor="password"
-                className="text-slate-300"
-              >
-                Hasło
-              </Label>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20"
-                  required
-                  autoFocus
-                  disabled={loginMutation.isPending}
-                />
-              </div>
-              {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
-            </div>
-
-            <div className="flex items-center justify-between text-sm">
-              <a
-                href="#"
-                className="text-blue-400 hover:text-blue-300 transition-colors"
-                onClick={onForgotPassword}
-              >
-                Zapomniałeś hasła?
-              </a>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
-              size="lg"
-              disabled={loginMutation.isPending}
-            >
-              {loginMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Logowanie...
-                </>
-              ) : (
-                "Zaloguj się"
-              )}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleBackToEmail}
-              variant="ghost"
-              className="w-full text-slate-400 hover:text-blue-400 hover:bg-slate-700/50"
-              size="lg"
-              disabled={loginMutation.isPending}
-            >
-              <ArrowLeft className="size-4 mr-2" />
-              Wróć
-            </Button>
-          </form>
+        {state.step === "password" && (
+          <PasswordStep
+            email={state.email}
+            password={state.password}
+            passwordError={state.passwordError}
+            isPending={loginMutation.isPending}
+            onPasswordChange={(value) =>
+              dispatch({ type: "set-field", field: "password", value })
+            }
+            onSubmit={handlePasswordSubmit}
+            onBackToEmail={handleBackToEmail}
+            onForgotPassword={onForgotPassword}
+          />
         )}
       </Card>
     </div>

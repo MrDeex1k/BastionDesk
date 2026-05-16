@@ -39,6 +39,14 @@ export const env = {
 
 	// Database
 	DATABASE_URL: getEnvVar("DATABASE_URL"),
+	POSTGRES_USER: getEnvVar("POSTGRES_USER"),
+	POSTGRES_PASSWORD: getEnvVar("POSTGRES_PASSWORD"),
+	POSTGRES_DB: getEnvVar("POSTGRES_DB"),
+	PGBOUNCER_HOST: getEnvVar("PGBOUNCER_HOST"),
+	PGBOUNCER_PORT: getEnvNumber("PGBOUNCER_PORT", 6432),
+	DB_TLS_CA_PATH: getEnvVar("DB_TLS_CA_PATH"),
+	DB_TLS_CERT_PATH: getEnvVar("DB_TLS_CERT_PATH"),
+	DB_TLS_KEY_PATH: getEnvVar("DB_TLS_KEY_PATH"),
 
 	// Better-Auth
 	BETTER_AUTH_SECRET: getEnvVar("BETTER_AUTH_SECRET"),
@@ -54,7 +62,11 @@ export const env = {
 	CORS_ORIGIN: getEnvVar("CORS_ORIGIN"),
 
 	// LLM Service
-	LLM_SERVICE_URL: getEnvVar("LLM_SERVICE_URL"),
+	LLM_GRPC_TARGET: getEnvVar("LLM_GRPC_TARGET"),
+	LLM_TLS_CA_PATH: getEnvVar("LLM_TLS_CA_PATH"),
+	LLM_TLS_CERT_PATH: getEnvVar("LLM_TLS_CERT_PATH"),
+	LLM_TLS_KEY_PATH: getEnvVar("LLM_TLS_KEY_PATH"),
+	LLM_RPC_TIMEOUT_MS: getEnvNumber("LLM_RPC_TIMEOUT_MS", 30000),
 
 	// Rate Limiting
 	RATE_LIMIT_WINDOW_MS: getEnvNumber("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
@@ -66,6 +78,7 @@ export const env = {
 	S3_ACCESS_KEY: getEnvVar("S3_ACCESS_KEY"),
 	S3_SECRET_KEY: getEnvVar("S3_SECRET_KEY"),
 	S3_BUCKET: getEnvVar("S3_BUCKET"),
+	S3_TLS_CA_PATH: getEnvVar("S3_TLS_CA_PATH"),
 
 	// Email / SMTP Configuration
 	SMTP_HOST: getEnvVar("SMTP_HOST"),

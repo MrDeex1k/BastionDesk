@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Activity, User, UserX, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -10,56 +10,57 @@ import { IncidentReportForm } from "../components/IncidentReportForm";
 export function AnalystDashboardPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const queryClient = useQueryClient();
+  const handleIncidentCreated = useCallback(() => {
+    setIsCreateDialogOpen(false);
+    queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
+  }, [queryClient]);
 
   return (
-    <div className="flex flex-col items-center min-h-[60vh] space-y-8 w-full max-w-5xl mx-auto">
-      <div className="text-center space-y-4">
-        <div className="inline-flex p-4 rounded-full bg-purple-500/10 border border-purple-500/20 mb-2">
+    <div className="mx-auto flex min-h-[60vh] w-full max-w-5xl flex-col items-center gap-8">
+      <div className="text-center">
+        <div className="mb-2 inline-flex rounded-full border border-violet-500/20 bg-violet-500/10 p-4">
           <Activity className="size-12 text-purple-400" />
         </div>
-        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+        <h1 className="text-4xl font-semibold tracking-tight text-zinc-100">
           Panel Analityka
         </h1>
-        <p className="text-slate-400 text-lg max-w-2xl">
+        <p className="mt-3 max-w-2xl text-lg text-zinc-400">
           Zarządzaj incydentami bezpieczeństwa w twojej organizacji.
         </p>
       </div>
 
       <Tabs defaultValue="assigned" className="w-full">
-        <div className="flex items-center justify-center gap-4 mb-6">
-          <TabsList className="bg-slate-900/50 border border-slate-800 p-1 rounded-lg">
-            <TabsTrigger 
-              value="assigned" 
-              className="px-6 py-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 hover:text-slate-200"
+        <div className="mb-6 flex items-center justify-center gap-4">
+          <TabsList className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-1">
+              <TabsTrigger
+              value="assigned"
+              className="px-6 py-2 text-white/85 hover:text-white data-[state=active]:bg-blue-600 data-[state=active]:text-white"
             >
-              <User className="mr-2 h-4 w-4" />
+              <User className="mr-2 size-4" />
               Przypisane do mnie
             </TabsTrigger>
-            <TabsTrigger 
+              <TabsTrigger
               value="unassigned"
-              className="px-6 py-2 data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-400 hover:text-slate-200"
+              className="px-6 py-2 text-white/85 hover:text-white data-[state=active]:bg-violet-600 data-[state=active]:text-white"
             >
-              <UserX className="mr-2 h-4 w-4" />
+              <UserX className="mr-2 size-4" />
               Nieprzypisane
             </TabsTrigger>
           </TabsList>
 
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20">
-                <Plus className="h-4 w-4 mr-2" />
+              <Button className="bg-green-600 text-white shadow-lg shadow-green-900/20 hover:bg-green-700">
+                <Plus className="mr-2 size-4" />
                 Zgłoś incydent
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-slate-950 border-slate-800 text-slate-200 max-w-2xl">
+            <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-950 text-zinc-200">
               <DialogTitle className="sr-only">Zgłoś incydent</DialogTitle>
               <DialogDescription className="sr-only">
                 Formularz zgłaszania nowego incydentu bezpieczeństwa.
               </DialogDescription>
-              <IncidentReportForm onSuccess={() => {
-                setIsCreateDialogOpen(false);
-                queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
-              }} />
+              <IncidentReportForm onSuccess={handleIncidentCreated} />
             </DialogContent>
           </Dialog>
         </div>

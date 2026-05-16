@@ -1,22 +1,23 @@
 /**
- * Storage (S3/MinIO) - Bun S3Client
+ * Storage (S3/MinIO) - Bun native S3 client
  *
- * Wykorzystuje Bun S3Client dla kompatybilności z MinIO.
+ * Połączenie HTTPS do MinIO korzysta z globalnego zaufania CA procesu
+ * (`NODE_EXTRA_CA_CERTS` / `SSL_CERT_FILE`) ustawianego w Docker Compose.
  */
 
+import { S3Client } from "bun";
 import { env } from "./env";
 
 // Singleton klienta S3
-let s3Client: Bun.S3Client | null = null;
+let s3Client: S3Client | null = null;
 
-function getClient(): Bun.S3Client {
+function getClient(): S3Client {
 	if (!s3Client) {
-		s3Client = new Bun.S3Client({
+		s3Client = new S3Client({
 			accessKeyId: env.S3_ACCESS_KEY,
 			secretAccessKey: env.S3_SECRET_KEY,
 			bucket: env.S3_BUCKET,
 			endpoint: env.S3_ENDPOINT,
-			region: env.S3_REGION,
 		});
 	}
 	return s3Client;
@@ -34,14 +35,15 @@ export interface PutObjectOptions {
 export async function putObject(
 	key: string,
 	data: Blob | Buffer | ArrayBuffer | string,
-	_options: PutObjectOptions = {},
+	options: PutObjectOptions = {},
 ) {
-	const client = getClient();
-	const file = client.file(key);
-	await file.write(data, {
-		type: _options.contentType,
-		acl: _options.acl,
+	const file = getClient().file(key);
+	const body = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+
+	await file.write(body, {
+		type: options.contentType,
 	});
+
 	return { key };
 }
 
@@ -49,16 +51,14 @@ export async function putObject(
  * Pobierz obiekt jako Buffer
  */
 export async function getObjectBuffer(key: string): Promise<Buffer | null> {
-	const client = getClient();
-	const file = client.file(key);
-	try {
-		const buffer = await file.arrayBuffer();
-		return Buffer.from(buffer);
-	} catch (error) {
-		// Zakładamy, że błąd oznacza brak pliku
-		if (error instanceof Error) return null;
-		throw error;
+	const file = getClient().file(key);
+	const exists = await file.exists();
+
+	if (!exists) {
+		return null;
 	}
+
+	return Buffer.from(await file.arrayBuffer());
 }
 
 /**
@@ -67,10 +67,15 @@ export async function getObjectBuffer(key: string): Promise<Buffer | null> {
 export async function getObjectJson<T = unknown>(
 	key: string,
 ): Promise<T | null> {
-	const client = getClient();
-	const file = client.file(key);
 	try {
-		return await file.json() as T;
+		const file = getClient().file(key);
+		const exists = await file.exists();
+
+		if (!exists) {
+			return null;
+		}
+
+		return (await file.json()) as T;
 	} catch {
 		return null;
 	}
@@ -80,29 +85,24 @@ export async function getObjectJson<T = unknown>(
  * Usuń obiekt
  */
 export async function deleteObject(key: string): Promise<void> {
-	const client = getClient();
-	const file = client.file(key);
-	await file.delete();
+	await getClient().file(key).delete();
 }
 
 /**
- * Wygeneruj presigned URL (np. do pobrania/wgrania)
+ * Wygeneruj presigned URL do pobrania
  */
-export function presignObject(
+export async function presignObject(
 	key: string,
 	{
 		expiresIn = 3600, // 1h
-		acl,
 	}: {
 		expiresIn?: number;
 		acl?: "private" | "public-read";
 	} = {},
-): string {
-	const client = getClient();
-	const file = client.file(key);
-	return file.presign({
+): Promise<string> {
+	return getClient().file(key).presign({
 		expiresIn,
-		acl,
+		method: "GET",
 	});
 }
 

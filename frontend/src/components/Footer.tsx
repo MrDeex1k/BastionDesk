@@ -1,9 +1,11 @@
+const CURRENT_YEAR = new Date().getFullYear();
+
 export function Footer() {
   return (
-    <footer className="border-t border-blue-900/50 backdrop-blur-sm bg-slate-900/80 mt-8">
-      <div className="container mx-auto px-4 py-6 text-center text-sm text-slate-500">
-        <p>
-          © {new Date().getFullYear()} BastionDesk. Wszystkie prawa zastrzeżone.
+    <footer className="mt-8 border-t border-blue-900/40 bg-zinc-900/80 backdrop-blur-sm">
+      <div className="container mx-auto px-4 py-6 text-center text-sm text-zinc-500">
+        <p suppressHydrationWarning>
+          © {CURRENT_YEAR} BastionDesk. Wszystkie prawa zastrzeżone.
         </p>
         <p className="mt-2">
           System do zarządzania incydentami bezpieczeństwa IT

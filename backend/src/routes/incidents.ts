@@ -7,12 +7,14 @@
  * - Admin: przeglądanie wszystkich, statystyki
  */
 
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { Router } from "express";
 import { getDb, query, queryOne } from "../lib/database";
+import { classifyIncident } from "../lib/llm-client";
 import { getObjectBuffer, presignObject, storageClient } from "../lib/storage";
 import {
 	type AuthenticatedRequest,
+	getRequiredOrganizationId,
 	requireAuth,
 	requireRole,
 } from "../middleware/auth.middleware";
@@ -32,24 +34,26 @@ import {
 	uuidSchema,
 	validate,
 } from "../utils/validation";
+import {
+	createContentDispositionHeader,
+	findStoredFileMetadata,
+	parseStoredFileMetadata,
+	type StoredFileMetadata,
+	type StoredFileMetadataPayload,
+} from "./shared/file-metadata";
 
 /**
  * Asynchroniczna analiza kategorii incydentu za pomocą LLM_SERVICE
  */
-async function analyzeIncidentCategory(incidentId: string, description: string) {
+async function analyzeIncidentCategory(
+	incidentId: string,
+	description: string,
+) {
 	try {
-		const response = await fetch("http://llm_service:8888/query_message", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ prompt: description }),
-		});
-
-		if (!response.ok) {
-			throw new Error(`LLM service responded with status ${response.status}`);
-		}
-
-		const data = await response.json() as { response: IncidentCategory };
-		const category: IncidentCategory = data.response;
+		const category = (await classifyIncident(
+			incidentId,
+			description,
+		)) as IncidentCategory;
 
 		// Aktualizuj kategorię w bazie danych
 		await query('UPDATE incidents SET "llmCategory" = $1 WHERE id = $2', [
@@ -208,32 +212,64 @@ router.get(
 
 		// Parsuj metadata z JSON strings do obiektów
 		incidents.forEach((incident) => {
-			if (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'string') {
+			if (
+				incident.userScreenshotMetadata &&
+				typeof incident.userScreenshotMetadata === "string"
+			) {
 				try {
-					incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+					incident.userScreenshotMetadata = JSON.parse(
+						incident.userScreenshotMetadata,
+					);
 				} catch (e) {
-					console.error('[INCIDENTS] Failed to parse userScreenshotMetadata:', e);
+					console.error(
+						"[INCIDENTS] Failed to parse userScreenshotMetadata:",
+						e,
+					);
 				}
 			}
-			if (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'string') {
+			if (
+				incident.userAttachmentMetadata &&
+				typeof incident.userAttachmentMetadata === "string"
+			) {
 				try {
-					incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+					incident.userAttachmentMetadata = JSON.parse(
+						incident.userAttachmentMetadata,
+					);
 				} catch (e) {
-					console.error('[INCIDENTS] Failed to parse userAttachmentMetadata:', e);
+					console.error(
+						"[INCIDENTS] Failed to parse userAttachmentMetadata:",
+						e,
+					);
 				}
 			}
-			if (incident.analystReportMetadata && typeof incident.analystReportMetadata === 'string') {
+			if (
+				incident.analystReportMetadata &&
+				typeof incident.analystReportMetadata === "string"
+			) {
 				try {
-					incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+					incident.analystReportMetadata = JSON.parse(
+						incident.analystReportMetadata,
+					);
 				} catch (e) {
-					console.error('[INCIDENTS] Failed to parse analystReportMetadata:', e);
+					console.error(
+						"[INCIDENTS] Failed to parse analystReportMetadata:",
+						e,
+					);
 				}
 			}
-			if (incident.analystStatementMetadata && typeof incident.analystStatementMetadata === 'string') {
+			if (
+				incident.analystStatementMetadata &&
+				typeof incident.analystStatementMetadata === "string"
+			) {
 				try {
-					incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+					incident.analystStatementMetadata = JSON.parse(
+						incident.analystStatementMetadata,
+					);
 				} catch (e) {
-					console.error('[INCIDENTS] Failed to parse analystStatementMetadata:', e);
+					console.error(
+						"[INCIDENTS] Failed to parse analystStatementMetadata:",
+						e,
+					);
 				}
 			}
 		});
@@ -304,32 +340,55 @@ router.get(
 		}
 
 		// Parsuj metadata z JSON strings do obiektów
-		if (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'string') {
+		if (
+			incident.userScreenshotMetadata &&
+			typeof incident.userScreenshotMetadata === "string"
+		) {
 			try {
-				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+				incident.userScreenshotMetadata = JSON.parse(
+					incident.userScreenshotMetadata,
+				);
 			} catch (e) {
-				console.error('[INCIDENTS] Failed to parse userScreenshotMetadata:', e);
+				console.error("[INCIDENTS] Failed to parse userScreenshotMetadata:", e);
 			}
 		}
-		if (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'string') {
+		if (
+			incident.userAttachmentMetadata &&
+			typeof incident.userAttachmentMetadata === "string"
+		) {
 			try {
-				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
+				incident.userAttachmentMetadata = JSON.parse(
+					incident.userAttachmentMetadata,
+				);
 			} catch (e) {
-				console.error('[INCIDENTS] Failed to parse userAttachmentMetadata:', e);
+				console.error("[INCIDENTS] Failed to parse userAttachmentMetadata:", e);
 			}
 		}
-		if (incident.analystReportMetadata && typeof incident.analystReportMetadata === 'string') {
+		if (
+			incident.analystReportMetadata &&
+			typeof incident.analystReportMetadata === "string"
+		) {
 			try {
-				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
+				incident.analystReportMetadata = JSON.parse(
+					incident.analystReportMetadata,
+				);
 			} catch (e) {
-				console.error('[INCIDENTS] Failed to parse analystReportMetadata:', e);
+				console.error("[INCIDENTS] Failed to parse analystReportMetadata:", e);
 			}
 		}
-		if (incident.analystStatementMetadata && typeof incident.analystStatementMetadata === 'string') {
+		if (
+			incident.analystStatementMetadata &&
+			typeof incident.analystStatementMetadata === "string"
+		) {
 			try {
-				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
+				incident.analystStatementMetadata = JSON.parse(
+					incident.analystStatementMetadata,
+				);
 			} catch (e) {
-				console.error('[INCIDENTS] Failed to parse analystStatementMetadata:', e);
+				console.error(
+					"[INCIDENTS] Failed to parse analystStatementMetadata:",
+					e,
+				);
 			}
 		}
 
@@ -669,8 +728,7 @@ router.post(
 	requireAuth,
 	requireRole(["analityk", "admin"]),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const id = req.params.id!;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		// Parsuj multipart/form-data
 		const { files } = await parseMultipartFormData(req);
@@ -754,8 +812,7 @@ router.post(
 	requireAuth,
 	requireRole(["analityk", "admin"]),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const id = req.params.id!;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		// Parsuj multipart/form-data
 		const { files } = await parseMultipartFormData(req);
@@ -841,11 +898,11 @@ router.get(
 	requireAuth,
 	requireRole(["pracownik", "analityk", "admin"]),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const id = req.params.id!;
-		const fileType = req.params.fileType!;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
+		const { fileType } = req.params;
 
 		if (
+			!fileType ||
 			!["screenshot", "attachment", "report", "statement"].includes(fileType)
 		) {
 			return res.status(400).json({
@@ -888,7 +945,7 @@ router.get(
 
 		// Pobierz ścieżkę do pliku
 		let filePath: string | null = null;
-		let metadata: any = null;
+		let metadata: unknown = null;
 
 		switch (fileType) {
 			case "screenshot":
@@ -920,7 +977,7 @@ router.get(
 		}
 
 		// Generuj presigned URL (ważny przez 1 godzinę)
-		const presignedUrl = presignObject(filePath, {
+		const presignedUrl = await presignObject(filePath, {
 			expiresIn: 3600,
 		});
 
@@ -1057,7 +1114,8 @@ async function downloadFile(req: Request, res: Response) {
 		const authReq = req as AuthenticatedRequest;
 		const { id, type, filename } = req.params;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id || !type || !filename) {
@@ -1100,7 +1158,8 @@ async function downloadFile(req: Request, res: Response) {
 				success: false,
 				error: {
 					code: "INCIDENT_NOT_FOUND",
-					message: "Zgłoszenie nie zostało znalezione lub nie masz do niego dostępu",
+					message:
+						"Zgłoszenie nie zostało znalezione lub nie masz do niego dostępu",
 				},
 			});
 		}
@@ -1124,7 +1183,7 @@ async function downloadFile(req: Request, res: Response) {
 						? "analystReportPath"
 						: "analystStatementPath";
 
-		const fileData = await queryOne<{ metadata: any; path: string }>(
+		const fileData = await queryOne<{ metadata: unknown; path: string }>(
 			`
 			SELECT "${metadataColumn}" as metadata, "${pathColumn}" as path FROM incidents
 			WHERE id = $1 AND "organizationId" = $2 AND "userId" = $3
@@ -1142,33 +1201,28 @@ async function downloadFile(req: Request, res: Response) {
 			});
 		}
 
-		// Parsuj metadata jeśli jest stringiem JSON
-		let parsedMetadata = fileData.metadata;
-		if (typeof fileData.metadata === "string") {
-			try {
-				parsedMetadata = JSON.parse(fileData.metadata);
-			} catch (e) {
-				return res.status(500).json({
-					success: false,
-					error: {
-						code: "METADATA_PARSE_ERROR",
-						message: "Błąd parsowania metadanych pliku",
-					},
-				});
-			}
+		let parsedMetadata: StoredFileMetadataPayload;
+		try {
+			parsedMetadata = parseStoredFileMetadata(fileData.metadata);
+		} catch (_e) {
+			return res.status(500).json({
+				success: false,
+				error: {
+					code: "METADATA_PARSE_ERROR",
+					message: "Błąd parsowania metadanych pliku",
+				},
+			});
 		}
 
 		// Znajdź plik w metadanych
-		let fileMetadata = null;
-		let filePath = null;
+		let fileMetadata: StoredFileMetadata | null = null;
+		let filePath: string | null = null;
 
 		if (Array.isArray(parsedMetadata)) {
 			// Dla wielu plików
-			fileMetadata = parsedMetadata.find(
-				(f: any) => f.filename === filename || f.originalName === filename,
-			);
-			filePath = fileMetadata?.path;
-		} else if (typeof parsedMetadata === "object") {
+			fileMetadata = findStoredFileMetadata(parsedMetadata, filename);
+			filePath = fileMetadata?.path ?? null;
+		} else if (parsedMetadata) {
 			// Dla pojedynczych plików
 			fileMetadata = parsedMetadata;
 			filePath = fileData.path;
@@ -1203,11 +1257,11 @@ async function downloadFile(req: Request, res: Response) {
 			fileMetadata.mimeType || "application/octet-stream",
 		);
 
-		const realFilename = fileMetadata.filename || fileMetadata.originalName || filename;
-		const encodedFilename = encodeURIComponent(realFilename);
+		const realFilename =
+			fileMetadata.filename || fileMetadata.originalName || filename;
 		res.setHeader(
 			"Content-Disposition",
-			`attachment; filename="${realFilename.replace(/[^\x00-\x7F]/g, "_")}"; filename*=UTF-8''${encodedFilename}`,
+			createContentDispositionHeader(realFilename),
 		);
 
 		res.setHeader("Content-Length", fileBuffer.length);

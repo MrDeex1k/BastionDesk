@@ -1,8 +1,8 @@
-FROM busybox:1.36.1-musl AS wget-src
+FROM busybox:1.37.0-musl AS wget-src
 
-FROM minio/mc:latest AS mc-src
+FROM minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
 
-FROM quay.io/minio/minio:latest
+FROM minio/minio:RELEASE.2025-09-07T16-13-09Z
 
 # Provide wget via busybox for healthchecks (minio base image lacks package manager)
 COPY --from=wget-src /bin/busybox /bin/busybox

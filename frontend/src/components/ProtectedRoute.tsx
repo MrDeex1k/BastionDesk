@@ -35,10 +35,10 @@ interface ProtectedRouteProps {
  * />
  * ```
  */
-export function ProtectedRoute({ 
-  children, 
-  allowedRoles, 
-  redirectTo = "/login" 
+export function ProtectedRoute({
+  children,
+  allowedRoles,
+  redirectTo = "/login",
 }: ProtectedRouteProps) {
   const { session, role, isLoading } = useAuth();
 
@@ -48,7 +48,7 @@ export function ProtectedRoute({
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="size-12 animate-spin text-cyan-400" />
-          <p className="text-slate-400 text-sm">Ładowanie...</p>
+          <p className="text-sm text-zinc-400">Ładowanie…</p>
         </div>
       </div>
     );

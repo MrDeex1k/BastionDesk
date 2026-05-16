@@ -3,10 +3,11 @@
 
 // Typy pomocnicze - używamy głównego interface z types/index.ts
 import type { Incident } from "../../types/index";
+
 export type { Incident };
 
 // Wspólne funkcje walidacji i przetwarzania
-export const validateIncidentData = (_data: any) => {
+export const validateIncidentData = (_data: unknown) => {
 	// Walidacja danych incydentu
 };
 

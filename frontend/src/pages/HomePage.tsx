@@ -5,26 +5,26 @@ import {
   AlertTriangle,
   Lock,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { useNavigate } from "react-router-dom";
 
 export function HomePage() {
   const navigate = useNavigate();
 
   return (
     <>
-      <div className="max-w-4xl mx-auto text-center mb-16">
-        <h2 className="text-5xl mb-6 bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-500 bg-clip-text text-transparent">
+      <div className="mx-auto mb-16 max-w-4xl text-center">
+        <h2 className="mb-6 text-5xl tracking-tight text-zinc-100">
           Witaj w BastionDesk
         </h2>
 
-        <p className="text-xl text-slate-300 mb-4">
+        <p className="mb-4 text-xl text-zinc-300">
           Profesjonalny system zgłaszania i zarządzania
           incydentami bezpieczeństwa
         </p>
 
-        <p className="text-slate-400 max-w-2xl mx-auto">
+        <p className="mx-auto max-w-2xl text-zinc-400">
           Chronimy Twoją organizację poprzez szybkie
           reagowanie na zagrożenia. Zgłaszaj incydenty,
           śledź postępy i współpracuj z zespołem
@@ -33,24 +33,24 @@ export function HomePage() {
       </div>
 
       {/* Action Cards */}
-      <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-16">
-        <Card className="bg-gradient-to-br from-slate-800/90 to-slate-700/90 border-blue-900/50 hover:border-blue-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 p-6">
-          <div className="flex flex-col items-center text-center gap-4 h-full">
-            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+      <div className="mx-auto mb-16 grid max-w-5xl gap-6 md:grid-cols-3">
+        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10">
+          <div className="flex h-full flex-col items-center gap-4 text-center">
+            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
               <Lock className="size-8 text-blue-400" />
             </div>
             <div>
-              <h3 className="text-xl mb-2 text-blue-300">
+              <h3 className="mb-2 text-xl text-blue-200">
                 Zaloguj się
               </h3>
-              <p className="text-sm text-slate-400 mb-6">
+              <p className="mb-6 text-sm text-zinc-400">
                 Masz już konto? Zaloguj się i uzyskaj
                 dostęp do swojego panelu.
               </p>
             </div>
             <Button
               onClick={() => navigate("/login")}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 mt-auto"
+              className="mt-auto w-full bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700"
               size="lg"
             >
               Zaloguj się
@@ -58,23 +58,23 @@ export function HomePage() {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-slate-800/90 to-slate-700/90 border-cyan-900/50 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10 p-6">
-          <div className="flex flex-col items-center text-center gap-4 h-full">
-            <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20">
+        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-all duration-300 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/10">
+          <div className="flex h-full flex-col items-center gap-4 text-center">
+            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
               <Users className="size-8 text-cyan-400" />
             </div>
             <div>
-              <h3 className="text-xl mb-2 text-cyan-300">
+              <h3 className="mb-2 text-xl text-cyan-200">
                 Dołącz do nas
               </h3>
-              <p className="text-sm text-slate-400 mb-6">
+              <p className="mb-6 text-sm text-zinc-400">
                 Stwórz konto, a następnie dołącz do
                 organizacji
               </p>
             </div>
             <Button
               onClick={() => navigate("/register")}
-              className="w-full bg-cyan-600 hover:bg-cyan-700 text-white shadow-lg shadow-cyan-500/20 mt-auto"
+              className="mt-auto w-full bg-cyan-600 text-white shadow-lg shadow-cyan-500/20 hover:bg-cyan-700"
               size="lg"
             >
               Dołącz do nas
@@ -82,16 +82,16 @@ export function HomePage() {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-slate-800/90 to-slate-700/90 border-purple-900/50 hover:border-purple-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/10 p-6">
-          <div className="flex flex-col items-center text-center gap-4 h-full">
-            <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20">
-              <Building2 className="size-8 text-purple-400" />
+        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-all duration-300 hover:border-emerald-500/50 hover:shadow-xl hover:shadow-emerald-500/10">
+          <div className="flex h-full flex-col items-center gap-4 text-center">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <Building2 className="size-8 text-emerald-400" />
             </div>
             <div>
-              <h3 className="text-xl mb-2 text-purple-300">
+              <h3 className="mb-2 text-xl text-emerald-200">
                 Stwórz organizację
               </h3>
-              <p className="text-sm text-slate-400 mb-6">
+              <p className="mb-6 text-sm text-zinc-400">
                 Jesteś administratorem? Stwórz nową
                 organizację i zacznij zarządzać
                 bezpieczeństwem.
@@ -99,7 +99,7 @@ export function HomePage() {
             </div>
             <Button
               onClick={() => navigate("/create-organization")}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20 mt-auto"
+              className="mt-auto w-full bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-700"
               size="lg"
             >
               Stwórz organizację
@@ -110,38 +110,38 @@ export function HomePage() {
 
       {/* Features Section */}
       <div className="max-w-4xl mx-auto">
-        <h3 className="text-center mb-8 text-slate-300">
+        <h3 className="mb-8 text-center text-zinc-300">
           Kluczowe funkcje systemu
         </h3>
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="flex flex-col items-center text-center gap-3 p-6 rounded-xl bg-slate-800/50 border border-slate-800">
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
             <AlertTriangle className="size-6 text-yellow-400" />
-            <h4 className="text-slate-200">
+            <h4 className="text-zinc-200">
               Szybkie zgłaszanie
             </h4>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-zinc-400">
               Błyskawiczne zgłaszanie incydentów z
               dowolnego miejsca
             </p>
           </div>
 
-          <div className="flex flex-col items-center text-center gap-3 p-6 rounded-xl bg-slate-800/50 border border-slate-800">
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
             <Shield className="size-6 text-blue-400" />
-            <h4 className="text-slate-200">
+            <h4 className="text-zinc-200">
               Analiza zagrożeń
             </h4>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-zinc-400">
               Światowej klasy eksperci, którzy pomogą w
               analizie zagrożeń
             </p>
           </div>
 
-          <div className="flex flex-col items-center text-center gap-3 p-6 rounded-xl bg-slate-800/50 border border-slate-800">
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
             <Users className="size-6 text-cyan-400" />
-            <h4 className="text-slate-200">
+            <h4 className="text-zinc-200">
               Współpraca zespołowa
             </h4>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-zinc-400">
               Efektywna wymiana informacji, pomiędzy
               użytkownikami
             </p>

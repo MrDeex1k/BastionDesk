@@ -1,13 +1,50 @@
 import type { Request, Response } from "express";
 import { Router } from "express";
-import { query, queryOne, sql } from "../../lib/database.js";
-import { getObjectBuffer, putObject } from "../../lib/storage.js";
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
-import { requireOrganizationAccess } from "../shared/middleware.js";
-import type { Incident } from "../../types/index.js";
+import { query, queryOne } from "../../lib/database.js";
 import { env } from "../../lib/env.js";
+import { getObjectBuffer, putObject } from "../../lib/storage.js";
+import {
+	type AuthenticatedRequest,
+	getRequiredOrganizationId,
+} from "../../middleware/auth.middleware.js";
+import type { Incident } from "../../types/index.js";
+import {
+	createContentDispositionHeader,
+	findStoredFileMetadata,
+	parseStoredFileMetadata,
+	type StoredFileMetadata,
+	type StoredFileMetadataPayload,
+} from "../shared/file-metadata.js";
+import { requireOrganizationAccess } from "../shared/middleware.js";
 
 const router = Router();
+
+const ALLOWED_INCIDENT_SORT_FIELDS = new Set([
+	"createdAt",
+	"updatedAt",
+	"status",
+	"dataZgloszenia",
+	"userId",
+	"analystId",
+]);
+
+function getIncidentOrderBy(
+	sortByValue: unknown,
+	sortOrderValue: unknown,
+): string | null {
+	const sortBy = typeof sortByValue === "string" ? sortByValue : "createdAt";
+	const sortOrder =
+		typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
+
+	if (
+		!ALLOWED_INCIDENT_SORT_FIELDS.has(sortBy) ||
+		!["asc", "desc"].includes(sortOrder)
+	) {
+		return null;
+	}
+
+	return `i."${sortBy}" ${sortOrder}`;
+}
 
 /**
  * Pobierz incydenty przypisane do aktualnego analityka w jego organizacji
@@ -16,7 +53,8 @@ async function getAssignedIncidents(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 		const {
 			page = 1,
 			limit = 20,
@@ -24,6 +62,16 @@ async function getAssignedIncidents(req: Request, res: Response) {
 			sortBy = "createdAt",
 			sortOrder = "desc",
 		} = req.query;
+		const orderBy = getIncidentOrderBy(sortBy, sortOrder);
+		if (!orderBy) {
+			return res.status(400).json({
+				success: false,
+				error: {
+					code: "INVALID_SORT",
+					message: "Nieprawidłowe sortowanie",
+				},
+			});
+		}
 
 		let whereClause = 'WHERE i."analystId" = $1 AND i."organizationId" = $2';
 		const params: unknown[] = [userId, organizationId];
@@ -38,7 +86,6 @@ async function getAssignedIncidents(req: Request, res: Response) {
 		const offset = (Number(page) - 1) * Number(limit);
 
 		// Pobierz incydenty
-		const orderBy = `i."${sortBy}" ${sortOrder}`;
 		const incidents = await query<Incident>(
 			`
 			SELECT
@@ -112,7 +159,8 @@ async function getAssignedIncidents(req: Request, res: Response) {
 async function getUnassignedIncidents(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 		const {
 			page = 1,
 			limit = 20,
@@ -120,6 +168,16 @@ async function getUnassignedIncidents(req: Request, res: Response) {
 			sortBy = "createdAt",
 			sortOrder = "desc",
 		} = req.query;
+		const orderBy = getIncidentOrderBy(sortBy, sortOrder);
+		if (!orderBy) {
+			return res.status(400).json({
+				success: false,
+				error: {
+					code: "INVALID_SORT",
+					message: "Nieprawidłowe sortowanie",
+				},
+			});
+		}
 
 		let whereClause = 'WHERE i."analystId" IS NULL AND i."organizationId" = $1';
 		const params: unknown[] = [organizationId];
@@ -134,7 +192,6 @@ async function getUnassignedIncidents(req: Request, res: Response) {
 		const offset = (Number(page) - 1) * Number(limit);
 
 		// Pobierz incydenty
-		const orderBy = `i."${sortBy}" ${sortOrder}`;
 		const incidents = await query<Incident>(
 			`
 			SELECT
@@ -209,10 +266,10 @@ router.get("/assigned", getAssignedIncidents);
 router.get("/unassigned", getUnassignedIncidents);
 
 // POST /analyst/incidents/:id/assign - Przypisanie incydentu do siebie
-router.post('/:id/assign', requireOrganizationAccess, assignIncident);
+router.post("/:id/assign", requireOrganizationAccess, assignIncident);
 
 // POST /analyst/incidents/:id/unassign - Oddanie incydentu do puli
-router.post('/:id/unassign', requireOrganizationAccess, unassignIncident);
+router.post("/:id/unassign", requireOrganizationAccess, unassignIncident);
 
 // PUT /analyst/incidents/:id/status - Zmiana statusu incydentu
 // router.put('/:id/status', requireOrganizationAccess, updateIncidentStatus);
@@ -246,7 +303,8 @@ async function downloadFile(req: Request, res: Response) {
 		const authReq = req as AuthenticatedRequest;
 		const { id, type, filename } = req.params;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id || !type || !filename) {
@@ -298,15 +356,15 @@ async function downloadFile(req: Request, res: Response) {
 		// Analityk może pobierać pliki tylko z incydentów które są do niego przypisane
 		// lub raporty/sprawozdania z jego organizacji
 		// Dla screenshots i attachments - dostęp jeśli w organizacji
-		const isAdmin = authReq.memberRole === 'admin';
-		console.log('[DOWNLOAD] Access check:', {
+		const isAdmin = authReq.memberRole === "admin";
+		console.log("[DOWNLOAD] Access check:", {
 			userId,
 			memberRole: authReq.memberRole,
 			isAdmin,
 			analystId: incident.analystId,
-			type
+			type,
 		});
-		
+
 		const hasAccess =
 			isAdmin ||
 			incident.analystId === userId ||
@@ -316,7 +374,7 @@ async function downloadFile(req: Request, res: Response) {
 			type === "attachments";
 
 		if (!hasAccess) {
-			console.log('[DOWNLOAD] Access denied');
+			console.log("[DOWNLOAD] Access denied");
 			return res.status(403).json({
 				success: false,
 				error: {
@@ -326,64 +384,65 @@ async function downloadFile(req: Request, res: Response) {
 			});
 		}
 
-// Sprawdź metadane pliku i ścieżkę w bazie danych
-	const metadataColumn =
-		type === "screenshots"
-			? "userScreenshotMetadata"
-			: type === "attachments"
-				? "userAttachmentMetadata"
-				: type === "reports"
-					? "analystReportMetadata"
-					: "analystStatementMetadata";
+		// Sprawdź metadane pliku i ścieżkę w bazie danych
+		const metadataColumn =
+			type === "screenshots"
+				? "userScreenshotMetadata"
+				: type === "attachments"
+					? "userAttachmentMetadata"
+					: type === "reports"
+						? "analystReportMetadata"
+						: "analystStatementMetadata";
 
-	const pathColumn =
-		type === "screenshots"
-			? "userScreenshotPath"
-			: type === "attachments"
-				? "userAttachmentPath"
-				: type === "reports"
-					? "analystReportPath"
-					: "analystStatementPath";
+		const pathColumn =
+			type === "screenshots"
+				? "userScreenshotPath"
+				: type === "attachments"
+					? "userAttachmentPath"
+					: type === "reports"
+						? "analystReportPath"
+						: "analystStatementPath";
 
-	const fileData = await queryOne<{ metadata: any; path: string }>(
-		`
+		const fileData = await queryOne<{ metadata: unknown; path: string }>(
+			`
 		SELECT "${metadataColumn}" as metadata, "${pathColumn}" as path FROM incidents
 		WHERE id = $1 AND "organizationId" = $2
 	`,
-		[id, organizationId],
-	);
+			[id, organizationId],
+		);
 
-	if (!fileData?.metadata || !fileData?.path) {
-		console.log('[DOWNLOAD] No metadata or path found:', { hasMetadata: !!fileData?.metadata, hasPath: !!fileData?.path });
-		return res.status(404).json({
-			success: false,
-			error: {
-				code: "FILE_NOT_FOUND",
-				message: "Plik nie został znaleziony",
-			},
+		if (!fileData?.metadata || !fileData?.path) {
+			console.log("[DOWNLOAD] No metadata or path found:", {
+				hasMetadata: !!fileData?.metadata,
+				hasPath: !!fileData?.path,
+			});
+			return res.status(404).json({
+				success: false,
+				error: {
+					code: "FILE_NOT_FOUND",
+					message: "Plik nie został znaleziony",
+				},
+			});
+		}
+
+		console.log("[DOWNLOAD] File data:", {
+			type,
+			filename,
+			metadata: fileData.metadata,
+			path: fileData.path,
+			isArray: Array.isArray(fileData.metadata),
 		});
-	}
 
-	console.log('[DOWNLOAD] File data:', {
-		type,
-		filename,
-		metadata: fileData.metadata,
-		path: fileData.path,
-		isArray: Array.isArray(fileData.metadata)
-	});
+		// Znajdź plik w metadanych
+		let fileMetadata: StoredFileMetadata | null = null;
+		let filePath: string | null = null;
 
-	// Znajdź plik w metadanych
-	let fileMetadata = null;
-	let filePath = null;
-	
-	// Parsuj metadata jeśli jest stringiem JSON
-	let parsedMetadata = fileData.metadata;
-	if (typeof fileData.metadata === 'string') {
+		let parsedMetadata: StoredFileMetadataPayload;
 		try {
-			parsedMetadata = JSON.parse(fileData.metadata);
-			console.log('[DOWNLOAD] Parsed metadata:', parsedMetadata);
+			parsedMetadata = parseStoredFileMetadata(fileData.metadata);
+			console.log("[DOWNLOAD] Parsed metadata:", parsedMetadata);
 		} catch (e) {
-			console.log('[DOWNLOAD] Failed to parse metadata JSON:', e);
+			console.log("[DOWNLOAD] Failed to parse metadata JSON:", e);
 			return res.status(500).json({
 				success: false,
 				error: {
@@ -392,39 +451,43 @@ async function downloadFile(req: Request, res: Response) {
 				},
 			});
 		}
-	}
-	
-	if (Array.isArray(parsedMetadata)) {
-		// Dla wielu plików (screenshots/attachments mogą być tablicą)
-		fileMetadata = parsedMetadata.find(
-			(f: any) => f.filename === filename || f.originalName === filename,
-		);
-		filePath = fileMetadata?.path; // Ścieżka może być w metadanych dla wielu plików
-	} else if (typeof parsedMetadata === "object") {
-		// Dla pojedynczych plików - zawsze zwróć jeśli istnieje metadata
-		// Nie wymagamy dokładnego filename, bo dla każdego typu jest tylko jeden plik
-		const metaFilename = parsedMetadata?.filename || parsedMetadata?.originalName;
-		console.log('[DOWNLOAD] Single file mode:', { metaFilename, requestedFilename: filename });
-		// Zawsze zwracamy plik jeśli istnieje - frontend może nie mieć aktualnej nazwy
-		fileMetadata = parsedMetadata;
-		filePath = fileData.path;
-	}
 
-	console.log('[DOWNLOAD] Result:', { hasMetadata: !!fileMetadata, filePath });
+		if (Array.isArray(parsedMetadata)) {
+			// Dla wielu plików (screenshots/attachments mogą być tablicą)
+			fileMetadata = findStoredFileMetadata(parsedMetadata, filename);
+			filePath = fileMetadata?.path ?? null; // Ścieżka może być w metadanych dla wielu plików
+		} else if (parsedMetadata) {
+			// Dla pojedynczych plików - zawsze zwróć jeśli istnieje metadata
+			// Nie wymagamy dokładnego filename, bo dla każdego typu jest tylko jeden plik
+			const metaFilename =
+				parsedMetadata?.filename || parsedMetadata?.originalName;
+			console.log("[DOWNLOAD] Single file mode:", {
+				metaFilename,
+				requestedFilename: filename,
+			});
+			// Zawsze zwracamy plik jeśli istnieje - frontend może nie mieć aktualnej nazwy
+			fileMetadata = parsedMetadata;
+			filePath = fileData.path;
+		}
 
-	if (!fileMetadata || !filePath) {
-		console.log('[DOWNLOAD] File not found in metadata');
-		return res.status(404).json({
-			success: false,
-			error: {
-				code: "FILE_NOT_FOUND",
-				message: "Plik nie został znaleziony w metadanych",
-			},
+		console.log("[DOWNLOAD] Result:", {
+			hasMetadata: !!fileMetadata,
+			filePath,
 		});
-	}
 
-	// Pobierz plik z storage
-	const fileBuffer = await getObjectBuffer(filePath);
+		if (!fileMetadata || !filePath) {
+			console.log("[DOWNLOAD] File not found in metadata");
+			return res.status(404).json({
+				success: false,
+				error: {
+					code: "FILE_NOT_FOUND",
+					message: "Plik nie został znaleziony w metadanych",
+				},
+			});
+		}
+
+		// Pobierz plik z storage
+		const fileBuffer = await getObjectBuffer(filePath);
 
 		if (!fileBuffer) {
 			return res.status(404).json({
@@ -441,16 +504,15 @@ async function downloadFile(req: Request, res: Response) {
 			"Content-Type",
 			fileMetadata.mimeType || "application/octet-stream",
 		);
-		
+
 		// Użyj prawdziwej nazwy pliku z metadanych (nie z URL)
-		const realFilename = fileMetadata.filename || fileMetadata.originalName || filename;
-		// RFC 5987 encoding dla nazw plików z polskimi znakami
-		const encodedFilename = encodeURIComponent(realFilename);
+		const realFilename =
+			fileMetadata.filename || fileMetadata.originalName || filename;
 		res.setHeader(
-			"Content-Disposition", 
-			`attachment; filename="${realFilename.replace(/[^\x00-\x7F]/g, '_')}"; filename*=UTF-8''${encodedFilename}`
+			"Content-Disposition",
+			createContentDispositionHeader(realFilename),
 		);
-		
+
 		res.setHeader("Content-Length", fileBuffer.length);
 		res.send(fileBuffer);
 	} catch (error) {
@@ -480,7 +542,8 @@ async function assignIncident(req: Request, res: Response) {
 		const authReq = req as AuthenticatedRequest;
 		const { id } = req.params;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -580,7 +643,8 @@ async function unassignIncident(req: Request, res: Response) {
 		const authReq = req as AuthenticatedRequest;
 		const { id } = req.params;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -689,9 +753,10 @@ async function updateIncidentStatus(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const { id } = req.params;
-		const { status, reason } = req.body;
+		const { status } = req.body;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -846,7 +911,8 @@ async function updateIncidentNotes(req: Request, res: Response) {
 		const { id } = req.params;
 		const { notes } = req.body;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -961,7 +1027,8 @@ async function resolveIncident(req: Request, res: Response) {
 		const authReq = req as AuthenticatedRequest;
 		const { id } = req.params;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -1065,7 +1132,8 @@ async function getIncidentDetails(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const { id } = req.params;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -1127,39 +1195,59 @@ async function getIncidentDetails(req: Request, res: Response) {
 		}
 
 		// Parsuj metadata JSON strings do obiektów
-		if (incident.userScreenshotMetadata && typeof incident.userScreenshotMetadata === 'string') {
+		if (
+			incident.userScreenshotMetadata &&
+			typeof incident.userScreenshotMetadata === "string"
+		) {
 			try {
-				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
+				incident.userScreenshotMetadata = JSON.parse(
+					incident.userScreenshotMetadata,
+				);
 			} catch (e) {
-				console.error('[ANALYST] Failed to parse userScreenshotMetadata:', e);
-			}
-		}
-		
-		if (incident.userAttachmentMetadata && typeof incident.userAttachmentMetadata === 'string') {
-			try {
-				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
-			} catch (e) {
-				console.error('[ANALYST] Failed to parse userAttachmentMetadata:', e);
-			}
-		}
-		
-		if (incident.analystReportMetadata && typeof incident.analystReportMetadata === 'string') {
-			try {
-				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
-			} catch (e) {
-				console.error('[ANALYST] Failed to parse analystReportMetadata:', e);
-			}
-		}
-		
-		if (incident.analystStatementMetadata && typeof incident.analystStatementMetadata === 'string') {
-			try {
-				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
-			} catch (e) {
-				console.error('[ANALYST] Failed to parse analystStatementMetadata:', e);
+				console.error("[ANALYST] Failed to parse userScreenshotMetadata:", e);
 			}
 		}
 
-		console.log('[ANALYST] Sending incident metadata:', {
+		if (
+			incident.userAttachmentMetadata &&
+			typeof incident.userAttachmentMetadata === "string"
+		) {
+			try {
+				incident.userAttachmentMetadata = JSON.parse(
+					incident.userAttachmentMetadata,
+				);
+			} catch (e) {
+				console.error("[ANALYST] Failed to parse userAttachmentMetadata:", e);
+			}
+		}
+
+		if (
+			incident.analystReportMetadata &&
+			typeof incident.analystReportMetadata === "string"
+		) {
+			try {
+				incident.analystReportMetadata = JSON.parse(
+					incident.analystReportMetadata,
+				);
+			} catch (e) {
+				console.error("[ANALYST] Failed to parse analystReportMetadata:", e);
+			}
+		}
+
+		if (
+			incident.analystStatementMetadata &&
+			typeof incident.analystStatementMetadata === "string"
+		) {
+			try {
+				incident.analystStatementMetadata = JSON.parse(
+					incident.analystStatementMetadata,
+				);
+			} catch (e) {
+				console.error("[ANALYST] Failed to parse analystStatementMetadata:", e);
+			}
+		}
+
+		console.log("[ANALYST] Sending incident metadata:", {
 			userScreenshotMetadata: incident.userScreenshotMetadata,
 			userAttachmentMetadata: incident.userAttachmentMetadata,
 			analystReportMetadata: incident.analystReportMetadata,
@@ -1235,6 +1323,8 @@ async function uploadSingleFile(
 	}
 }
 
+type UploadedIncidentFile = Awaited<ReturnType<typeof uploadSingleFile>>;
+
 /**
  * Wgrywanie raportu dotyczącego incydentu
  */
@@ -1244,7 +1334,8 @@ async function uploadReport(req: Request, res: Response) {
 		const { id } = req.params;
 		const { reportData } = req.body;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -1307,7 +1398,7 @@ async function uploadReport(req: Request, res: Response) {
 		}
 
 		// Upload raportu do storage
-		let uploadedReport;
+		let uploadedReport: UploadedIncidentFile;
 		try {
 			uploadedReport = await uploadSingleFile(reportData, id, "reports");
 		} catch (error) {
@@ -1370,7 +1461,8 @@ async function uploadStatement(req: Request, res: Response) {
 		const { id } = req.params;
 		const { statementData } = req.body;
 		const userId = authReq.user.id;
-		const organizationId = authReq.organizationId!;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
 		if (!id) {
@@ -1446,7 +1538,7 @@ async function uploadStatement(req: Request, res: Response) {
 		}
 
 		// Upload sprawozdania do storage
-		let uploadedStatement;
+		let uploadedStatement: UploadedIncidentFile;
 		try {
 			uploadedStatement = await uploadSingleFile(
 				statementData,

@@ -12,7 +12,7 @@ export interface FileMetadata {
 }
 
 // Funkcje pomocnicze dla obsługi plików
-export const validateFileUpload = (_file: any) => {
+export const validateFileUpload = (_file: unknown) => {
 	// Walidacja przesłanego pliku
 };
 

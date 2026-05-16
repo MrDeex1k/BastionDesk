@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package bastiondesk.llm.v1;
+
+service IncidentClassifier {
+  rpc ClassifyIncident(ClassifyIncidentRequest) returns (ClassifyIncidentResponse);
+}
+
+message ClassifyIncidentRequest {
+  string incident_id = 1;
+  string description = 2;
+}
+
+message ClassifyIncidentResponse {
+  string category = 1;
+  string model_name = 2;
+}

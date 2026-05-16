@@ -35,6 +35,12 @@ const signUpWithOrganizationSchema = z.object({
 	organizationLogo: createOrganizationSchema.shape.logo.optional(),
 });
 
+type SignUpEmailResponse = {
+	user?: {
+		id?: string;
+	};
+};
+
 /**
  * POST /api/auth/sign-up-with-organization/email
  *
@@ -84,7 +90,7 @@ router.post(
 				res.setHeader("set-cookie", setCookie);
 			}
 
-			const userId = (response as any)?.user?.id as string | undefined;
+			const userId = (response as SignUpEmailResponse | null)?.user?.id;
 			if (!userId) {
 				// In case the SDK changes shape or returns an unexpected response
 				return res.status(500).json({
@@ -132,6 +138,12 @@ router.post(
       UPDATE member
       SET role = 'admin'
       WHERE "organizationId" = ${organization.id} AND "userId" = ${userId}
+    `;
+
+			await sql`
+      UPDATE session
+      SET "activeOrganizationId" = ${organization.id}, "updatedAt" = now()
+      WHERE "userId" = ${userId}
     `;
 
 			return res.status(201).json({

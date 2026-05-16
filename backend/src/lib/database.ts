@@ -17,7 +17,24 @@ let _sql: SQL | null = null;
  */
 export function getDb(): SQL {
 	if (!_sql) {
-		_sql = new SQL(env.DATABASE_URL);
+		_sql = new SQL({
+			hostname: env.PGBOUNCER_HOST,
+			port: env.PGBOUNCER_PORT,
+			database: env.POSTGRES_DB,
+			username: env.POSTGRES_USER,
+			password: env.POSTGRES_PASSWORD,
+			prepare: true,
+			max: 20,
+			idleTimeout: 30,
+			connectionTimeout: 10,
+			tls: {
+				rejectUnauthorized: true,
+				serverName: env.PGBOUNCER_HOST,
+				ca: Bun.file(env.DB_TLS_CA_PATH),
+				cert: Bun.file(env.DB_TLS_CERT_PATH),
+				key: Bun.file(env.DB_TLS_KEY_PATH),
+			},
+		});
 		console.log("[DATABASE] Bun SQL connection initialized");
 	}
 	return _sql;

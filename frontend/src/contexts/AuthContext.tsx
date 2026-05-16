@@ -1,4 +1,5 @@
-import { createContext, ReactNode, useEffect, useState } from "react";
+import { createContext, type ReactNode, useEffect, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, organization } from "@/lib/auth-client";
 
 /**
@@ -47,22 +48,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Eksportujemy Context, aby hook w osobnym pliku mógł z niego korzystać
 export { AuthContext };
 
+const NO_ROLE: null = null;
+
+interface OrganizationSummary {
+  id: string;
+}
+
 /**
  * AuthProvider - Provider dla kontekstu autoryzacji
- * 
+ *
  * Opakowuje aplikację i dostarcza informacje o sesji użytkownika
  * wykorzystując Better-Auth useSession hook i pobierając rolę przez organization.getActiveMember()
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { 
-    data: session, 
-    isPending, 
-    error,
-    refetch 
-  } = useSession();
-
-  const [role, setRole] = useState<UserRole | null>(null);
-  const [isLoadingRole, setIsLoadingRole] = useState(false);
+  const { data: session, isPending, error, refetch } = useSession();
+  const queryClient = useQueryClient();
 
   /**
    * Wyciągamy activeOrganizationId z sesji
@@ -70,88 +70,127 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const organizationId = session?.session?.activeOrganizationId || null;
 
+  const organizationsQuery = useQuery({
+    queryKey: ["auth", "organizations", session?.user?.id],
+    enabled: Boolean(session?.user) && !organizationId,
+    queryFn: async () => {
+      const { data } = await organization.list();
+      return (data ?? []) as OrganizationSummary[];
+    },
+    staleTime: 60_000,
+  });
+
+  const firstOrganizationId = organizationsQuery.data?.[0]?.id ?? null;
+  const shouldActivateOrganization =
+    Boolean(session?.user) &&
+    !organizationId &&
+    Boolean(firstOrganizationId);
+
+  const activateOrganizationMutation = useMutation({
+    mutationFn: async (nextOrganizationId: string) =>
+      organization.setActive({
+        organizationId: nextOrganizationId,
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["auth", "organizations"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["auth", "active-member"],
+        }),
+        refetch(),
+      ]);
+    },
+  });
+
+  useEffect(() => {
+    if (
+      !shouldActivateOrganization ||
+      !firstOrganizationId ||
+      !activateOrganizationMutation.isIdle
+    ) {
+      return;
+    }
+
+    void activateOrganizationMutation.mutateAsync(firstOrganizationId);
+  }, [
+    activateOrganizationMutation,
+    firstOrganizationId,
+    shouldActivateOrganization,
+  ]);
+
+  const activeMemberQuery = useQuery({
+    queryKey: ["auth", "active-member", session?.user?.id, organizationId],
+    enabled: Boolean(session?.user) && Boolean(organizationId),
+    queryFn: async () => {
+      const { data } = await organization.getActiveMember();
+      return normalizeRole(data?.role);
+    },
+    staleTime: 60_000,
+  });
+
   /**
    * Pobieramy rolę użytkownika przez organization.getActiveMember()
    * Better-Auth nie zwraca roli bezpośrednio w sesji, musimy ją pobrać osobno
    */
-  useEffect(() => {
-    async function fetchRole() {
-      if (!session?.user) {
-        setRole(null);
-        return;
-      }
+  const role = organizationId ? (activeMemberQuery.data ?? NO_ROLE) : NO_ROLE;
+  const combinedError =
+    error ||
+    asError(organizationsQuery.error) ||
+    asError(activateOrganizationMutation.error) ||
+    asError(activeMemberQuery.error);
+  const isLoading =
+    isPending ||
+    organizationsQuery.isLoading ||
+    activateOrganizationMutation.isPending ||
+    activeMemberQuery.isLoading;
 
-      // Jeśli użytkownik nie ma aktywnej organizacji, sprawdź czy ma jakieś organizacje
-      if (!organizationId) {
-        try {
-          const { data: organizations } = await organization.list();
-          if (organizations && organizations.length > 0) {
-            // Automatycznie ustaw pierwszą organizację jako aktywną
-            await organization.setActive({
-              organizationId: organizations[0].id,
-            });
-            // Refetch session aby pobrać nową activeOrganizationId
-            await refetch();
-            return;
-          }
-        } catch (error) {
-        }
-        setRole(null);
-        return;
-      }
-
-      setIsLoadingRole(true);
-      try {
-        const { data } = await organization.getActiveMember();
-        
-        if (data?.role) {
-          const normalizedRole = normalizeRole(data.role);
-          setRole(normalizedRole);
-        } else {
-          setRole(null);
-        }
-      } catch (err) {
-        setRole(null);
-      } finally {
-        setIsLoadingRole(false);
-      }
-    }
-
-    fetchRole();
-  }, [session?.user, organizationId]);
-
-  const value: AuthContextType = {
-    session: session || null,
-    user: session?.user || null,
-    isLoading: isPending || isLoadingRole,
-    isPending,
-    error: error || null,
-    role,
-    organizationId,
-    refetch,
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextType>(
+    () => ({
+      session: session || null,
+      user: session?.user || null,
+      isLoading,
+      isPending,
+      error: combinedError,
+      role,
+      organizationId,
+      refetch,
+    }),
+    [
+      combinedError,
+      isLoading,
+      isPending,
+      organizationId,
+      refetch,
+      role,
+      session,
+    ],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 /**
  * Normalizuje nazwy ról z różnych formatów
  */
-function normalizeRole(role: string | string[]): UserRole | null {
+function normalizeRole(
+  role: string | string[] | null | undefined,
+): UserRole | null {
   // Jeśli role to tablica, weź pierwszą (Better-Auth może zwracać multiple roles)
   const roleString = Array.isArray(role) ? role[0] : role;
-  
+
   if (!roleString) return null;
-  
+
   const lowerRole = roleString.toLowerCase();
-  
+
   if (lowerRole === "admin" || lowerRole === "administrator") return "admin";
   if (lowerRole === "analityk" || lowerRole === "analyst") return "analityk";
   if (lowerRole === "pracownik" || lowerRole === "employee") return "pracownik";
-  
+
   return null;
+}
+
+function asError(value: unknown): Error | null {
+  return value instanceof Error ? value : null;
 }

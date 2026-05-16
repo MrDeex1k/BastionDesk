@@ -1,25 +1,33 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import type { IncidentDetail, IncidentDetailResponse } from "@/ApiModel";
+import { apiFetch } from "@/lib/api";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { Textarea } from "./ui/textarea";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";import type { LucideIcon } from "lucide-react";import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import { 
-  ArrowLeft, 
-  Calendar, 
-  CheckCircle2, 
+import { IncidentFileCard } from "./incident-details/IncidentFileCard";
+import { UploadFileDialog } from "./incident-details/UploadFileDialog";
+import { useIncidentUpload } from "./incident-details/useIncidentUpload";
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
   Image as ImageIcon,
   User,
   ShieldAlert,
@@ -31,228 +39,213 @@ import {
   XCircle,
   Save,
   Paperclip,
-  CheckSquare
+  CheckSquare,
 } from "lucide-react";
 
 interface IncidentDetailsProps {
   incidentId: string;
   onBack: () => void;
-  mode?: 'employee' | 'analyst' | 'admin';
-}
-
-// Typowanie zgodne z odpowiedzią API (singular paths)
-interface IncidentDetail {
-  id: string;
-  dataZgloszenia: string;
-  userId: string;
-  organizationId: string;
-  status: string;
-  userDescription: string;
-  userScreenshotPath?: string | null;
-  userScreenshotMetadata?: {
-    originalName?: string;
-    filename?: string;
-    size?: number;
-    mimeType?: string;
-    uploadedAt?: string;
-  } | null;
-  userAttachmentPath?: string | null;
-  userAttachmentMetadata?: {
-    originalName?: string;
-    filename?: string;
-    size?: number;
-    mimeType?: string;
-    uploadedAt?: string;
-  } | null;
-  analystId: string | null;
-  analystNote: string | null;
-  czyRozwiazany: boolean;
-  dataRozwiazania?: string | null;
-  analystReportPath?: string;
-  analystReportMetadata?: {
-    path?: string;
-    bucket: string;
-    filename: string;
-    mimeType: string;
-    size: number;
-    originalName?: string;
-    uploadedAt?: string;
-  };
-  analystReportData?: string;
-  analystStatementPath?: string;
-  analystStatementMetadata?: {
-    bucket: string;
-    filename: string;
-    mimeType: string;
-    size: number;
-  };
-  analystStatementData?: string;
-  llmCategory?: string;
-  userName?: string;
-  analystName?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-interface IncidentDetailResponse {
-  success: boolean;
-  data: IncidentDetail;
+  mode?: "employee" | "analyst" | "admin";
 }
 
 const getStatusColor = (status: string) => {
   const lowerStatus = status.toLowerCase();
-  if (lowerStatus.includes("zgłoszony") || lowerStatus.includes("nowe") || lowerStatus.includes("raport w trakcie")) return "bg-blue-500/20 text-blue-400 border-blue-500/50";
-  if (lowerStatus.includes("trakcie") || lowerStatus.includes("analiza")) return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
-  if (lowerStatus.includes("rozwiązany") || lowerStatus.includes("zamknięte") || lowerStatus.includes("raport złożony") || lowerStatus.includes("sprawozdanie")) return "bg-green-500/20 text-green-400 border-green-500/50";
-  if (lowerStatus.includes("odrzucone")) return "bg-red-500/20 text-red-400 border-red-500/50";
-  return "bg-slate-500/20 text-slate-400 border-slate-500/50";
+  if (
+    lowerStatus.includes("zgłoszony") ||
+    lowerStatus.includes("nowe") ||
+    lowerStatus.includes("raport w trakcie")
+  )
+    return "bg-blue-500/20 text-blue-400 border-blue-500/50";
+  if (lowerStatus.includes("trakcie") || lowerStatus.includes("analiza"))
+    return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
+  if (
+    lowerStatus.includes("rozwiązany") ||
+    lowerStatus.includes("zamknięte") ||
+    lowerStatus.includes("raport złożony") ||
+    lowerStatus.includes("sprawozdanie")
+  )
+    return "bg-green-500/20 text-green-400 border-green-500/50";
+  if (lowerStatus.includes("odrzucone"))
+    return "bg-red-500/20 text-red-400 border-red-500/50";
+  return "border-zinc-500/50 bg-zinc-500/20 text-zinc-300";
 };
 
-type ActionType = 'status' | 'upload_report' | 'upload_statement';
+type ActionType = "status" | "upload_report" | "upload_statement";
 
-const getAvailableTransitions = (currentStatus: string): { label: string, value: string, variant?: string, icon: LucideIcon, actionType?: ActionType }[] => {
+const getAvailableTransitions = (
+  currentStatus: string,
+): {
+  label: string;
+  value: string;
+  variant?: string;
+  icon: LucideIcon;
+  actionType?: ActionType;
+}[] => {
   switch (currentStatus) {
     case "Zgłoszony":
       return [
-        { label: "Odrzuć", value: "Odrzucone", variant: "destructive", icon: XCircle, actionType: 'status' }
+        {
+          label: "Odrzuć",
+          value: "Odrzucone",
+          variant: "destructive",
+          icon: XCircle,
+          actionType: "status",
+        },
       ];
     case "Raport w trakcie":
       return [
-        { label: "Złóż raport", value: "Raport złożony", variant: "default", icon: ArrowRight, actionType: 'upload_report' }
+        {
+          label: "Złóż raport",
+          value: "Raport złożony",
+          variant: "default",
+          icon: ArrowRight,
+          actionType: "upload_report",
+        },
       ];
     case "Raport złożony":
       return [
-        { label: "Rozpocznij sprawozdanie", value: "Sprawozdanie w trakcie", variant: "default", icon: ArrowRight, actionType: 'status' }
+        {
+          label: "Rozpocznij sprawozdanie",
+          value: "Sprawozdanie w trakcie",
+          variant: "default",
+          icon: ArrowRight,
+          actionType: "status",
+        },
       ];
     case "Sprawozdanie w trakcie":
       return [
-        { label: "Zakończ zgłoszenie", value: "Sprawozdanie złożone", variant: "default", icon: CheckCircle2, actionType: 'upload_statement' }
+        {
+          label: "Zakończ zgłoszenie",
+          value: "Sprawozdanie złożone",
+          variant: "default",
+          icon: CheckCircle2,
+          actionType: "upload_statement",
+        },
       ];
     default:
       return [];
   }
 };
 
-export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: IncidentDetailsProps) {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const currentAnalystId = user?.id || null;
-  const [noteContent, setNoteContent] = useState("");
-  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
-  const [uploadType, setUploadType] = useState<'report' | 'statement' | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+type IncidentTransition = ReturnType<typeof getAvailableTransitions>[number];
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["incident", incidentId, mode],
-    queryFn: async () => {
-      // --- REAL SERVER IMPLEMENTATION ---
-      let endpoint = '';
-      if (mode === 'analyst') endpoint = `/api/analyst/incidents/${incidentId}`;
-      else if (mode === 'admin') endpoint = `/api/admin/incidents/${incidentId}`;
-      else endpoint = `/api/incidents/${incidentId}`; // employee
-      
-      const response = await fetch(endpoint, {
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error("Failed to fetch incident details");
-      return response.json() as Promise<IncidentDetailResponse>;
-    }
-  });
+interface UseIncidentDetailsActionsArgs {
+  incidentId: string;
+  mode: NonNullable<IncidentDetailsProps["mode"]>;
+  noteContent: string;
+  onBack: () => void;
+  queryClient: QueryClient;
+  setIsUploadDialogOpen: (open: boolean) => void;
+  setUploadType: (type: "report" | "statement" | null) => void;
+}
 
-  // Initialize note content from data
-  if (data?.data?.analystNote && noteContent === "") {
-    setNoteContent(data.data.analystNote);
-  }
-
+function useIncidentDetailsActions({
+  incidentId,
+  mode,
+  noteContent,
+  onBack,
+  queryClient,
+  setIsUploadDialogOpen,
+  setUploadType,
+}: UseIncidentDetailsActionsArgs) {
   const assignMutation = useMutation({
     mutationFn: async () => {
-      const endpoint = mode === 'admin' 
-        ? `/api/admin/incidents/${incidentId}/assign` 
-        : `/api/analyst/incidents/${incidentId}/assign`;
+      const endpoint =
+        mode === "admin"
+          ? `/api/admin/incidents/${incidentId}/assign`
+          : `/api/analyst/incidents/${incidentId}/assign`;
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const response = await apiFetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
       if (!response.ok) throw new Error("Failed to assign incident");
       return response.json();
     },
     onSuccess: () => {
       toast.success("Incydent został przypisany do Ciebie");
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId], exact: false });
+      queryClient.invalidateQueries({
+        queryKey: ["incident", incidentId],
+        exact: false,
+      });
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
       toast.error("Nie udało się przypisać incydentu");
-    }
+    },
   });
 
   const unassignMutation = useMutation({
     mutationFn: async () => {
-      const endpoint = mode === 'admin' 
-        ? `/api/admin/incidents/${incidentId}/unassign` 
-        : `/api/analyst/incidents/${incidentId}/unassign`;
+      const endpoint =
+        mode === "admin"
+          ? `/api/admin/incidents/${incidentId}/unassign`
+          : `/api/analyst/incidents/${incidentId}/unassign`;
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const response = await apiFetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
       if (!response.ok) throw new Error("Failed to unassign incident");
       return response.json();
     },
     onSuccess: () => {
       toast.success("Incydent został oddany do puli");
-      queryClient.setQueryData(["incident", incidentId], (old: IncidentDetailResponse | undefined) => ({
-        ...old,
-        data: {
-          ...old?.data,
-          analystId: null,
-          analystName: undefined,
-          status: "Zgłoszony"
-        } as IncidentDetail
-      }));
+      queryClient.setQueryData(
+        ["incident", incidentId],
+        (old: IncidentDetailResponse | undefined) => ({
+          ...old,
+          data: {
+            ...old?.data,
+            analystId: null,
+            analystName: undefined,
+            status: "Zgłoszony",
+          } as IncidentDetail,
+        }),
+      );
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
       onBack();
     },
     onError: () => {
       toast.error("Nie udało się oddać incydentu");
-    }
+    },
   });
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      const response = await fetch(`/api/analyst/incidents/${incidentId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-        credentials: 'include',
-      });
+      const response = await apiFetch(
+        `/api/analyst/incidents/${incidentId}/status`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        },
+      );
       if (!response.ok) throw new Error("Failed to update status");
       return response.json();
     },
     onSuccess: (_data: unknown, variables) => {
-      const newStatus = variables;
-      toast.success(`Status zmieniony na: ${newStatus}`);
+      toast.success(`Status zmieniony na: ${variables}`);
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
       toast.error("Nie udało się zmienić statusu");
-    }
+    },
   });
 
   const resolveMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch(`/api/analyst/incidents/${incidentId}/resolve`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-      
+      const response = await apiFetch(
+        `/api/analyst/incidents/${incidentId}/resolve`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
       if (!response.ok) throw new Error("Failed to resolve incident");
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -262,20 +255,22 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     },
     onError: () => {
       toast.error("Nie udało się oznaczyć incydentu jako rozwiązany");
-    }
+    },
   });
 
   const notesMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch(`/api/analyst/incidents/${incidentId}/notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: noteContent }),
-        credentials: 'include',
-      });
-      
+      const response = await apiFetch(
+        `/api/analyst/incidents/${incidentId}/notes`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: noteContent }),
+        },
+      );
+
       if (!response.ok) throw new Error("Failed to update notes");
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -284,137 +279,206 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     },
     onError: () => {
       toast.error("Nie udało się zapisać notatki");
-    }
+    },
   });
 
-  const downloadFile = async (type: 'reports' | 'statements' | 'screenshots' | 'attachments', filename: string) => {
-    try {
-      // Wybierz odpowiedni endpoint w zależności od trybu
-      let url = '';
-      if (mode === 'admin') {
-        url = `/api/admin/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
-      } else if (mode === 'analyst') {
-        url = `/api/analyst/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
-      } else {
-        // employee mode
-        url = `/api/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
-      }
-      
-      const response = await fetch(url, {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to download file: ${errorText}`);
-      }
-      
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(blobUrl);
-      document.body.removeChild(a);
-      toast.success('Plik został pobrany');
-    } catch (error) {
-      toast.error('Nie udało się pobrać pliku');
-    }
-  };
-
-  const uploadFileMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedFile || !uploadType) return;
-
-      // Funkcja konwersji pliku do base64
-      const fileToBase64 = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => {
-            const base64String = reader.result as string;
-            // Usuń prefix "data:*/*;base64,"
-            const base64Data = base64String.split(',')[1];
-            resolve(base64Data);
-          };
-          reader.onerror = (error) => reject(error);
-        });
-      };
-
-      const base64Data = await fileToBase64(selectedFile);
-      const bodyKey = uploadType === 'report' ? 'reportData' : 'statementData';
-      const apiEndpoint = uploadType === 'report' ? 'reports' : 'statements';
-      const requestBody = {
-        [bodyKey]: {
-          filename: selectedFile.name,
-          data: base64Data,
-          mimeType: selectedFile.type
+  const downloadFile = useCallback(
+    async (
+      type: "reports" | "statements" | "screenshots" | "attachments",
+      filename: string,
+    ) => {
+      try {
+        let url = "";
+        if (mode === "admin") {
+          url = `/api/admin/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
+        } else if (mode === "analyst") {
+          url = `/api/analyst/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
+        } else {
+          url = `/api/incidents/${incidentId}/files/${type}/${encodeURIComponent(filename)}`;
         }
-      };
-      
-      const response = await fetch(`/api/analyst/incidents/${incidentId}/${apiEndpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        credentials: 'include',
-      });
-      
-      if (!response.ok) throw new Error(`Failed to upload ${uploadType}`);
-      
-      return response.json();
-    },
-    onSuccess: (data) => {
-      toast.success(data?.message || (data?.data?.status === "Raport złożony" ? "Raport został przesłany" : "Sprawozdanie zostało przesłane"));
-      setIsUploadDialogOpen(false);
-      setSelectedFile(null);
-      setUploadType(null);
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
-    },
-    onError: () => {
-      toast.error("Wystąpił błąd podczas wysyłania pliku");
-    }
-  });
 
-  const handleTransitionClick = (transition: { label: string, value: string, variant?: string, icon: LucideIcon, actionType?: ActionType }) => {
-    if (transition.actionType === 'upload_report') {
-      setUploadType('report');
-      setIsUploadDialogOpen(true);
-    } else if (transition.actionType === 'upload_statement') {
-      setUploadType('statement');
-      setIsUploadDialogOpen(true);
-    } else {
-      statusMutation.mutate(transition.value);
-    }
+        const response = await apiFetch(url);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to download file: ${errorText}`);
+        }
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        window.URL.revokeObjectURL(blobUrl);
+        document.body.removeChild(anchor);
+        toast.success("Plik został pobrany");
+      } catch {
+        toast.error("Nie udało się pobrać pliku");
+      }
+    },
+    [incidentId, mode],
+  );
+
+  const handleTransitionClick = useCallback(
+    (transition: IncidentTransition) => {
+      if (transition.actionType === "upload_report") {
+        setUploadType("report");
+        setIsUploadDialogOpen(true);
+      } else if (transition.actionType === "upload_statement") {
+        setUploadType("statement");
+        setIsUploadDialogOpen(true);
+      } else {
+        statusMutation.mutate(transition.value);
+      }
+    },
+    [setIsUploadDialogOpen, setUploadType, statusMutation],
+  );
+
+  return {
+    assignMutation,
+    unassignMutation,
+    statusMutation,
+    resolveMutation,
+    notesMutation,
+    downloadFile,
+    handleTransitionClick,
   };
+}
+
+export function IncidentDetails({
+  incidentId,
+  onBack,
+  mode = "employee",
+}: IncidentDetailsProps) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const currentAnalystId = user?.id || null;
+  const [noteDraft, setNoteDraft] = useState<{
+    incidentId: string | null;
+    value: string;
+  }>({
+    incidentId: null,
+    value: "",
+  });
+  const {
+    isUploadDialogOpen,
+    selectedFile,
+    setIsUploadDialogOpen,
+    setSelectedFile,
+    setUploadType,
+    uploadFileMutation,
+    uploadType,
+  } = useIncidentUpload({ incidentId, queryClient });
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["incident", incidentId, mode],
+    queryFn: async () => {
+      // --- REAL SERVER IMPLEMENTATION ---
+      const endpoint =
+        mode === "analyst"
+          ? `/api/analyst/incidents/${incidentId}`
+          : mode === "admin"
+            ? `/api/admin/incidents/${incidentId}`
+            : `/api/incidents/${incidentId}`;
+
+      const response = await apiFetch(endpoint);
+      if (!response.ok) throw new Error("Failed to fetch incident details");
+      return response.json() as Promise<IncidentDetailResponse>;
+    },
+  });
+  const incident = data?.data;
+  const incidentAnalystNote = incident?.analystNote;
+  const incidentIdValue = incident?.id;
+  const incidentStatus = incident?.status;
+  const submittedAtLabel = useMemo(
+    () => formatLocalizedDateTime(incident?.dataZgloszenia),
+    [incident?.dataZgloszenia],
+  );
+  const createdAtLabel = useMemo(
+    () => formatLocalizedDateTime(incident?.createdAt),
+    [incident?.createdAt],
+  );
+  const noteContent = useMemo(
+    () =>
+      incidentIdValue && noteDraft.incidentId === incidentIdValue
+        ? noteDraft.value
+        : (incidentAnalystNote ?? ""),
+    [
+      incidentAnalystNote,
+      incidentIdValue,
+      noteDraft.incidentId,
+      noteDraft.value,
+    ],
+  );
+  const isAssignedToMe = incident?.analystId === currentAnalystId;
+  const nextTransitions = useMemo(
+    () => (incidentStatus ? getAvailableTransitions(incidentStatus) : []),
+    [incidentStatus],
+  );
+  const {
+    assignMutation,
+    unassignMutation,
+    statusMutation,
+    resolveMutation,
+    notesMutation,
+    downloadFile,
+    handleTransitionClick,
+  } = useIncidentDetailsActions({
+    incidentId,
+    mode,
+    noteContent,
+    onBack,
+    queryClient,
+    setIsUploadDialogOpen,
+    setUploadType,
+  });
+  const handleNoteChange = useCallback(
+    (value: string) => {
+      if (!incident?.id) {
+        return;
+      }
+
+      setNoteDraft({ incidentId: incident.id, value });
+    },
+    [incident],
+  );
+  const handleSaveNote = useCallback(() => {
+    notesMutation.mutate();
+  }, [notesMutation]);
 
   if (isLoading) {
     return (
-      <Card className="w-full h-full bg-slate-900/50 border-slate-800 shadow-xl">
+      <Card className="h-full w-full border-zinc-800 bg-zinc-900/50 shadow-xl">
         <CardHeader>
-           <Skeleton className="h-8 w-1/3 bg-slate-800" />
+          <Skeleton className="h-8 w-1/3 bg-zinc-800" />
         </CardHeader>
         <CardContent className="space-y-4">
-          <Skeleton className="h-32 w-full bg-slate-800" />
+          <Skeleton className="h-32 w-full bg-zinc-800" />
           <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-12 w-full bg-slate-800" />
-            <Skeleton className="h-12 w-full bg-slate-800" />
+            <Skeleton className="h-12 w-full bg-zinc-800" />
+            <Skeleton className="h-12 w-full bg-zinc-800" />
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  if (isError || !data?.data) {
+  if (isError || !incident) {
     return (
-      <Card className="w-full bg-slate-900/50 border-slate-800 shadow-xl p-8 text-center">
+      <Card className="w-full border-zinc-800 bg-zinc-900/50 p-8 text-center shadow-xl">
         <div className="flex flex-col items-center gap-4 text-red-400">
-          <ShieldAlert className="h-12 w-12" />
+          <ShieldAlert className="size-12" />
           <h3 className="text-xl font-semibold">Błąd pobierania danych</h3>
-          <p className="text-slate-400">Nie udało się załadować szczegółów incydentu.</p>
-          <Button onClick={onBack} variant="outline" className="mt-4 border-slate-700 text-slate-300">
+          <p className="text-zinc-400">
+            Nie udało się załadować szczegółów incydentu.
+          </p>
+          <Button
+            onClick={onBack}
+            variant="outline"
+            className="mt-4 border-zinc-700 text-zinc-300"
+          >
             Wróć do listy
           </Button>
         </div>
@@ -422,336 +486,462 @@ export function IncidentDetails({ incidentId, onBack, mode = 'employee' }: Incid
     );
   }
 
-  const incident = data.data;
-  const isAssignedToMe = incident.analystId === currentAnalystId;
-  const nextTransitions = getAvailableTransitions(incident.status);
-
   return (
     <>
-      <Card className="w-full bg-slate-900/50 border-slate-800 shadow-xl animate-in slide-in-from-right-4 duration-300">
-        <CardHeader className="border-b border-slate-800/50 pb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onBack}
-              className="text-slate-400 hover:text-white hover:bg-slate-800 -ml-2"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Powrót
-            </Button>
-          </div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-2xl text-slate-100 flex items-center gap-3">
-                Incydent #{incident.id.slice(0, 8)}
-                {incident.czyRozwiazany && (
-                  <Badge className="bg-green-500/20 text-green-400 border-green-500/50 ml-2">
-                    <CheckSquare className="h-3 w-3 mr-1" />
-                    Rozwiązany
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription className="text-slate-500 mt-1 flex items-center gap-2">
-                <Calendar className="h-3 w-3" />
-                {new Date(incident.dataZgloszenia).toLocaleString("pl-PL")}
-                {incident.userName && (
-                   <>
-                    <span className="mx-1">•</span>
-                    <User className="h-3 w-3" />
-                    {incident.userName}
-                   </>
-                )}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap justify-end">
-              <Badge className={`${getStatusColor(incident.status)} px-4 py-1.5 text-sm`}>
-                {incident.status}
-              </Badge>
-              
-              {/* Sekcja dla Admina */}
-              {mode === 'admin' && incident.analystId && (
-                 <Button 
-                   size="sm" 
-                   variant="outline"
-                   className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                   onClick={() => unassignMutation.mutate()}
-                   disabled={unassignMutation.isPending}
-                 >
-                   {unassignMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserMinus className="h-4 w-4 mr-2" />}
-                   Oddaj do puli
-                 </Button>
-              )}
-
-              {mode === 'analyst' && isAssignedToMe && (
-                <Button 
-                   size="sm" 
-                   className={`
-                     ${incident.czyRozwiazany 
-                       ? "bg-green-900/20 text-green-400 border-green-900/50 hover:bg-green-900/30" 
-                       : "bg-green-600 hover:bg-green-700 text-white"}
-                   `}
-                   variant={incident.czyRozwiazany ? "outline" : "default"}
-                   onClick={() => !incident.czyRozwiazany && resolveMutation.mutate()}
-                   disabled={resolveMutation.isPending || incident.czyRozwiazany}
-                >
-                   {resolveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckSquare className="h-4 w-4 mr-2" />}
-                   {incident.czyRozwiazany ? "Rozwiązano" : "Oznacz jako rozwiązane"}
-                </Button>
-              )}
-              
-              {mode === 'analyst' && (
-                <>
-                  {!incident.analystId && (
-                    <Button 
-                      size="sm" 
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                      onClick={() => assignMutation.mutate()}
-                      disabled={assignMutation.isPending}
-                    >
-                      {assignMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                      Przypisz do mnie
-                    </Button>
-                  )}
-
-                  {!incident.analystId && nextTransitions.map((transition) => (
-                    <Button
-                      key={transition.value}
-                      size="sm"
-                      variant={(transition.variant as "default" | "destructive" | "outline" | "secondary" | "ghost" | "link") || "outline"}
-                      className={transition.variant === 'destructive' ? "bg-red-900/20 text-red-400 border-red-900/50 hover:bg-red-900/40" : ""}
-                      onClick={() => handleTransitionClick(transition)}
-                      disabled={statusMutation.isPending}
-                    >
-                      {statusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <transition.icon className="h-4 w-4 mr-2" />}
-                      {transition.label}
-                    </Button>
-                  ))}
-                  
-                  {isAssignedToMe && (
-                    <>
-                      {nextTransitions.map((transition) => (
-                        <Button
-                          key={transition.value}
-                          size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                          onClick={() => handleTransitionClick(transition)}
-                          disabled={statusMutation.isPending}
-                        >
-                           {statusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <transition.icon className="h-4 w-4 mr-2" />}
-                          {transition.label}
-                        </Button>
-                      ))}
-
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                        onClick={() => unassignMutation.mutate()}
-                        disabled={unassignMutation.isPending}
-                      >
-                        {unassignMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserMinus className="h-4 w-4 mr-2" />}
-                        Oddaj do puli
-                      </Button>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </CardHeader>
+      <Card className="w-full border-zinc-800 bg-zinc-900/50 shadow-xl animate-in slide-in-from-right-4 duration-300">
+        <IncidentHeader
+          assignPending={assignMutation.isPending}
+          incident={incident}
+          isAssignedToMe={isAssignedToMe}
+          mode={mode}
+          nextTransitions={nextTransitions}
+          onAssign={() => assignMutation.mutate()}
+          onBack={onBack}
+          onResolve={() => resolveMutation.mutate()}
+          onTransition={handleTransitionClick}
+          onUnassign={() => unassignMutation.mutate()}
+          resolvePending={resolveMutation.isPending}
+          statusPending={statusMutation.isPending}
+          submittedAtLabel={submittedAtLabel}
+          unassignPending={unassignMutation.isPending}
+        />
 
         <CardContent className="pt-6 space-y-8">
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Opis zgłoszenia</h3>
-            <div className="p-4 rounded-lg bg-slate-950/50 border border-slate-800 text-slate-200 leading-relaxed">
+            <h3 className="text-sm font-medium uppercase tracking-wider text-zinc-400">
+              Opis zgłoszenia
+            </h3>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 leading-relaxed text-zinc-100">
               {incident.userDescription}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className={`p-4 rounded-lg border flex items-center gap-3 ${incident.userScreenshotPath ? 'bg-blue-500/5 border-blue-500/20' : 'bg-slate-950/30 border-slate-800'}`}>
-              <div className={`p-2 rounded-full ${incident.userScreenshotPath ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-600'}`}>
-                <ImageIcon className="h-5 w-5" />
-              </div>
-              <div className="overflow-hidden flex-1">
-                <p className="text-sm font-medium text-slate-300">Zrzut ekranu</p>
-                <p className={`text-xs truncate ${incident.userScreenshotPath ? 'text-green-400' : 'text-slate-500'}`}>
-                  {incident.userScreenshotPath ? (incident.userScreenshotMetadata?.originalName || incident.userScreenshotMetadata?.filename || "Dostępny plik") : "Brak pliku"}
-                </p>
-              </div>
-              {incident.userScreenshotPath && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  className="border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 shrink-0"
-                  onClick={() => {
-                    const filename = incident.userScreenshotMetadata?.originalName || incident.userScreenshotMetadata?.filename || 'screenshot';
-                    downloadFile('screenshots', filename);
-                  }}
-                >
-                  <FileDown className="h-4 w-4 mr-1" />
-                  Pobierz
-                </Button>
-              )}
-              {incident.userScreenshotPath && !isAssignedToMe && mode !== 'admin' && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
-            </div>
-
-            <div className={`p-4 rounded-lg border flex items-center gap-3 ${incident.userAttachmentPath ? 'bg-blue-500/5 border-blue-500/20' : 'bg-slate-950/30 border-slate-800'}`}>
-              <div className={`p-2 rounded-full ${incident.userAttachmentPath ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-600'}`}>
-                <Paperclip className="h-5 w-5" />
-              </div>
-              <div className="overflow-hidden flex-1">
-                <p className="text-sm font-medium text-slate-300">Załącznik</p>
-                <p className={`text-xs truncate ${incident.userAttachmentPath ? 'text-green-400' : 'text-slate-500'}`}>
-                  {incident.userAttachmentPath ? (incident.userAttachmentMetadata?.originalName || incident.userAttachmentMetadata?.filename || "Dostępny plik") : "Brak pliku"}
-                </p>
-              </div>
-              {incident.userAttachmentPath && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  className="border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 shrink-0"
-                  onClick={() => {
-                    const filename = incident.userAttachmentMetadata?.originalName || incident.userAttachmentMetadata?.filename || 'attachment';
-                    downloadFile('attachments', filename);
-                  }}
-                >
-                  <FileDown className="h-4 w-4 mr-1" />
-                  Pobierz
-                </Button>
-              )}
-              {incident.userAttachmentPath && !isAssignedToMe && mode !== 'admin' && <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto shrink-0" />}
-            </div>
+            <IncidentFileCard
+              title="Zrzut ekranu"
+              path={incident.userScreenshotPath}
+              metadata={incident.userScreenshotMetadata}
+              fallbackFilename="screenshot"
+              icon={ImageIcon}
+              isAssignedToMe={isAssignedToMe}
+              mode={mode}
+              onDownload={(filename) => downloadFile("screenshots", filename)}
+            />
+            <IncidentFileCard
+              title="Załącznik"
+              path={incident.userAttachmentPath}
+              metadata={incident.userAttachmentMetadata}
+              fallbackFilename="attachment"
+              icon={Paperclip}
+              isAssignedToMe={isAssignedToMe}
+              mode={mode}
+              onDownload={(filename) => downloadFile("attachments", filename)}
+            />
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-slate-800/50">
-             <h3 className="text-sm font-medium text-blue-400 uppercase tracking-wider flex items-center gap-2">
-                <User className="h-4 w-4" /> Obsługa incydentu
-             </h3>
-             
-             {incident.analystName && (
-               <div className="text-sm text-slate-400 mb-2">
-                 Analityk prowadzący: <span className="text-slate-200 font-medium">{incident.analystName}</span>
-               </div>
-             )}
+          <IncidentServiceSection
+            incident={incident}
+            isAssignedToMe={isAssignedToMe}
+            mode={mode}
+            noteContent={noteContent}
+            notesPending={notesMutation.isPending}
+            onDownload={downloadFile}
+            onNoteChange={handleNoteChange}
+            onSaveNote={handleSaveNote}
+          />
 
-             {isAssignedToMe && mode === 'analyst' ? (
-               <div className="space-y-3">
-                 <Textarea 
-                   placeholder="Wprowadź notatki analityka..." 
-                   value={noteContent}
-                   onChange={(e) => setNoteContent(e.target.value)}
-                   className="bg-blue-950/20 border-blue-900/30 text-slate-300 min-h-[120px] focus:ring-blue-500/50"
-                 />
-                 <Button 
-                   size="sm" 
-                   onClick={() => notesMutation.mutate()} 
-                   disabled={notesMutation.isPending || noteContent === incident.analystNote}
-                   className="bg-blue-600 hover:bg-blue-700 text-white"
-                 >
-                   {notesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                   Zapisz notatkę
-                 </Button>
-               </div>
-             ) : incident.analystNote ? (
-               <div className="p-4 rounded-lg bg-blue-950/20 border border-blue-900/30 text-slate-300 italic whitespace-pre-wrap">
-                 {incident.analystNote}
-               </div>
-             ) : null}
-
-             {incident.analystReportPath && (
-               <div className="flex items-center gap-3 p-3 rounded-md bg-green-500/10 border border-green-500/20 mt-4">
-                 <div className="p-2 rounded-full bg-green-500/20 text-green-400">
-                   <FileDown className="h-4 w-4" />
-                 </div>
-                 <div className="flex-1">
-                   <p className="text-sm font-medium text-green-400">Dostępny raport końcowy</p>
-                   <p className="text-xs text-slate-500">{incident.analystReportMetadata?.filename || 'Raport'}</p>
-                 </div>
-                 <Button 
-                   size="sm" 
-                   variant="outline" 
-                   className="border-green-500/30 text-green-400 hover:bg-green-500/20 hover:text-green-300"
-                   onClick={() => downloadFile('reports', incident.analystReportMetadata?.filename || 'report')}
-                 >
-                   Pobierz
-                 </Button>
-               </div>
-             )}
-
-             {incident.analystStatementPath && (
-               <div className="flex items-center gap-3 p-3 rounded-md bg-purple-500/10 border border-purple-500/20 mt-2">
-                 <div className="p-2 rounded-full bg-purple-500/20 text-purple-400">
-                   <FileDown className="h-4 w-4" />
-                 </div>
-                 <div className="flex-1">
-                   <p className="text-sm font-medium text-purple-400">Dostępne sprawozdanie końcowe</p>
-                   <p className="text-xs text-slate-500">{incident.analystStatementMetadata?.filename || 'Sprawozdanie'}</p>
-                 </div>
-                 <Button 
-                   size="sm" 
-                   variant="outline" 
-                   className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300"
-                   onClick={() => downloadFile('statements', incident.analystStatementMetadata?.filename || 'statement')}
-                 >
-                   Pobierz
-                 </Button>
-               </div>
-             )}
-          </div>
-
-          {incident.createdAt && (
-            <div className="text-xs text-slate-600 font-mono pt-4 text-right">
-              Utworzono: {new Date(incident.createdAt).toLocaleString("pl-PL")}
+          {createdAtLabel && (
+            <div className="pt-4 text-right font-mono text-xs text-zinc-500">
+              Utworzono: {createdAtLabel}
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200">
-          <DialogHeader>
-            <DialogTitle>
-              {uploadType === 'report' ? 'Prześlij raport analityka' : 'Prześlij sprawozdanie końcowe'}
-            </DialogTitle>
-            <DialogDescription className="text-slate-400">
-              {uploadType === 'report' 
-                ? 'Wybierz plik raportu PDF, aby zakończyć etap analizy.' 
-                : 'Wybierz plik sprawozdania (DOCX/PDF), aby zakończyć zgłoszenie.'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid w-full max-w-sm items-center gap-1.5 py-4">
-            <Label htmlFor="file-upload">Plik</Label>
-            <Input 
-              id="file-upload" 
-              type="file" 
-              className="bg-slate-950 border-slate-800 text-slate-300 file:text-slate-200 file:bg-slate-800 file:border-0 file:mr-4 file:py-2 file:px-4 file:rounded-md hover:file:bg-slate-700 cursor-pointer" 
-              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-            />
-            {selectedFile && (
-              <p className="text-xs text-slate-500 mt-2">
-                Wybrano: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
-              </p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800">
-              Anuluj
-            </Button>
-            <Button 
-              onClick={() => uploadFileMutation.mutate()} 
-              disabled={!selectedFile || uploadFileMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {uploadFileMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {uploadType === 'report' ? 'Wyślij raport' : 'Wyślij sprawozdanie'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UploadFileDialog
+        open={isUploadDialogOpen}
+        uploadType={uploadType}
+        selectedFile={selectedFile}
+        isUploading={uploadFileMutation.isPending}
+        onOpenChange={setIsUploadDialogOpen}
+        onFileChange={setSelectedFile}
+        onUpload={() => uploadFileMutation.mutate()}
+      />
     </>
+  );
+}
+
+interface IncidentHeaderProps {
+  assignPending: boolean;
+  incident: IncidentDetail;
+  isAssignedToMe: boolean;
+  mode: NonNullable<IncidentDetailsProps["mode"]>;
+  nextTransitions: IncidentTransition[];
+  onAssign: () => void;
+  onBack: () => void;
+  onResolve: () => void;
+  onTransition: (transition: IncidentTransition) => void;
+  onUnassign: () => void;
+  resolvePending: boolean;
+  statusPending: boolean;
+  submittedAtLabel: string;
+  unassignPending: boolean;
+}
+
+function IncidentHeader({
+  assignPending,
+  incident,
+  isAssignedToMe,
+  mode,
+  nextTransitions,
+  onAssign,
+  onBack,
+  onResolve,
+  onTransition,
+  onUnassign,
+  resolvePending,
+  statusPending,
+  submittedAtLabel,
+  unassignPending,
+}: IncidentHeaderProps) {
+  return (
+    <CardHeader className="border-b border-zinc-800/50 pb-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          className="-ml-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+        >
+          <ArrowLeft className="mr-1 size-4" />
+          Powrót
+        </Button>
+      </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <CardTitle className="flex items-center gap-3 text-2xl text-zinc-100">
+            Incydent #{incident.id.slice(0, 8)}
+            {incident.czyRozwiazany && (
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/50 ml-2">
+                <CheckSquare className="mr-1 size-3" />
+                Rozwiązany
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription className="mt-1 flex items-center gap-2 text-zinc-500">
+            <Calendar className="size-3" />
+            {submittedAtLabel}
+            {incident.userName && (
+              <>
+                <span className="mx-1">•</span>
+                <User className="size-3" />
+                {incident.userName}
+              </>
+            )}
+          </CardDescription>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <Badge className={`${getStatusColor(incident.status)} px-4 py-1.5 text-sm`}>
+            {incident.status}
+          </Badge>
+
+          {mode === "admin" && incident.analystId && (
+            <UnassignButton
+              isPending={unassignPending}
+              onClick={onUnassign}
+            />
+          )}
+
+          {mode === "analyst" && isAssignedToMe && (
+            <Button
+              size="sm"
+              className={
+                incident.czyRozwiazany
+                  ? "border-green-900/50 bg-green-900/20 text-green-400 hover:bg-green-900/30"
+                  : "bg-green-600 hover:bg-green-700 text-white"
+              }
+              variant={incident.czyRozwiazany ? "outline" : "default"}
+              onClick={() => !incident.czyRozwiazany && onResolve()}
+              disabled={resolvePending || incident.czyRozwiazany}
+            >
+              {resolvePending ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <CheckSquare className="mr-2 size-4" />
+              )}
+              {incident.czyRozwiazany ? "Rozwiązano" : "Oznacz jako rozwiązane"}
+            </Button>
+          )}
+
+          {mode === "analyst" && (
+            <>
+              {!incident.analystId && (
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={onAssign}
+                  disabled={assignPending}
+                >
+                  {assignPending ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="mr-2 size-4" />
+                  )}
+                  Przypisz do mnie
+                </Button>
+              )}
+
+              {(!incident.analystId || isAssignedToMe) &&
+                nextTransitions.map((transition) => (
+                  <TransitionButton
+                    key={transition.value}
+                    isAssignedToMe={isAssignedToMe}
+                    isPending={statusPending}
+                    onClick={() => onTransition(transition)}
+                    transition={transition}
+                  />
+                ))}
+
+              {isAssignedToMe && (
+                <UnassignButton
+                  isPending={unassignPending}
+                  onClick={onUnassign}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </CardHeader>
+  );
+}
+
+function formatLocalizedDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  return new Date(value).toLocaleString("pl-PL");
+}
+
+function UnassignButton({
+  isPending,
+  onClick,
+}: {
+  isPending: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+      onClick={onClick}
+      disabled={isPending}
+    >
+      {isPending ? (
+        <Loader2 className="mr-2 size-4 animate-spin" />
+      ) : (
+        <UserMinus className="mr-2 size-4" />
+      )}
+      Oddaj do puli
+    </Button>
+  );
+}
+
+function TransitionButton({
+  isAssignedToMe,
+  isPending,
+  onClick,
+  transition,
+}: {
+  isAssignedToMe: boolean;
+  isPending: boolean;
+  onClick: () => void;
+  transition: IncidentTransition;
+}) {
+  const variant = isAssignedToMe
+    ? "default"
+    : ((transition.variant as
+        | "default"
+        | "destructive"
+        | "outline"
+        | "secondary"
+        | "ghost"
+        | "link") ?? "outline");
+
+  return (
+    <Button
+      size="sm"
+      variant={variant}
+      className={
+        isAssignedToMe
+          ? "bg-blue-600 hover:bg-blue-700 text-white"
+          : transition.variant === "destructive"
+            ? "bg-red-900/20 text-red-400 border-red-900/50 hover:bg-red-900/40"
+            : ""
+      }
+      onClick={onClick}
+      disabled={isPending}
+    >
+      {isPending ? (
+        <Loader2 className="mr-2 size-4 animate-spin" />
+      ) : (
+        <transition.icon className="mr-2 size-4" />
+      )}
+      {transition.label}
+    </Button>
+  );
+}
+
+interface IncidentServiceSectionProps {
+  incident: IncidentDetail;
+  isAssignedToMe: boolean;
+  mode: NonNullable<IncidentDetailsProps["mode"]>;
+  noteContent: string;
+  notesPending: boolean;
+  onDownload: (
+    type: "reports" | "statements" | "screenshots" | "attachments",
+    filename: string,
+  ) => void;
+  onNoteChange: (value: string) => void;
+  onSaveNote: () => void;
+}
+
+function IncidentServiceSection({
+  incident,
+  isAssignedToMe,
+  mode,
+  noteContent,
+  notesPending,
+  onDownload,
+  onNoteChange,
+  onSaveNote,
+}: IncidentServiceSectionProps) {
+  return (
+    <div className="space-y-4 border-t border-zinc-800/50 pt-4">
+      <h3 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-blue-400">
+        <User className="size-4" /> Obsługa incydentu
+      </h3>
+
+      {incident.analystName && (
+        <div className="mb-2 text-sm text-zinc-400">
+          Analityk prowadzący:{" "}
+          <span className="font-medium text-zinc-100">
+            {incident.analystName}
+          </span>
+        </div>
+      )}
+
+      {isAssignedToMe && mode === "analyst" ? (
+        <div className="space-y-3">
+          <Textarea
+            placeholder="Wprowadź notatki analityka..."
+            value={noteContent}
+            onChange={(event) => onNoteChange(event.target.value)}
+            className="min-h-[120px] border-blue-900/30 bg-blue-950/20 text-white focus:ring-blue-500/50"
+          />
+          <Button
+            size="sm"
+            onClick={onSaveNote}
+            disabled={notesPending || noteContent === incident.analystNote}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {notesPending ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 size-4" />
+            )}
+            Zapisz notatkę
+          </Button>
+        </div>
+      ) : incident.analystNote ? (
+        <div className="rounded-lg border border-blue-900/30 bg-blue-950/20 p-4 text-white italic whitespace-pre-wrap">
+          {incident.analystNote}
+        </div>
+      ) : null}
+
+      <AnalystFileDownload
+        color="green"
+        isVisible={Boolean(incident.analystReportPath)}
+        label="Dostępny raport końcowy"
+        filename={incident.analystReportMetadata?.filename || "Raport"}
+        onDownload={() =>
+          onDownload(
+            "reports",
+            incident.analystReportMetadata?.filename || "report",
+          )
+        }
+      />
+      <AnalystFileDownload
+        color="purple"
+        isVisible={Boolean(incident.analystStatementPath)}
+        label="Dostępne sprawozdanie końcowe"
+        filename={incident.analystStatementMetadata?.filename || "Sprawozdanie"}
+        onDownload={() =>
+          onDownload(
+            "statements",
+            incident.analystStatementMetadata?.filename || "statement",
+          )
+        }
+      />
+    </div>
+  );
+}
+
+function AnalystFileDownload({
+  color,
+  filename,
+  isVisible,
+  label,
+  onDownload,
+}: {
+  color: "green" | "purple";
+  filename: string;
+  isVisible: boolean;
+  label: string;
+  onDownload: () => void;
+}) {
+  if (!isVisible) {
+    return null;
+  }
+
+  const classes =
+    color === "green"
+      ? {
+          border: "border-green-500/20",
+          button: "border-green-500/30 text-green-400 hover:bg-green-500/20 hover:text-green-300",
+          icon: "bg-green-500/20 text-green-400",
+          label: "text-green-400",
+          wrapper: "bg-green-500/10",
+        }
+      : {
+          border: "border-purple-500/20",
+          button: "border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
+          icon: "bg-purple-500/20 text-purple-400",
+          label: "text-purple-400",
+          wrapper: "bg-purple-500/10",
+        };
+
+  return (
+    <div
+      className={`flex items-center gap-3 p-3 rounded-md border mt-4 ${classes.wrapper} ${classes.border}`}
+    >
+      <div className={`p-2 rounded-full ${classes.icon}`}>
+        <FileDown className="size-4" />
+      </div>
+      <div className="flex-1">
+        <p className={`text-sm font-medium ${classes.label}`}>{label}</p>
+        <p className="text-xs text-zinc-500">{filename}</p>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className={classes.button}
+        onClick={onDownload}
+      >
+        Pobierz
+      </Button>
+    </div>
   );
 }

@@ -33,6 +33,29 @@ class EmailSender {
 	private readonly MAX_CONNECTION_ATTEMPTS = 3;
 	private readonly CONNECTION_TIMEOUT = 10000; // 10 sekund
 
+	private withTimeout<T>(promise: Promise<T>, operation: string): Promise<T> {
+		return new Promise<T>((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				reject(
+					new Error(
+						`Przekroczono limit czasu podczas operacji SMTP: ${operation}`,
+					),
+				);
+			}, this.CONNECTION_TIMEOUT);
+
+			void promise.then(
+				(value) => {
+					clearTimeout(timeoutId);
+					resolve(value);
+				},
+				(error) => {
+					clearTimeout(timeoutId);
+					reject(error);
+				},
+			);
+		});
+	}
+
 	/**
 	 * Tworzy transporter NodeMailer (lazy initialization)
 	 */
@@ -53,6 +76,8 @@ class EmailSender {
 			},
 			connectionTimeout: this.CONNECTION_TIMEOUT,
 			greetingTimeout: this.CONNECTION_TIMEOUT,
+			socketTimeout: this.CONNECTION_TIMEOUT,
+			dnsTimeout: this.CONNECTION_TIMEOUT,
 		} as SMTPTransport.Options);
 
 		return this.transporter;
@@ -74,7 +99,7 @@ class EmailSender {
 			console.log(
 				`Weryfikacja połączenia SMTP (próba ${this.connectionAttempts}/${this.MAX_CONNECTION_ATTEMPTS})...`,
 			);
-			await transporter.verify();
+			await this.withTimeout(transporter.verify(), "verify");
 			this.isVerified = true;
 			console.log("Połączenie SMTP zweryfikowane pomyślnie");
 			return true;

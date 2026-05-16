@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import { organizationClient } from "better-auth/client/plugins";
 import { passkeyClient } from "@better-auth/passkey/client";
+import { apiBaseUrl } from "./api";
 
 /**
  * Better Auth Client Configuration
@@ -12,7 +13,7 @@ import { passkeyClient } from "@better-auth/passkey/client";
  * - PassKeys (WebAuthn)
  */
 export const authClient = createAuthClient({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3333",
+  baseURL: apiBaseUrl || window.location.origin,
   
   plugins: [
     organizationClient(),
@@ -48,5 +49,4 @@ export const {
   signOut,
   useSession,
   organization,
-  passkey,
 } = authClient;

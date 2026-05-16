@@ -7,7 +7,7 @@ export function CreateOrganizationPage() {
   return (
     <CreateOrganizationForm
       onBack={() => navigate("/")}
-      onRegisterSuccess={() => navigate("/waiting-for-organization")}
+      onRegisterSuccess={() => navigate("/admin-dashboard")}
     />
   );
 }

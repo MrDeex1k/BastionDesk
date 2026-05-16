@@ -59,7 +59,7 @@ export async function parseMultipartFormData(
 ): Promise<ParsedFormData> {
 	const contentType = req.headers["content-type"];
 
-	if (!contentType || !contentType.includes("multipart/form-data")) {
+	if (!contentType?.includes("multipart/form-data")) {
 		throw new AppError(
 			400,
 			"INVALID_CONTENT_TYPE",
@@ -73,10 +73,10 @@ export async function parseMultipartFormData(
 		const webRequest = new Request(`http://localhost${req.url}`, {
 			method: req.method,
 			headers: req.headers as Record<string, string>,
-		// biome-ignore lint/suspicious/noExplicitAny: Express req jest ReadableStream-compatible
-		body: req as any,
-		// biome-ignore lint/suspicious/noExplicitAny: Bun rozszerza Request API
-		duplex: "half" as any,
+			// biome-ignore lint/suspicious/noExplicitAny: Express req jest ReadableStream-compatible
+			body: req as any,
+			// biome-ignore lint/suspicious/noExplicitAny: Bun rozszerza Request API
+			duplex: "half" as any,
 		});
 
 		// Użyj natywnego parsowania FormData

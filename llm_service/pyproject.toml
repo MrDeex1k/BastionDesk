@@ -1,13 +1,18 @@
 [project]
 name = "llm-service"
-version = "0.9.0"
+version = "1.0.0"
 description = "Serwer LLM, do analizy incydentów"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
-    "fastapi>=0.121.2",
-    "huggingface-hub>=0.36.0",
-    "torch>=2.9.1",
-    "transformers>=4.57.1",
-    "uvicorn>=0.38.0",
+    "fastapi>=0.136.0",
+    "grpcio>=1.79.0",
+    "grpcio-tools>=1.79.0",
+    "huggingface-hub>=1.13.0",
+    "torch>=2.11.0",
+    "transformers>=5.8.0",
+    "uvicorn>=0.45.0",
 ]
+
+[tool.uv]
+exclude-newer = "60 hours"

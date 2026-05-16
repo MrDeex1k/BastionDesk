@@ -11,10 +11,23 @@ services:
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
     ports:
       - "${POSTGRES_PORT}:${POSTGRES_PORT}"
-    command: ["postgres", "-c", "port=${POSTGRES_PORT}"]
+    command:
+      [
+        "postgres",
+        "-c",
+        "config_file=/etc/postgresql/postgresql.conf",
+        "-c",
+        "hba_file=/etc/postgresql/pg_hba.conf",
+        "-c",
+        "port=${POSTGRES_PORT}"
+      ]
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./database/init-sql:/docker-entrypoint-initdb.d
+      - ./database/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./database/config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/database:/certs/database:ro
     networks:
       - bastiondesk-net-internal
     healthcheck:
@@ -25,41 +38,100 @@ services:
 
   llm_service:
     build:
-      context: ./llm_service
+      context: .
+      dockerfile: llm_service/Dockerfile
+    restart: unless-stopped
     env_file:
       - .env
     volumes:
-      - huggingface-cache:/root/.cache/huggingface
+      - huggingface-cache:/home/app/.cache/huggingface
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/llm_service:/certs/llm_service:ro
     networks:
       - bastiondesk-net-internal
       - bastiondesk-net-external
     deploy:
       resources:
         limits:
-          memory: 12GB
+          memory: 10GB
 
-  backend:
+  pgbouncer:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: ./pgbouncer
+    restart: unless-stopped
     env_file:
       - .env
     depends_on:
       database:
         condition: service_healthy
+    volumes:
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/pgbouncer:/certs/pgbouncer:ro
+    ports:
+      - "${PGBOUNCER_PORT}:${PGBOUNCER_PORT}"
+    networks:
+      - bastiondesk-net-internal
+
+  postgres-backup:
+    build:
+      context: .
+      dockerfile: postgres_backup/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=database
+      - DB_TLS_CERT_PATH=/certs/db-client/client.crt
+      - DB_TLS_KEY_PATH=/certs/db-client/client.key
+      - BACKUP_CRON=0 3 * * *
+      - BACKUP_RUN_ON_START=true
+      - BACKUP_RETENTION_DAYS=30
+      - BACKUP_S3_PREFIX=postgres/daily
+      - BACKUP_MAX_AGE_SECONDS=129600
+      - BACKUP_STATE_DIR=/state
+    depends_on:
+      database:
+        condition: service_healthy
+      storage-1:
+        condition: service_healthy
+    volumes:
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/pgbouncer:/certs/db-client:ro
+      - postgres-backup-state:/state
+    networks:
+      - bastiondesk-net-internal
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_EXTRA_CA_CERTS=/certs/ca/ca.crt
+      - SSL_CERT_FILE=/certs/ca/ca.crt
+    depends_on:
+      llm_service:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
       storage-1:
         condition: service_healthy
       storage-3:
         condition: service_healthy
-    command: ["bun", "run", "start"]
     ports:
       - "3333:3333"
+    volumes:
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/backend:/certs/backend:ro
     networks:
       - bastiondesk-net-internal
 
   frontend:
     build:
       context: ./frontend
+    restart: unless-stopped
     depends_on:
       - backend
     networks:
@@ -68,12 +140,17 @@ services:
   nginx:
     build:
       context: ./nginx
+    restart: unless-stopped
     container_name: bastiondesk-nginx
     ports:
-      - "4567:4567"
+      - "4567:8080"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      llm_service:
+        condition: service_healthy
     networks:
       - bastiondesk-net-internal
       - bastiondesk-net-external
@@ -82,6 +159,7 @@ services:
     build:
       context: ./storage
     container_name: bastiondesk-storage-1
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -91,31 +169,35 @@ services:
       - -c
       - |
         mkdir -p /data/backups/postgres
-        #Docker
-        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
+        mkdir -p /root/.mc/certs/CAs
+        cp -f /root/.minio/certs/CAs/* /root/.mc/certs/CAs/ 2>/dev/null || true
+        export MC_CERTS_DIR=/root/.mc/certs
+        export SSL_CERT_FILE=/root/.mc/certs/CAs/ca.crt
+        minio server --address :9000 --console-address :9001 https://storage-1:9000/data https://storage-2:9000/data https://storage-3:9000/data https://storage-4:9000/data &
         #Podman
         #minio server --address :9000 --console-address :9001 /data &
-        pid=$!
+        pid=$$!
         for i in $(seq 1 20); do
-          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          wget --spider --quiet --no-check-certificate https://localhost:9000/minio/health/ready && break
           sleep 2
         done
         if [ "$${BOOTSTRAP_NODE}" = "true" ]; then
-          mc alias set minio http://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+          mc alias set minio https://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
           mc mb --ignore-existing minio/"$${S3_BUCKET}"
-          sleep 5  # Czekaj na synchronizację bucketa w distributed MinIO
           mc version enable minio/"$${S3_BUCKET}" || true
+          sleep 5  # Czekaj na synchronizację bucketa w distributed MinIO
         fi
-        wait $pid
+        wait $$pid
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
       - minio-data-1:/data
+      - ./infra/tls/dev/storage-1:/root/.minio/certs:ro
     networks:
       - bastiondesk-net-internal
     healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "wget", "--spider", "--quiet", "--no-check-certificate", "https://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -125,6 +207,7 @@ services:
     build:
       context: ./storage
     container_name: bastiondesk-storage-2
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -134,19 +217,24 @@ services:
       - -c
       - |
         mkdir -p /data/backups/postgres
-        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
-        pid=$!
+        mkdir -p /root/.mc/certs/CAs
+        cp -f /root/.minio/certs/CAs/* /root/.mc/certs/CAs/ 2>/dev/null || true
+        export MC_CERTS_DIR=/root/.mc/certs
+        export SSL_CERT_FILE=/root/.mc/certs/CAs/ca.crt
+        minio server --address :9000 --console-address :9001 https://storage-1:9000/data https://storage-2:9000/data https://storage-3:9000/data https://storage-4:9000/data &
+        pid=$$!
         for i in $(seq 1 20); do
-          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          wget --spider --quiet --no-check-certificate https://localhost:9000/minio/health/ready && break
           sleep 2
         done
-        wait $pid
+        wait $$pid
     volumes:
       - minio-data-2:/data
+      - ./infra/tls/dev/storage-2:/root/.minio/certs:ro
     networks:
       - bastiondesk-net-internal
     healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "wget", "--spider", "--quiet", "--no-check-certificate", "https://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -156,6 +244,7 @@ services:
     build:
       context: ./storage
     container_name: bastiondesk-storage-3
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -165,19 +254,24 @@ services:
       - -c
       - |
         mkdir -p /data/backups/postgres
-        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
-        pid=$!
+        mkdir -p /root/.mc/certs/CAs
+        cp -f /root/.minio/certs/CAs/* /root/.mc/certs/CAs/ 2>/dev/null || true
+        export MC_CERTS_DIR=/root/.mc/certs
+        export SSL_CERT_FILE=/root/.mc/certs/CAs/ca.crt
+        minio server --address :9000 --console-address :9001 https://storage-1:9000/data https://storage-2:9000/data https://storage-3:9000/data https://storage-4:9000/data &
+        pid=$$!
         for i in $(seq 1 20); do
-          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          wget --spider --quiet --no-check-certificate https://localhost:9000/minio/health/ready && break
           sleep 2
         done
-        wait $pid
+        wait $$pid
     volumes:
       - minio-data-3:/data
+      - ./infra/tls/dev/storage-3:/root/.minio/certs:ro
     networks:
       - bastiondesk-net-internal
     healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "wget", "--spider", "--quiet", "--no-check-certificate", "https://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -187,6 +281,7 @@ services:
     build:
       context: ./storage
     container_name: bastiondesk-storage-4
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -196,19 +291,24 @@ services:
       - -c
       - |
         mkdir -p /data/backups/postgres
-        minio server --address :9000 --console-address :9001 http://storage-1:9000/data http://storage-2:9000/data http://storage-3:9000/data http://storage-4:9000/data &
-        pid=$!
+        mkdir -p /root/.mc/certs/CAs
+        cp -f /root/.minio/certs/CAs/* /root/.mc/certs/CAs/ 2>/dev/null || true
+        export MC_CERTS_DIR=/root/.mc/certs
+        export SSL_CERT_FILE=/root/.mc/certs/CAs/ca.crt
+        minio server --address :9000 --console-address :9001 https://storage-1:9000/data https://storage-2:9000/data https://storage-3:9000/data https://storage-4:9000/data &
+        pid=$$!
         for i in $(seq 1 20); do
-          wget --spider --quiet http://localhost:9000/minio/health/ready && break
+          wget --spider --quiet --no-check-certificate https://localhost:9000/minio/health/ready && break
           sleep 2
         done
-        wait $pid
+        wait $$pid
     volumes:
       - minio-data-4:/data
+      - ./infra/tls/dev/storage-4:/root/.minio/certs:ro
     networks:
       - bastiondesk-net-internal
     healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "wget", "--spider", "--quiet", "--no-check-certificate", "https://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -218,6 +318,8 @@ volumes:
   postgres-data:
     driver: local
   huggingface-cache:
+    driver: local
+  postgres-backup-state:
     driver: local
   minio-data-1:
     driver: local

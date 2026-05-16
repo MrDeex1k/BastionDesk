@@ -8,14 +8,12 @@
  * - Organization (multi-tenancy z rolami)
  */
 
+import fs from "node:fs";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { haveIBeenPwned, organization } from "better-auth/plugins";
 import { Pool } from "pg";
-import {
-	sendResetPasswordEmail,
-	sendVerificationEmail,
-} from "./email";
+import { sendResetPasswordEmail, sendVerificationEmail } from "./email";
 import { env } from "./env";
 import { organizationHelpersPlugin } from "./organization-helpers-plugin";
 import { passkeyCheckPlugin } from "./passkey-check-plugin";
@@ -24,6 +22,12 @@ import { ac, admin, analityk, pracownik } from "./permissions";
 // Database Pool Configuration
 const pool = new Pool({
 	connectionString: env.DATABASE_URL,
+	ssl: {
+		rejectUnauthorized: true,
+		ca: fs.readFileSync(env.DB_TLS_CA_PATH, "utf8"),
+		cert: fs.readFileSync(env.DB_TLS_CERT_PATH, "utf8"),
+		key: fs.readFileSync(env.DB_TLS_KEY_PATH, "utf8"),
+	},
 	max: 20,
 	idleTimeoutMillis: 30000,
 	connectionTimeoutMillis: 2000,
@@ -44,7 +48,7 @@ export const auth = betterAuth({
 		minPasswordLength: 10,
 		maxPasswordLength: 128,
 		autoSignIn: true,
-		requireEmailVerification: true, // Włączone - wysyłka emaili skonfigurowana
+		requireEmailVerification: true,
 		sendResetPassword: async ({ user, url, token }, _request) => {
 			void sendResetPasswordEmail({ user, url, token });
 		},
@@ -56,7 +60,7 @@ export const auth = betterAuth({
 		sendVerificationEmail: async ({ user, url, token }, _request) => {
 			void sendVerificationEmail({ user, url, token });
 		},
-		sendOnSignUp: true, // Automatycznie wysyłaj przy rejestracji
+		sendOnSignUp: true,
 		autoSignInAfterVerification: true, // Auto-login po weryfikacji
 		callbackURL: `${env.FRONTEND_URL}/login`,
 	},
