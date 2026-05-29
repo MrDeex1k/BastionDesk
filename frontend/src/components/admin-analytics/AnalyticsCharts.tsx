@@ -1,5 +1,20 @@
-import { useEffect, useState } from "react";
 import { AlertCircle, Calendar, Loader2, Shield } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   Select,
@@ -35,8 +50,6 @@ interface AnalyticsChartsProps {
   onPeriodChange: (period: number) => void;
 }
 
-type RechartsModule = typeof import("recharts");
-
 const STATUS_COLORS: Record<string, string> = {
   Zgłoszony: "#3b82f6",
   "Raport w trakcie": "#eab308",
@@ -68,22 +81,6 @@ export default function AnalyticsCharts({
   categoryBreakdown,
   onPeriodChange,
 }: AnalyticsChartsProps) {
-  const [chartsModule, setChartsModule] = useState<RechartsModule | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    void import("recharts").then((module) => {
-      if (active) {
-        setChartsModule(module);
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
   return (
     <>
       <Card className="border-zinc-800 bg-zinc-900/50">
@@ -131,10 +128,10 @@ export default function AnalyticsCharts({
         </CardHeader>
         <CardContent>
           <div className="h-[300px] w-full min-w-0">
-            {metricsLoading || !chartsModule ? (
+            {metricsLoading ? (
               <ChartLoader />
             ) : (
-              <MetricsLineChart charts={chartsModule} data={timeSeriesData} />
+              <MetricsLineChart data={timeSeriesData} />
             )}
           </div>
         </CardContent>
@@ -150,10 +147,10 @@ export default function AnalyticsCharts({
           </CardHeader>
         <CardContent>
           <div className="h-[300px] w-full min-w-0">
-              {statsLoading || !chartsModule ? (
+              {statsLoading ? (
                 <ChartLoader />
               ) : (
-                <StatusBarChart charts={chartsModule} data={statusBreakdown} />
+                <StatusBarChart data={statusBreakdown} />
               )}
             </div>
           </CardContent>
@@ -168,10 +165,10 @@ export default function AnalyticsCharts({
           </CardHeader>
         <CardContent>
           <div className="h-[300px] w-full min-w-0">
-              {statsLoading || !chartsModule ? (
+              {statsLoading ? (
                 <ChartLoader />
               ) : (
-                <CategoryPieChart charts={chartsModule} data={categoryBreakdown} />
+                <CategoryPieChart data={categoryBreakdown} />
               )}
             </div>
           </CardContent>
@@ -190,23 +187,10 @@ function ChartLoader() {
 }
 
 function MetricsLineChart({
-  charts,
   data,
 }: {
-  charts: RechartsModule;
   data: TimeSeriesPoint[];
 }) {
-  const {
-    CartesianGrid,
-    Legend,
-    Line,
-    LineChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-  } = charts;
-
   return (
     <ResponsiveContainer
       width="100%"
@@ -250,24 +234,10 @@ function MetricsLineChart({
 }
 
 function StatusBarChart({
-  charts,
   data,
 }: {
-  charts: RechartsModule;
   data: StatusBreakdownItem[];
 }) {
-  const {
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Cell,
-    LabelList,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-  } = charts;
-
   return (
     <ResponsiveContainer
       width="100%"
@@ -315,14 +285,10 @@ function StatusBarChart({
 }
 
 function CategoryPieChart({
-  charts,
   data,
 }: {
-  charts: RechartsModule;
   data: CategoryBreakdownItem[];
 }) {
-  const { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } = charts;
-
   return (
     <ResponsiveContainer
       width="100%"

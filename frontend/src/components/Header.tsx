@@ -1,6 +1,12 @@
+import { lazy, Suspense } from "react";
 import { Shield, LogIn, LogOut, LayoutDashboard } from "lucide-react";
 import { Button } from "./ui/button";
-import { SettingsDialog } from "./SettingsDialog";
+
+const SettingsDialog = lazy(() =>
+  import("./SettingsDialog").then((module) => ({
+    default: module.SettingsDialog,
+  })),
+);
 
 interface HeaderProps {
   onLogoClick: () => void;
@@ -37,6 +43,7 @@ export function Header({
       <div className="container mx-auto flex items-center justify-between p-4">
         {/* Logo Section */}
         <button
+          type="button"
           onClick={onLogoClick}
           className="z-10 flex items-center gap-2 transition-opacity hover:opacity-80"
         >
@@ -69,7 +76,9 @@ export function Header({
                 {getDashboardName(userRole)}
               </Button>
 
-              <SettingsDialog />
+              <Suspense fallback={<SettingsButtonFallback />}>
+                <SettingsDialog />
+              </Suspense>
 
               <Button
                 variant="ghost"
@@ -92,5 +101,19 @@ export function Header({
         </div>
       </div>
     </header>
+  );
+}
+
+function SettingsButtonFallback() {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      disabled
+      className="text-zinc-400 opacity-70"
+    >
+      <Shield className="size-5" />
+      <span className="sr-only">Ładowanie ustawień</span>
+    </Button>
   );
 }

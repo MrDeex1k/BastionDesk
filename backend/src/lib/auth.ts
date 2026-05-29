@@ -37,9 +37,7 @@ const pool = new Pool({
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
 	secret: env.BETTER_AUTH_SECRET,
-	trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGINS.split(",").map((origin) =>
-		origin.trim(),
-	),
+	trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGIN_LIST,
 	database: pool,
 
 	// Email and Password Authentication

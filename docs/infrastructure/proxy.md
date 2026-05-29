@@ -8,7 +8,6 @@ Serwis `nginx` jest głównym punktem wejścia do aplikacji uruchamianej przez D
 
 - serwowanie frontendu,
 - przekazywanie ruchu API do backendu,
-- przekazywanie ruchu `/llm/` do serwisu LLM,
 - jednolity punkt wejścia HTTP dla użytkownika końcowego.
 
 ## Porty
@@ -21,11 +20,7 @@ Serwis `nginx` jest głównym punktem wejścia do aplikacji uruchamianej przez D
 http://localhost:4567
 ```
 
-Backend API jest dodatkowo wystawione bezpośrednio na:
-
-```text
-http://localhost:3333
-```
+Pozostałe usługi działają wyłącznie wewnątrz sieci Docker Compose i nie są publikowane bezpośrednio na hoście.
 
 ## Routing
 
@@ -37,9 +32,22 @@ Aktualne trasy:
 
 - `/` -> `frontend:8080`
 - `/api/` -> `backend:3333`
-- `/llm/` -> `llm_service:8888`
 
 Frontend jest osobnym kontenerem NGINX, który serwuje statyczny build Vite i obsługuje SPA fallback przez `index.html`.
+
+## Security Headers
+
+Publiczny reverse proxy ustawia nagłówki bezpieczeństwa dla warstwy edge, w tym:
+
+- `X-Frame-Options: DENY`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy`
+- `Permissions-Policy`
+- `Cross-Origin-Opener-Policy`
+- `Cross-Origin-Resource-Policy`
+- `Content-Security-Policy`
+
+Ich celem jest ograniczenie clickjackingu, MIME sniffingu oraz wzmocnienie obrony warstwowej po stronie przeglądarki.
 
 ## Healthcheck
 
@@ -64,7 +72,7 @@ Definicja serwisu znajduje się w:
 Najważniejsze założenia:
 
 - `nginx` ma `restart: unless-stopped`,
-- startuje dopiero po uzyskaniu `healthy` przez `backend`, `frontend` i `llm_service`,
+- startuje dopiero po uzyskaniu `healthy` przez `backend` i `frontend`,
 - działa jako użytkownik `nginx`,
 - korzysta z port mappingu `4567:8080`.
 
@@ -97,18 +105,10 @@ Sprawdź:
 - czy `nginx` ma status `healthy`,
 - czy wejście następuje przez `http://localhost:4567`.
 
-### API działa bezpośrednio, ale nie działa przez proxy
+### API nie działa przez proxy
 
 Sprawdź:
 
-- czy `backend` działa na `3333`,
+- czy `backend` ma status `healthy`,
 - czy w [nginx/nginx.conf](/Users/jakubbatycki/KOD/BastionDesk/nginx/nginx.conf) trasa `/api/` wskazuje na `backend:3333`,
 - logi kontenera `nginx`.
-
-### LLM routing nie działa
-
-Sprawdź:
-
-- czy `llm_service` ma status `healthy`,
-- czy `nginx` proxyuje `/llm/` do `llm_service:8888`,
-- czy serwis LLM wystartował poprawnie z certyfikatami i zależnościami modelu.

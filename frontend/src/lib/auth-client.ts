@@ -27,7 +27,7 @@ export const authClient = createAuthClient({
       } else if (error.error.status === 401) {
         console.error("Unauthorized - session may have expired");
       } else {
-        console.error("Auth error:", error.error);
+        console.error("Auth error");
       }
     },
   },

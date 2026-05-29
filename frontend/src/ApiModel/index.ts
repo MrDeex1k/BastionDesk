@@ -4,6 +4,8 @@ export type {
 } from "./analytics";
 export type { PassKey } from "./auth";
 export type {
+  AdminIncidentAnalystFilter,
+  AdminIncidentFiltersResponse,
   ApiFileMetadata,
   IncidentDetail,
   IncidentDetailResponse,

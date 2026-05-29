@@ -1,6 +1,9 @@
-import { useCallback, useMemo, useReducer } from "react";
+import { lazy, Suspense, useCallback, useMemo, useReducer } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { IncidentsResponse } from "@/ApiModel";
+import type {
+  AdminIncidentFiltersResponse,
+  IncidentsResponse,
+} from "@/ApiModel";
 import { apiFetch } from "@/lib/api";
 import {
   Card,
@@ -31,7 +34,6 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
-import { IncidentDetails } from "./IncidentDetails";
 import {
   Dialog,
   DialogContent,
@@ -39,8 +41,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog";
-import { IncidentReportForm } from "./IncidentReportForm";
 import { IncidentSummaryItem } from "./incident-list/IncidentSummaryItem";
+
+const IncidentDetails = lazy(() =>
+  import("./IncidentDetails").then((module) => ({
+    default: module.IncidentDetails,
+  })),
+);
+const IncidentReportForm = lazy(() =>
+  import("./IncidentReportForm").then((module) => ({
+    default: module.IncidentReportForm,
+  })),
+);
 
 const LIMIT = 10;
 
@@ -52,13 +64,6 @@ const STATUS_FILTER_OPTIONS = [
   { value: "Sprawozdanie w trakcie", label: "Sprawozdanie w trakcie" },
   { value: "Sprawozdanie złożone", label: "Sprawozdanie złożone" },
   { value: "Odrzucone", label: "Odrzucone" },
-] as const;
-
-const ANALYST_FILTER_OPTIONS = [
-  { value: "all", label: "Wszyscy" },
-  { value: "unassigned", label: "Nieprzypisane" },
-  { value: "user_analyst001", label: "Tomasz Analityk" },
-  { value: "user_analyst002", label: "Katarzyna Bezpieczeństwo" },
 ] as const;
 
 const SORT_BY_OPTIONS = [
@@ -79,7 +84,7 @@ interface AdminIncidentListState {
   page: number;
   selectedIncidentId: string | null;
   statusFilter: string;
-  userIdFilter: string;
+  userQuery: string;
   analystFilter: string;
   sortBy: string;
   sortOrder: "asc" | "desc";
@@ -91,7 +96,7 @@ type AdminIncidentListAction =
   | { type: "set-page"; value: number }
   | { type: "set-selected-incident-id"; value: string | null }
   | { type: "set-status-filter"; value: string }
-  | { type: "set-user-id-filter"; value: string }
+  | { type: "set-user-query"; value: string }
   | { type: "set-analyst-filter"; value: string }
   | { type: "set-sort-by"; value: string }
   | { type: "set-sort-order"; value: "asc" | "desc" }
@@ -103,7 +108,7 @@ const initialAdminIncidentListState: AdminIncidentListState = {
   page: 1,
   selectedIncidentId: null,
   statusFilter: "all",
-  userIdFilter: "",
+  userQuery: "",
   analystFilter: "all",
   sortBy: "createdAt",
   sortOrder: "desc",
@@ -122,8 +127,8 @@ function adminIncidentListReducer(
       return { ...state, selectedIncidentId: action.value };
     case "set-status-filter":
       return { ...state, statusFilter: action.value, page: 1 };
-    case "set-user-id-filter":
-      return { ...state, userIdFilter: action.value, page: 1 };
+    case "set-user-query":
+      return { ...state, userQuery: action.value, page: 1 };
     case "set-analyst-filter":
       return { ...state, analystFilter: action.value, page: 1 };
     case "set-sort-by":
@@ -139,7 +144,7 @@ function adminIncidentListReducer(
         ...state,
         page: 1,
         statusFilter: "all",
-        userIdFilter: "",
+        userQuery: "",
         analystFilter: "all",
         sortBy: "createdAt",
         sortOrder: "desc",
@@ -156,6 +161,20 @@ export function AdminIncidentList() {
   );
   const queryClient = useQueryClient();
 
+  const { data: filtersData } = useQuery<AdminIncidentFiltersResponse>({
+    queryKey: ["adminIncidentFilters"],
+    queryFn: async () => {
+      const response = await apiFetch("/api/admin/incidents/filters");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch incident filters");
+      }
+
+      return response.json() as Promise<AdminIncidentFiltersResponse>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const queryString = useMemo(() => {
     const params = new URLSearchParams({
       page: state.page.toString(),
@@ -167,8 +186,8 @@ export function AdminIncidentList() {
     if (state.statusFilter !== "all") {
       params.append("status", state.statusFilter);
     }
-    if (state.userIdFilter) {
-      params.append("userId", state.userIdFilter);
+    if (state.userQuery) {
+      params.append("userQuery", state.userQuery);
     }
     if (state.analystFilter !== "all") {
       params.append(
@@ -184,7 +203,7 @@ export function AdminIncidentList() {
     state.sortBy,
     state.sortOrder,
     state.statusFilter,
-    state.userIdFilter,
+    state.userQuery,
   ]);
 
   const { data, isPending, isFetching, isError, isPlaceholderData } = useQuery<IncidentsResponse>({
@@ -192,7 +211,7 @@ export function AdminIncidentList() {
       "adminIncidents",
       state.page,
       state.statusFilter,
-      state.userIdFilter,
+      state.userQuery,
       state.analystFilter,
       state.sortBy,
       state.sortOrder,
@@ -212,7 +231,7 @@ export function AdminIncidentList() {
   const hasActiveFilters = useMemo(
     () =>
       state.statusFilter !== "all" ||
-      state.userIdFilter !== "" ||
+      state.userQuery !== "" ||
       state.analystFilter !== "all" ||
       state.sortBy !== "createdAt" ||
       state.sortOrder !== "desc",
@@ -221,7 +240,7 @@ export function AdminIncidentList() {
       state.sortBy,
       state.sortOrder,
       state.statusFilter,
-      state.userIdFilter,
+      state.userQuery,
     ],
   );
 
@@ -275,17 +294,31 @@ export function AdminIncidentList() {
     dispatch({ type: "set-sort-order", value });
   }, []);
 
-  const handleUserIdFilterChange = useCallback((value: string) => {
-    dispatch({ type: "set-user-id-filter", value });
+  const handleUserQueryChange = useCallback((value: string) => {
+    dispatch({ type: "set-user-query", value });
   }, []);
+
+  const analystFilterOptions = useMemo(
+    () => [
+      { value: "all", label: "Wszyscy" },
+      { value: "unassigned", label: "Nieprzypisane" },
+      ...(filtersData?.data.analysts.map((analyst) => ({
+        value: analyst.id,
+        label: analyst.name?.trim() || analyst.email,
+      })) ?? []),
+    ],
+    [filtersData?.data.analysts],
+  );
 
   if (state.selectedIncidentId) {
     return (
-      <IncidentDetails
-        incidentId={state.selectedIncidentId}
-        onBack={handleBackToList}
-        mode="admin"
-      />
+      <Suspense fallback={<AdminIncidentDetailsLoader />}>
+        <IncidentDetails
+          incidentId={state.selectedIncidentId}
+          onBack={handleBackToList}
+          mode="admin"
+        />
+      </Suspense>
     );
   }
 
@@ -316,13 +349,14 @@ export function AdminIncidentList() {
             analystFilter={state.analystFilter}
             sortBy={state.sortBy}
             sortOrder={state.sortOrder}
-            userIdFilter={state.userIdFilter}
+            userQuery={state.userQuery}
+            analystOptions={analystFilterOptions}
             hasActiveFilters={hasActiveFilters}
             onStatusFilterChange={handleStatusFilterChange}
             onAnalystFilterChange={handleAnalystFilterChange}
             onSortByChange={handleSortByChange}
             onSortOrderChange={handleSortOrderChange}
-            onUserIdFilterChange={handleUserIdFilterChange}
+            onUserQueryChange={handleUserQueryChange}
             onClearFilters={handleClearFilters}
           />
         )}
@@ -438,37 +472,57 @@ function CreateIncidentDialog({
         <DialogDescription className="sr-only">
           Formularz zgłaszania nowego incydentu bezpieczeństwa.
         </DialogDescription>
-        <IncidentReportForm onSuccess={onSuccess} />
+        <Suspense fallback={<AdminDialogLoader />}>
+          <IncidentReportForm onSuccess={onSuccess} />
+        </Suspense>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AdminIncidentDetailsLoader() {
+  return (
+    <div className="flex min-h-[420px] w-full items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/50 text-zinc-400">
+      Ładowanie szczegółów incydentu…
+    </div>
+  );
+}
+
+function AdminDialogLoader() {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center text-zinc-400">
+      Ładowanie formularza…
+    </div>
   );
 }
 
 function AdminIncidentFiltersPanel({
   statusFilter,
   analystFilter,
+  analystOptions,
   sortBy,
   sortOrder,
-  userIdFilter,
+  userQuery,
   hasActiveFilters,
   onStatusFilterChange,
   onAnalystFilterChange,
   onSortByChange,
   onSortOrderChange,
-  onUserIdFilterChange,
+  onUserQueryChange,
   onClearFilters,
 }: {
   statusFilter: string;
   analystFilter: string;
+  analystOptions: ReadonlyArray<{ value: string; label: string }>;
   sortBy: string;
   sortOrder: "asc" | "desc";
-  userIdFilter: string;
+  userQuery: string;
   hasActiveFilters: boolean;
   onStatusFilterChange: (value: string) => void;
   onAnalystFilterChange: (value: string) => void;
   onSortByChange: (value: string) => void;
   onSortOrderChange: (value: "asc" | "desc") => void;
-  onUserIdFilterChange: (value: string) => void;
+  onUserQueryChange: (value: string) => void;
   onClearFilters: () => void;
 }) {
   return (
@@ -482,7 +536,7 @@ function AdminIncidentFiltersPanel({
         />
         <FilterSelectField
           label="Analityk"
-          options={ANALYST_FILTER_OPTIONS}
+          options={analystOptions}
           value={analystFilter}
           onValueChange={onAnalystFilterChange}
         />
@@ -502,12 +556,12 @@ function AdminIncidentFiltersPanel({
 
       <div className="space-y-2">
         <Label className="text-xs text-zinc-400">
-          Szukaj użytkownika (ID lub nazwa)
+          Szukaj użytkownika (ID, nazwa lub email)
         </Label>
         <Input
-          placeholder="Wpisz ID użytkownika lub nazwę..."
-          value={userIdFilter}
-          onChange={(event) => onUserIdFilterChange(event.target.value)}
+          placeholder="Wpisz ID użytkownika, nazwę lub email..."
+          value={userQuery}
+          onChange={(event) => onUserQueryChange(event.target.value)}
           className="border-zinc-700 bg-zinc-900 text-zinc-300"
         />
       </div>

@@ -2,7 +2,7 @@ FROM busybox:1.37.0-musl AS wget-src
 
 FROM minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
 
-FROM minio/minio:RELEASE.2025-09-07T16-13-09Z
+FROM coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
 
 # Provide wget via busybox for healthchecks (minio base image lacks package manager)
 COPY --from=wget-src /bin/busybox /bin/busybox

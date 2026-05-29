@@ -80,6 +80,11 @@ W lokalnym Compose domyślne adresy wewnętrzne są już przygotowane, m.in.:
 - `PGBOUNCER_HOST=pgbouncer`
 - `FRONTEND_URL=http://localhost:4567`
 
+Dla frontendu i Better Auth lokalny model uruchomienia zakłada jeden publiczny origin:
+
+- `BETTER_AUTH_URL=http://localhost:4567`
+- `BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:4567`
+
 ## TLS and Certificates
 
 ### Development / Local Compose
@@ -134,16 +139,11 @@ Główny punkt wejścia dla użytkownika:
 http://localhost:4567
 ```
 
-Mapowania hosta używane obecnie przez Compose:
+Mapowanie hosta używane obecnie przez Compose:
 
 - `4567 -> nginx:8080` - główna aplikacja
-- `3333 -> backend:3333` - bezpośredni backend API
-- `${POSTGRES_PORT} -> database:${POSTGRES_PORT}` - PostgreSQL
-- `${PGBOUNCER_PORT} -> pgbouncer:${PGBOUNCER_PORT}` - PgBouncer
-- `9000 -> storage-1:9000` - MinIO API
-- `9001 -> storage-1:9001` - MinIO Console
 
-W produkcji warto ograniczyć ekspozycję usług danych i zostawić publicznie tylko reverse proxy albo świadomie kontrolowaną warstwę dostępu.
+Pozostałe usługi są dostępne wyłącznie wewnątrz sieci Docker Compose. Dzięki temu użytkownik końcowy korzysta z jednego publicznego entrypointu, a backend, baza, PgBouncer, LLM i storage nie są bezpośrednio publikowane na hoście.
 
 ## Runtime Verification
 
@@ -151,9 +151,9 @@ Po wdrożeniu warto sprawdzić:
 
 1. `docker compose ps` pokazuje zdrowe usługi krytyczne.
 2. Frontend otwiera się pod `http://localhost:4567`.
-3. Backend odpowiada pod `http://localhost:3333/health`.
+3. Logowanie i Better Auth działają przez publiczny origin `http://localhost:4567`.
 4. Upload i download plików działają przez MinIO po HTTPS.
-5. Logowanie, tworzenie organizacji i zgłaszanie incydentu przechodzą poprawnie.
+5. Zgłaszanie incydentu i klasyfikacja LLM przechodzą poprawnie.
 6. `postgres-backup` ma status `healthy`.
 
 ## Storage
@@ -192,7 +192,7 @@ Szczegóły znajdują się w:
 - Wspierany jest tylko model `fresh install only`.
 - Brak oficjalnej procedury upgrade z wcześniejszych instalacji.
 - `llm_service` ma limit pamięci `10GB` w Compose i może mieć zauważalny cold start podczas ładowania modelu.
-- Compose eksponuje także porty infrastrukturalne; środowisko publiczne powinno to zawęzić do własnych potrzeb.
+- Publiczny dostęp jest domyślnie ograniczony do reverse proxy; bezpośrednie debugowanie usług wewnętrznych z hosta wymaga tymczasowego wystawienia portów lub wejścia do sieci Docker.
 - Dokumentacja `1.0.0` opisuje wspierany deployment Compose, a nie pełny matrix środowisk i orkiestratorów.
 
 ## Related Documents

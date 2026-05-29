@@ -2,6 +2,7 @@
 
 import { fromNodeHeaders } from "better-auth/node";
 import type { NextFunction, Request, Response } from "express";
+import { sendErrorResponse } from "../lib/api-response";
 import { auth } from "../lib/auth";
 import type { UserRole } from "../types";
 
@@ -41,13 +42,12 @@ export function getRequiredOrganizationId(
 		return req.organizationId;
 	}
 
-	res.status(403).json({
-		success: false,
-		error: {
-			code: "NO_ORGANIZATION",
-			message: "Użytkownik nie należy do żadnej organizacji",
-		},
-	});
+	sendErrorResponse(
+		res,
+		403,
+		"NO_ORGANIZATION",
+		"Użytkownik nie należy do żadnej organizacji",
+	);
 	return null;
 }
 
@@ -62,8 +62,8 @@ export async function getSessionFromRequest(req: Request) {
 			headers: fromNodeHeaders(req.headers),
 		});
 		return session;
-	} catch (error) {
-		console.error("[AUTH] Failed to get session:", error);
+	} catch (_error) {
+		console.error("[AUTH] Failed to get session");
 		return null;
 	}
 }
@@ -81,20 +81,8 @@ export function requireAuth(
 ): void {
 	getSessionFromRequest(req)
 		.then((sessionData) => {
-			console.log("[AUTH] Session data:", {
-				hasSession: !!sessionData?.session,
-				hasUser: !!sessionData?.user,
-				cookies: req.headers.cookie,
-			});
-
 			if (!sessionData?.session || !sessionData?.user) {
-				res.status(401).json({
-					success: false,
-					error: {
-						code: "UNAUTHORIZED",
-						message: "Wymagane zalogowanie",
-					},
-				});
+				sendErrorResponse(res, 401, "UNAUTHORIZED", "Wymagane zalogowanie");
 				return;
 			}
 
@@ -106,15 +94,9 @@ export function requireAuth(
 
 			next();
 		})
-		.catch((error) => {
-			console.error("[AUTH] Authentication error:", error);
-			res.status(500).json({
-				success: false,
-				error: {
-					code: "AUTH_ERROR",
-					message: "Błąd autoryzacji",
-				},
-			});
+		.catch((_error) => {
+			console.error("[AUTH] Authentication error");
+			sendErrorResponse(res, 500, "AUTH_ERROR", "Błąd autoryzacji");
 		});
 }
 
@@ -137,8 +119,8 @@ export function optionalAuth(
 			}
 			next();
 		})
-		.catch((error) => {
-			console.error("[AUTH] Optional auth error:", error);
+		.catch((_error) => {
+			console.error("[AUTH] Optional auth error");
 			// Kontynuuj bez sesji w przypadku błędu
 			next();
 		});
@@ -165,13 +147,7 @@ export function requireRole(allowedRoles: UserRole[]) {
 		const authReq = req as AuthenticatedRequest;
 
 		if (!authReq.user) {
-			res.status(401).json({
-				success: false,
-				error: {
-					code: "UNAUTHORIZED",
-					message: "Wymagane zalogowanie",
-				},
-			});
+			sendErrorResponse(res, 401, "UNAUTHORIZED", "Wymagane zalogowanie");
 			return;
 		}
 
@@ -182,13 +158,12 @@ export function requireRole(allowedRoles: UserRole[]) {
 			});
 
 			if (!activeMember) {
-				res.status(403).json({
-					success: false,
-					error: {
-						code: "NO_ORGANIZATION",
-						message: "Użytkownik nie należy do żadnej organizacji",
-					},
-				});
+				sendErrorResponse(
+					res,
+					403,
+					"NO_ORGANIZATION",
+					"Użytkownik nie należy do żadnej organizacji",
+				);
 				return;
 			}
 
@@ -198,13 +173,12 @@ export function requireRole(allowedRoles: UserRole[]) {
 			);
 
 			if (!membership) {
-				res.status(403).json({
-					success: false,
-					error: {
-						code: "NOT_A_MEMBER",
-						message: "Użytkownik nie jest członkiem tej organizacji",
-					},
-				});
+				sendErrorResponse(
+					res,
+					403,
+					"NOT_A_MEMBER",
+					"Użytkownik nie jest członkiem tej organizacji",
+				);
 				return;
 			}
 
@@ -212,13 +186,12 @@ export function requireRole(allowedRoles: UserRole[]) {
 
 			// Sprawdź czy rola użytkownika jest dozwolona
 			if (!allowedRoles.includes(userRole)) {
-				res.status(403).json({
-					success: false,
-					error: {
-						code: "FORBIDDEN",
-						message: `Wymagana rola: ${allowedRoles.join(" lub ")}`,
-					},
-				});
+				sendErrorResponse(
+					res,
+					403,
+					"FORBIDDEN",
+					`Wymagana rola: ${allowedRoles.join(" lub ")}`,
+				);
 				return;
 			}
 
@@ -229,13 +202,12 @@ export function requireRole(allowedRoles: UserRole[]) {
 			next();
 		} catch (error) {
 			console.error("[AUTH] Role check error:", error);
-			res.status(500).json({
-				success: false,
-				error: {
-					code: "ROLE_CHECK_ERROR",
-					message: "Błąd sprawdzania uprawnień",
-				},
-			});
+			sendErrorResponse(
+				res,
+				500,
+				"ROLE_CHECK_ERROR",
+				"Błąd sprawdzania uprawnień",
+			);
 		}
 	};
 }

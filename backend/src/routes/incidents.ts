@@ -10,7 +10,7 @@
 import type { Request, Response } from "express";
 import { Router } from "express";
 import { getDb, query, queryOne } from "../lib/database";
-import { classifyIncident } from "../lib/llm-client";
+import { classifyIncident, LlmServiceError } from "../lib/llm-client";
 import { getObjectBuffer, presignObject, storageClient } from "../lib/storage";
 import {
 	type AuthenticatedRequest,
@@ -42,6 +42,31 @@ import {
 	type StoredFileMetadataPayload,
 } from "./shared/file-metadata";
 
+function getAnalystScopedIncidentWhere(
+	req: AuthenticatedRequest,
+	incidentId: string,
+): {
+	clause: string;
+	params: [string, string] | [string, string, string];
+} {
+	const organizationId = req.organizationId;
+	if (!organizationId) {
+		throw new Error("Missing organization context for scoped incident query");
+	}
+
+	if (req.memberRole === "admin") {
+		return {
+			clause: 'id = $1 AND "organizationId" = $2',
+			params: [incidentId, organizationId],
+		};
+	}
+
+	return {
+		clause: 'id = $1 AND "organizationId" = $2 AND "analystId" = $3',
+		params: [incidentId, organizationId, req.user.id],
+	};
+}
+
 /**
  * Asynchroniczna analiza kategorii incydentu za pomocą LLM_SERVICE
  */
@@ -63,6 +88,16 @@ async function analyzeIncidentCategory(
 
 		console.log(`[LLM] Incident ${incidentId} categorized as ${category}`);
 	} catch (error) {
+		if (error instanceof LlmServiceError) {
+			console.error("[LLM] Incident classification skipped", {
+				incidentId,
+				code: error.code,
+				message: error.message,
+				retryable: error.retryable,
+				grpcStatus: error.grpcStatus,
+			});
+			return;
+		}
 		console.error("[LLM] Error analyzing incident:", error);
 		// W przypadku błędu, kategoria pozostaje null
 	}
@@ -308,8 +343,7 @@ router.get(
 	requireAuth,
 	requireRole(["pracownik", "analityk", "admin"]),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { id } = req.params;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		let incident: Incident | null = null;
 
@@ -498,8 +532,7 @@ router.post(
 	requireAuth,
 	requireRole(["analityk", "admin"]),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { id } = req.params;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		const incident = await queryOne<Incident>(
 			`UPDATE incidents
@@ -535,8 +568,7 @@ router.post(
 	requireAuth,
 	requireRole(["analityk", "admin"]),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { id } = req.params;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		const incident = await queryOne<Incident>(
 			`UPDATE incidents
@@ -574,26 +606,15 @@ router.patch(
 	requireRole(["analityk", "admin"]),
 	validate(updateIncidentStatusSchema, "body"),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { id } = req.params;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		const { status } = req.body;
-
-		// Sprawdź czy incydent jest przypisany do analityka lub admin może wszystko
-		const whereClause =
-			req.memberRole === "admin"
-				? `id = $1 AND "organizationId" = $2`
-				: `id = $1 AND "organizationId" = $2 AND "analystId" = $3`;
-
-		const params =
-			req.memberRole === "admin"
-				? [id, req.organizationId]
-				: [id, req.organizationId, req.user.id];
+		const { clause, params } = getAnalystScopedIncidentWhere(req, id);
 
 		const incident = await queryOne<Incident>(
 			`UPDATE incidents
 			SET status = $${params.length + 1}
-			WHERE ${whereClause}
+			WHERE ${clause}
 			RETURNING *`,
 			[...params, status],
 		);
@@ -626,25 +647,15 @@ router.patch(
 	requireRole(["analityk", "admin"]),
 	validate(updateIncidentNoteSchema, "body"),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { id } = req.params;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		const { analystNote } = req.body;
-
-		const whereClause =
-			req.memberRole === "admin"
-				? `id = $1 AND "organizationId" = $2`
-				: `id = $1 AND "organizationId" = $2 AND "analystId" = $3`;
-
-		const params =
-			req.memberRole === "admin"
-				? [id, req.organizationId]
-				: [id, req.organizationId, req.user.id];
+		const { clause, params } = getAnalystScopedIncidentWhere(req, id);
 
 		const incident = await queryOne<Incident>(
 			`UPDATE incidents
 			SET "analystNote" = $${params.length + 1}
-			WHERE ${whereClause}
+			WHERE ${clause}
 			RETURNING *`,
 			[...params, analystNote],
 		);
@@ -678,25 +689,15 @@ router.patch(
 	requireRole(["analityk", "admin"]),
 	validate(resolveIncidentSchema, "body"),
 	asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-		const { id } = req.params;
-		uuidSchema.parse(id);
+		const id = uuidSchema.parse(req.params.id);
 
 		const { resolved } = req.body;
-
-		const whereClause =
-			req.memberRole === "admin"
-				? `id = $1 AND "organizationId" = $2`
-				: `id = $1 AND "organizationId" = $2 AND "analystId" = $3`;
-
-		const params =
-			req.memberRole === "admin"
-				? [id, req.organizationId]
-				: [id, req.organizationId, req.user.id];
+		const { clause, params } = getAnalystScopedIncidentWhere(req, id);
 
 		const incident = await queryOne<Incident>(
 			`UPDATE incidents
 			SET "czyRozwiazany" = $${params.length + 1}
-			WHERE ${whereClause}
+			WHERE ${clause}
 			RETURNING *`,
 			[...params, resolved],
 		);
@@ -759,17 +760,7 @@ router.post(
 			Buffer.from(files.report.buffer),
 			{ contentType: files.report.metadata.mimeType },
 		);
-
-		// Aktualizuj bazę danych
-		const whereClause =
-			req.memberRole === "admin"
-				? `id = $1 AND "organizationId" = $2`
-				: `id = $1 AND "organizationId" = $2 AND "analystId" = $3`;
-
-		const params =
-			req.memberRole === "admin"
-				? [id, req.organizationId]
-				: [id, req.organizationId, req.user.id];
+		const { clause, params } = getAnalystScopedIncidentWhere(req, id);
 
 		const incident = await queryOne<Incident>(
 			`UPDATE incidents
@@ -777,7 +768,7 @@ router.post(
 				"analystReportPath" = $${params.length + 1},
 				"analystReportMetadata" = $${params.length + 2},
 				"analystReportData" = now()
-			WHERE ${whereClause}
+			WHERE ${clause}
 			RETURNING *`,
 			[...params, reportPath, JSON.stringify(files.report.metadata)],
 		);
@@ -843,17 +834,7 @@ router.post(
 			Buffer.from(files.statement.buffer),
 			{ contentType: files.statement.metadata.mimeType },
 		);
-
-		// Aktualizuj bazę danych
-		const whereClause =
-			req.memberRole === "admin"
-				? `id = $1 AND "organizationId" = $2`
-				: `id = $1 AND "organizationId" = $2 AND "analystId" = $3`;
-
-		const params =
-			req.memberRole === "admin"
-				? [id, req.organizationId]
-				: [id, req.organizationId, req.user.id];
+		const { clause, params } = getAnalystScopedIncidentWhere(req, id);
 
 		const incident = await queryOne<Incident>(
 			`UPDATE incidents
@@ -861,7 +842,7 @@ router.post(
 				"analystStatementPath" = $${params.length + 1},
 				"analystStatementMetadata" = $${params.length + 2},
 				"analystStatementData" = now()
-			WHERE ${whereClause}
+			WHERE ${clause}
 			RETURNING *`,
 			[...params, statementPath, JSON.stringify(files.statement.metadata)],
 		);

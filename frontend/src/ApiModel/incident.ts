@@ -43,3 +43,14 @@ export type IncidentDetail = Incident;
 export type IncidentDetailResponse = ApiResponse<IncidentDetail>;
 
 export type IncidentsResponse = PaginatedApiResponse<Incident>;
+
+export interface AdminIncidentAnalystFilter {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string | null;
+}
+
+export type AdminIncidentFiltersResponse = ApiResponse<{
+  analysts: AdminIncidentAnalystFilter[];
+}>;

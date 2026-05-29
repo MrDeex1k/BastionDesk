@@ -2,7 +2,9 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
+import { sendErrorResponse } from "../lib/api-response";
 import { env } from "../lib/env";
+import { LlmServiceError } from "../lib/llm-client";
 
 // Customowe klasy błędów
 
@@ -61,6 +63,37 @@ export class RateLimitError extends AppError {
 	}
 }
 
+export class BadGatewayError extends AppError {
+	constructor(message = "Usługa zależna zwróciła nieprawidłową odpowiedź") {
+		super(502, "BAD_GATEWAY", message);
+		this.name = "BadGatewayError";
+	}
+}
+
+export class ServiceUnavailableError extends AppError {
+	constructor(message = "Usługa jest chwilowo niedostępna") {
+		super(503, "SERVICE_UNAVAILABLE", message);
+		this.name = "ServiceUnavailableError";
+	}
+}
+
+export class GatewayTimeoutError extends AppError {
+	constructor(message = "Przekroczono czas oczekiwania na usługę zależną") {
+		super(504, "GATEWAY_TIMEOUT", message);
+		this.name = "GatewayTimeoutError";
+	}
+}
+
+function sendError(
+	res: Response,
+	statusCode: number,
+	code: string,
+	message: string,
+	details?: unknown,
+): void {
+	sendErrorResponse(res, statusCode, code, message, details);
+}
+
 // Error Handler Middleware
 
 /**
@@ -69,12 +102,18 @@ export class RateLimitError extends AppError {
  */
 export function errorHandler(
 	err: Error,
-	_req: Request,
+	req: Request,
 	res: Response,
 	_next: NextFunction,
 ): void {
+	if (res.headersSent) {
+		return;
+	}
+
 	// Log błędu
 	console.error("[ERROR]", {
+		method: req.method,
+		path: req.path,
 		name: err.name,
 		message: err.message,
 		stack: env.NODE_ENV === "development" ? err.stack : undefined,
@@ -87,29 +126,70 @@ export function errorHandler(
 			message: issue.message,
 		}));
 
-		res.status(400).json({
-			success: false,
-			error: {
-				code: "VALIDATION_ERROR",
-				message: "Błąd walidacji danych",
-				details: formattedErrors,
-			},
-		});
+		sendError(
+			res,
+			400,
+			"VALIDATION_ERROR",
+			"Błąd walidacji danych",
+			formattedErrors,
+		);
 		return;
 	}
 
 	// Obsługa własnych błędów aplikacji
 	if (err instanceof AppError) {
-		res.status(err.statusCode).json({
-			success: false,
-			error: {
-				code: err.code,
-				message: err.message,
-				...(err.details && env.NODE_ENV === "development"
-					? { details: err.details }
-					: {}),
-			},
-		});
+		sendError(
+			res,
+			err.statusCode,
+			err.code,
+			err.message,
+			err.details && env.NODE_ENV === "development" ? err.details : undefined,
+		);
+		return;
+	}
+
+	if (err instanceof LlmServiceError) {
+		sendError(
+			res,
+			err.statusCode,
+			err.code,
+			err.message,
+			env.NODE_ENV === "development"
+				? {
+						retryable: err.retryable,
+						grpcStatus: err.grpcStatus,
+						upstreamDetails: err.details,
+					}
+				: undefined,
+		);
+		return;
+	}
+
+	const operationalError = err as Error & { code?: string; syscall?: string };
+	if (
+		operationalError.name === "AbortError" ||
+		operationalError.code === "ETIMEDOUT"
+	) {
+		sendError(
+			res,
+			504,
+			"GATEWAY_TIMEOUT",
+			"Przekroczono czas oczekiwania na usługę zależną",
+		);
+		return;
+	}
+
+	if (
+		["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH"].includes(
+			operationalError.code ?? "",
+		)
+	) {
+		sendError(
+			res,
+			503,
+			"SERVICE_UNAVAILABLE",
+			"Usługa zależna jest chwilowo niedostępna",
+		);
 		return;
 	}
 
@@ -122,54 +202,42 @@ export function errorHandler(
 
 		// Unique violation
 		if (pgError.code === "23505") {
-			res.status(409).json({
-				success: false,
-				error: {
-					code: "DUPLICATE_ENTRY",
-					message: "Taki rekord już istnieje",
-					...(env.NODE_ENV === "development"
-						? { details: pgError.constraint }
-						: {}),
-				},
-			});
+			sendError(
+				res,
+				409,
+				"DUPLICATE_ENTRY",
+				"Taki rekord już istnieje",
+				env.NODE_ENV === "development" ? pgError.constraint : undefined,
+			);
 			return;
 		}
 
 		// Foreign key violation
 		if (pgError.code === "23503") {
-			res.status(400).json({
-				success: false,
-				error: {
-					code: "INVALID_REFERENCE",
-					message: "Nieprawidłowe odwołanie do powiązanego zasobu",
-				},
-			});
+			sendError(
+				res,
+				400,
+				"INVALID_REFERENCE",
+				"Nieprawidłowe odwołanie do powiązanego zasobu",
+			);
 			return;
 		}
 
 		// Not null violation
 		if (pgError.code === "23502") {
-			res.status(400).json({
-				success: false,
-				error: {
-					code: "MISSING_REQUIRED_FIELD",
-					message: "Brakuje wymaganego pola",
-				},
-			});
+			sendError(res, 400, "MISSING_REQUIRED_FIELD", "Brakuje wymaganego pola");
 			return;
 		}
 	}
 
 	// Domyślna obsługa nieznanych błędów
-	res.status(500).json({
-		success: false,
-		error: {
-			code: "INTERNAL_ERROR",
-			message:
-				env.NODE_ENV === "development" ? err.message : "Wystąpił błąd serwera",
-			...(env.NODE_ENV === "development" ? { stack: err.stack } : {}),
-		},
-	});
+	sendError(
+		res,
+		500,
+		"INTERNAL_ERROR",
+		env.NODE_ENV === "development" ? err.message : "Wystąpił błąd serwera",
+		env.NODE_ENV === "development" ? { stack: err.stack } : undefined,
+	);
 }
 
 // Async Handler Wrapper

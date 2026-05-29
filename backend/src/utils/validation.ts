@@ -2,6 +2,7 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
+import { sendErrorResponse } from "../lib/api-response";
 
 export const uuidSchema = z
 	.string()
@@ -121,14 +122,13 @@ export function validate<T extends z.ZodTypeAny>(
 					message: issue.message,
 				}));
 
-				res.status(400).json({
-					success: false,
-					error: {
-						code: "VALIDATION_ERROR",
-						message: "Błąd walidacji danych",
-						details: formattedErrors,
-					},
-				});
+				sendErrorResponse(
+					res,
+					400,
+					"VALIDATION_ERROR",
+					"Błąd walidacji danych",
+					formattedErrors,
+				);
 				return;
 			}
 
@@ -178,14 +178,13 @@ export function validateMultiple(schemas: {
 		}
 
 		if (errors.length > 0) {
-			res.status(400).json({
-				success: false,
-				error: {
-					code: "VALIDATION_ERROR",
-					message: "Błąd walidacji danych",
-					details: errors,
-				},
-			});
+			sendErrorResponse(
+				res,
+				400,
+				"VALIDATION_ERROR",
+				"Błąd walidacji danych",
+				errors,
+			);
 			return;
 		}
 

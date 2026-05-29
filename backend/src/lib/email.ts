@@ -83,16 +83,10 @@ export async function sendVerificationEmail(
 		});
 
 		if (!result.success) {
-			console.error(
-				`Nie udało się wysłać emaila weryfikacyjnego do ${user.email}:`,
-				result.error,
-			);
+			console.error("Nie udało się wysłać emaila weryfikacyjnego");
 		}
-	} catch (error) {
-		console.error(
-			`Błąd podczas wysyłki emaila weryfikacyjnego do ${user.email}:`,
-			error,
-		);
+	} catch (_error) {
+		console.error("Błąd podczas wysyłki emaila weryfikacyjnego");
 	}
 }
 
@@ -125,16 +119,10 @@ export async function sendResetPasswordEmail(
 		});
 
 		if (!result.success) {
-			console.error(
-				`Nie udało się wysłać emaila resetującego hasło do ${user.email}:`,
-				result.error,
-			);
+			console.error("Nie udało się wysłać emaila resetującego hasło");
 		}
-	} catch (error) {
-		console.error(
-			`Błąd podczas wysyłki emaila resetującego hasło do ${user.email}:`,
-			error,
-		);
+	} catch (_error) {
+		console.error("Błąd podczas wysyłki emaila resetującego hasło");
 	}
 }
 

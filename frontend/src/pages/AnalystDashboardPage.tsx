@@ -1,11 +1,16 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Activity, User, UserX, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { AnalystIncidentList } from "../components/AnalystIncidentList";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
-import { IncidentReportForm } from "../components/IncidentReportForm";
+
+const IncidentReportForm = lazy(() =>
+  import("../components/IncidentReportForm").then((module) => ({
+    default: module.IncidentReportForm,
+  })),
+);
 
 export function AnalystDashboardPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -60,7 +65,9 @@ export function AnalystDashboardPage() {
               <DialogDescription className="sr-only">
                 Formularz zgłaszania nowego incydentu bezpieczeństwa.
               </DialogDescription>
-              <IncidentReportForm onSuccess={handleIncidentCreated} />
+              <Suspense fallback={<DialogLoader />}>
+                <IncidentReportForm onSuccess={handleIncidentCreated} />
+              </Suspense>
             </DialogContent>
           </Dialog>
         </div>
@@ -73,6 +80,14 @@ export function AnalystDashboardPage() {
           <AnalystIncidentList type="unassigned" />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function DialogLoader() {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center text-zinc-400">
+      Ładowanie formularza…
     </div>
   );
 }

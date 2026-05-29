@@ -12,7 +12,13 @@ import { auth } from "./lib/auth";
 import { checkDatabaseConnection, closeDatabase } from "./lib/database";
 import { testEmailConnection } from "./lib/email";
 import { env } from "./lib/env";
-import { apiRateLimiter, errorHandler, notFoundHandler } from "./middleware";
+import {
+	apiRateLimiter,
+	errorHandler,
+	issueCsrfToken,
+	notFoundHandler,
+	requireCsrf,
+} from "./middleware";
 import signUpWithOrganizationRouter from "./routes/auth/sign-up-with-organization";
 
 const app = express();
@@ -61,16 +67,22 @@ app.use(
 // CORS Configuration
 app.use(
 	cors({
-		origin: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
+		origin: env.CORS_ORIGINS,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		credentials: true,
-		allowedHeaders: ["Content-Type", "Authorization"],
+		allowedHeaders: ["Accept", "Authorization", "Content-Type", "X-CSRF-Token"],
+		maxAge: 600,
 	}),
 );
 
 // Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// CSRF token bootstrap for same-origin frontend requests
+app.get("/api/csrf", (req, res, next) => {
+	void issueCsrfToken(req, res).catch(next);
+});
 
 // Custom auth routes
 app.use("/api/auth", signUpWithOrganizationRouter);
@@ -136,9 +148,9 @@ import incidentsRouter from "./routes/incidents";
 import apiRoutes from "./routes/index";
 
 // Rate Limiting dla własnych endpointów (zgodnie z Better-Auth: 100 req/10s)
-app.use("/api/incidents", apiRateLimiter, incidentsRouter);
-app.use("/api/admin", apiRateLimiter);
-app.use("/api/analyst", apiRateLimiter);
+app.use("/api/incidents", requireCsrf, apiRateLimiter, incidentsRouter);
+app.use("/api/admin", requireCsrf, apiRateLimiter);
+app.use("/api/analyst", requireCsrf, apiRateLimiter);
 app.use("/api", apiRoutes); // Podłącza /api/admin/* i /api/analyst/*
 
 app.use(notFoundHandler);

@@ -2,6 +2,8 @@
 
 Dokumentacja API dla aplikacji BastionDesk. Zawiera szczegółowe informacje o endpointach, strukturach JSON odpowiedzi oraz kodach błędów.
 
+> Uwaga: w aktualnym środowisku Docker Compose publicznym entrypointem aplikacji jest `http://localhost:4567`. Przykłady dla endpointów `/api/*` korzystają z reverse proxy `nginx`. Endpoint `GET /health` pozostaje endpointem backendu i nie jest osobno publikowany na hoście w domyślnej konfiguracji.
+
 ## Przegląd API
 
 ### Formaty danych
@@ -93,7 +95,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/health
+docker compose exec backend wget -qO- http://127.0.0.1:3333/health
 ```
 
 **Response (Success):**
@@ -136,7 +138,7 @@ Wszystkie endpointy autoryzacji są dostępne pod ścieżką `/api/auth/*`. Bett
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/sign-up/email \
+curl -X POST http://localhost:4567/api/auth/sign-up/email \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -185,7 +187,7 @@ curl -X POST http://localhost:3333/api/auth/sign-up/email \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/sign-up-with-organization/email \
+curl -X POST http://localhost:4567/api/auth/sign-up-with-organization/email \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -243,7 +245,7 @@ curl -X POST http://localhost:3333/api/auth/sign-up-with-organization/email \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/sign-in/email \
+curl -X POST http://localhost:4567/api/auth/sign-in/email \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -281,7 +283,7 @@ curl -X POST http://localhost:3333/api/auth/sign-in/email \
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/auth/session \
+curl http://localhost:4567/api/auth/session \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -332,7 +334,7 @@ curl http://localhost:3333/api/auth/session \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/request-password-reset \
+curl -X POST http://localhost:4567/api/auth/request-password-reset \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -361,7 +363,7 @@ curl -X POST http://localhost:3333/api/auth/request-password-reset \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/reset-password \
+curl -X POST http://localhost:4567/api/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{
     "newPassword": "newSecurePassword123!",
@@ -391,7 +393,7 @@ curl -X POST http://localhost:3333/api/auth/reset-password \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/change-password \
+curl -X POST http://localhost:4567/api/auth/change-password \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -416,7 +418,7 @@ curl -X POST http://localhost:3333/api/auth/change-password \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/sign-out \
+curl -X POST http://localhost:4567/api/auth/sign-out \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -444,7 +446,7 @@ curl -X POST http://localhost:3333/api/auth/sign-out \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/organization/create \
+curl -X POST http://localhost:4567/api/auth/organization/create \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -479,7 +481,7 @@ curl -X POST http://localhost:3333/api/auth/organization/create \
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/auth/organization/list \
+curl http://localhost:4567/api/auth/organization/list \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -503,7 +505,7 @@ curl http://localhost:3333/api/auth/organization/list \
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/auth/organization/full \
+curl http://localhost:4567/api/auth/organization/full \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -549,7 +551,7 @@ curl http://localhost:3333/api/auth/organization/full \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/organization/invite-member \
+curl -X POST http://localhost:4567/api/auth/organization/invite-member \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -586,7 +588,7 @@ curl -X POST http://localhost:3333/api/auth/organization/invite-member \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/organization/add-member \
+curl -X POST http://localhost:4567/api/auth/organization/add-member \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -636,7 +638,7 @@ curl -X POST http://localhost:3333/api/auth/organization/add-member \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/organization/add-member-by-email \
+curl -X POST http://localhost:4567/api/auth/organization/add-member-by-email \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -703,7 +705,7 @@ curl -X POST http://localhost:3333/api/auth/organization/add-member-by-email \
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:3333/api/auth/organization/list-members?limit=10&sortBy=createdAt&sortDirection=desc" \
+curl "http://localhost:4567/api/auth/organization/list-members?limit=10&sortBy=createdAt&sortDirection=desc" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -762,7 +764,7 @@ curl "http://localhost:3333/api/auth/organization/list-members?limit=10&sortBy=c
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/organization/update-member-role \
+curl -X POST http://localhost:4567/api/auth/organization/update-member-role \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -805,7 +807,7 @@ curl -X POST http://localhost:3333/api/auth/organization/update-member-role \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/organization/remove-member \
+curl -X POST http://localhost:4567/api/auth/organization/remove-member \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -827,7 +829,7 @@ curl -X POST http://localhost:3333/api/auth/organization/remove-member \
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/auth/organization/get-active-member \
+curl http://localhost:4567/api/auth/organization/get-active-member \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -858,7 +860,7 @@ curl http://localhost:3333/api/auth/organization/get-active-member \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/passkey/check-availability \
+curl -X POST http://localhost:4567/api/auth/passkey/check-availability \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com"
@@ -891,7 +893,7 @@ curl -X POST http://localhost:3333/api/auth/passkey/check-availability \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/passkey/register \
+curl -X POST http://localhost:4567/api/auth/passkey/register \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -929,7 +931,7 @@ curl -X POST http://localhost:3333/api/auth/passkey/register \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/auth/passkey/sign-in \
+curl -X POST http://localhost:4567/api/auth/passkey/sign-in \
   -H "Content-Type: application/json"
 ```
 
@@ -1053,7 +1055,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:3333/api/incidents/my?page=1&limit=10" \
+curl "http://localhost:4567/api/incidents/my?page=1&limit=10" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1127,7 +1129,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
+curl http://localhost:4567/api/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1208,7 +1210,7 @@ Nieprawidłowe `sortBy` lub `sortOrder` zwraca `400 INVALID_SORT`.
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:3333/api/analyst/incidents/assigned?page=1&limit=10&status=Raport w trakcie" \
+curl "http://localhost:4567/api/analyst/incidents/assigned?page=1&limit=10&status=Raport w trakcie" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1281,7 +1283,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:3333/api/analyst/incidents/unassigned?page=1&limit=5" \
+curl "http://localhost:4567/api/analyst/incidents/unassigned?page=1&limit=5" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1349,7 +1351,7 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/assign \
+curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/assign \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
@@ -1384,7 +1386,7 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/unassign \
+curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/unassign \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
@@ -1432,7 +1434,7 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X PUT http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/status \
+curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/status \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{"status": "Raport złożony"}'
@@ -1475,7 +1477,7 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X PUT http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/notes \
+curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/notes \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{"notes": "Sprawdziłem logi systemowe..."}'
@@ -1510,7 +1512,7 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X PUT http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/resolve \
+curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/resolve \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
@@ -1549,7 +1551,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
+curl http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1628,7 +1630,7 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports \
+curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -1690,7 +1692,7 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/statements \
+curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/statements \
   -H "Content-Type: application/json" \
   -H "Cookie: better-auth.session=session_token_here" \
   -d '{
@@ -1752,7 +1754,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:3333/api/admin/incidents?page=1&limit=10&status=Zgłoszony&sortBy=createdAt&sortOrder=desc" \
+curl "http://localhost:4567/api/admin/incidents?page=1&limit=10&status=Zgłoszony&sortBy=createdAt&sortOrder=desc" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1810,7 +1812,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
+curl http://localhost:4567/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1860,7 +1862,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl http://localhost:3333/api/admin/analytics/stats \
+curl http://localhost:4567/api/admin/analytics/stats \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -1912,7 +1914,7 @@ Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:3333/api/admin/analytics/metrics?period=30" \
+curl "http://localhost:4567/api/admin/analytics/metrics?period=30" \
   -H "Cookie: better-auth.session=session_token_here"
 ```
 
@@ -2272,17 +2274,17 @@ if (incident.data.analystReportPath) {
 **cURL przykłady:**
 ```bash
 # Pobieranie screenshotu przez analityka
-curl "http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/screenshots/error.png" \
+curl "http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/screenshots/error.png" \
   -H "Cookie: better-auth.session=session_token_here" \
   --output error.png
 
 # Pobieranie raportu przez analityka
-curl "http://localhost:3333/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/reports/analysis.docx" \
+curl "http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/reports/analysis.docx" \
   -H "Cookie: better-auth.session=session_token_here" \
   --output analysis.docx
 
 # Pobieranie sprawozdania przez administratora
-curl "http://localhost:3333/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/statements/final_report.pdf" \
+curl "http://localhost:4567/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/statements/final_report.pdf" \
   -H "Cookie: better-auth.session=session_token_here" \
   --output final_report.pdf
 ```

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { IncidentsResponse } from "@/ApiModel";
 import { apiFetch } from "@/lib/api";
@@ -6,8 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card"
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { IncidentDetails } from "./IncidentDetails";
 import { IncidentSummaryItem } from "./incident-list/IncidentSummaryItem";
+
+const IncidentDetails = lazy(() =>
+  import("./IncidentDetails").then((module) => ({
+    default: module.IncidentDetails,
+  })),
+);
 
 export function MyIncidentsList() {
   const [page, setPage] = useState(1);
@@ -32,7 +37,15 @@ export function MyIncidentsList() {
 
   // Jeśli wybrano zgłoszenie, pokaż szczegóły
   if (selectedIncidentId) {
-    return <IncidentDetails incidentId={selectedIncidentId} onBack={() => setSelectedIncidentId(null)} mode="employee" />;
+    return (
+      <Suspense fallback={<IncidentDetailsLoader />}>
+        <IncidentDetails
+          incidentId={selectedIncidentId}
+          onBack={() => setSelectedIncidentId(null)}
+          mode="employee"
+        />
+      </Suspense>
+    );
   }
 
   return (
@@ -100,5 +113,13 @@ export function MyIncidentsList() {
         </CardFooter>
       )}
     </Card>
+  );
+}
+
+function IncidentDetailsLoader() {
+  return (
+    <div className="flex min-h-[420px] w-full max-w-2xl items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/50 text-zinc-400">
+      Ładowanie szczegółów incydentu…
+    </div>
   );
 }

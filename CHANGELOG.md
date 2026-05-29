@@ -2,6 +2,53 @@
 
 All notable changes to BastionDesk will be documented in this file.
 
+## [1.0.1] - 2026-05-29
+
+Patch release focused on security hardening, deployment cleanup, admin incident filtering improvements and safer runtime behavior for the supported Docker Compose installation.
+
+### Changed
+
+- Consolidated the supported public entrypoint around `http://localhost:4567`.
+- Updated `.env.example` for same-origin frontend API access with `VITE_API_URL` omitted by default and `VITE_API_TIMEOUT_MS=15000`.
+- Updated Better Auth defaults to use the reverse proxy origin.
+- Added `CSRF_SECRET` environment configuration.
+- Added optional outbound proxy configuration for `llm_service` through `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`.
+- Updated API and infrastructure documentation to use the reverse proxy entrypoint and the current single-entrypoint deployment model.
+- Updated base images for PostgreSQL, nginx and storage runtime.
+
+### Security
+
+- Added CSRF protection for state-changing application API routes.
+- Added frontend CSRF token bootstrap, token refresh and retry behavior for stale CSRF tokens.
+- Added stricter runtime validation for frontend, auth, WebAuthn, CORS and trusted origin configuration.
+- Added production checks for HTTPS origins and strong `CSRF_SECRET`.
+- Added browser security headers to public and frontend nginx.
+- Removed direct public proxy routing to `/llm/` from nginx.
+- Removed default host port publishing for backend, PostgreSQL, PgBouncer, MinIO and LLM service in the supported Compose path.
+- Reduced sensitive auth, email and error logging.
+
+### Fixed
+
+- Improved LLM client error mapping for timeout, unavailable, invalid request and invalid response cases.
+- Improved `llm_service` health reporting with explicit `ok` / `degraded` status and HTTP `503` when the model is not loaded.
+- Replaced unsafe parameterized SQL helper execution with `pg` Pool queries.
+- Hardened admin and analyst incident sorting through explicit SQL column allowlists.
+- Improved admin incident filtering with dynamic analyst options and real user search by ID, name and email.
+- Shared scoped incident update logic across analyst and admin incident operations.
+- Improved frontend API error handling, request timeouts and CSRF retry behavior.
+
+### Frontend
+
+- Added lazy loading for heavier dashboard sections, incident details, settings and incident report forms.
+- Added clearer loading states for dashboard and incident-detail views.
+- Added `react-doctor` developer script.
+
+### Known Notes
+
+- `1.0.1` remains within the `fresh install only` release model.
+- Internal services are no longer directly reachable from the host in the default Compose setup.
+- Environments without direct internet access can now route `llm_service` model downloads through an outbound proxy.
+
 ## [1.0.0] - 2026-05-16
 
 First public release of BastionDesk.

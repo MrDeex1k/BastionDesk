@@ -33,6 +33,7 @@ Zasady przyjmowania wkładu zewnętrznego opisuje `CONTRIBUTING.md`.
 1. Wchodzimy w katalog BastionDesk.  
 2. Uruchamiamy komendę "docker compose build" .  
 3. Uruchamiamy komendę "docker compose up" lub "docker compose up -d", jeśli chcemy uruchomić w tle.    
+4. Z aplikacji korzystamy przez `http://localhost:4567` - to jedyny publiczny entrypoint stacka.    
 
 ## Deployment
 

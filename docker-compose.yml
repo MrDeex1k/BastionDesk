@@ -9,8 +9,6 @@ services:
     environment:
       - PGDATA=/var/lib/postgresql/data/pgdata
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
-    ports:
-      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     command:
       [
         "postgres",
@@ -43,13 +41,19 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,llm_service,backend,pgbouncer,database,storage-1,storage-2,storage-3,storage-4}
+      - http_proxy=${HTTP_PROXY:-}
+      - https_proxy=${HTTPS_PROXY:-}
+      - no_proxy=${NO_PROXY:-localhost,127.0.0.1,llm_service,backend,pgbouncer,database,storage-1,storage-2,storage-3,storage-4}
     volumes:
       - huggingface-cache:/home/app/.cache/huggingface
       - ./infra/tls/dev/ca:/certs/ca:ro
       - ./infra/tls/dev/llm_service:/certs/llm_service:ro
     networks:
       - bastiondesk-net-internal
-      - bastiondesk-net-external
     deploy:
       resources:
         limits:
@@ -67,8 +71,6 @@ services:
     volumes:
       - ./infra/tls/dev/ca:/certs/ca:ro
       - ./infra/tls/dev/pgbouncer:/certs/pgbouncer:ro
-    ports:
-      - "${PGBOUNCER_PORT}:${PGBOUNCER_PORT}"
     networks:
       - bastiondesk-net-internal
 
@@ -120,8 +122,6 @@ services:
         condition: service_healthy
       storage-3:
         condition: service_healthy
-    ports:
-      - "3333:3333"
     volumes:
       - ./infra/tls/dev/ca:/certs/ca:ro
       - ./infra/tls/dev/backend:/certs/backend:ro
@@ -148,8 +148,6 @@ services:
       backend:
         condition: service_healthy
       frontend:
-        condition: service_healthy
-      llm_service:
         condition: service_healthy
     networks:
       - bastiondesk-net-internal
@@ -188,9 +186,6 @@ services:
           sleep 5  # Czekaj na synchronizację bucketa w distributed MinIO
         fi
         wait $$pid
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - minio-data-1:/data
       - ./infra/tls/dev/storage-1:/root/.minio/certs:ro

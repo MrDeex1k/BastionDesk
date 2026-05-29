@@ -1,8 +1,17 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Users, List, PlusCircle } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { IncidentReportForm } from "../components/IncidentReportForm";
-import { MyIncidentsList } from "../components/MyIncidentsList";
+
+const IncidentReportForm = lazy(() =>
+  import("../components/IncidentReportForm").then((module) => ({
+    default: module.IncidentReportForm,
+  })),
+);
+const MyIncidentsList = lazy(() =>
+  import("../components/MyIncidentsList").then((module) => ({
+    default: module.MyIncidentsList,
+  })),
+);
 
 export function EmployeeDashboardPage() {
   const [view, setView] = useState<"report" | "list">("report");
@@ -42,12 +51,22 @@ export function EmployeeDashboardPage() {
       </div>
 
       <div className="w-full flex justify-center">
-        {view === "report" ? (
-          <IncidentReportForm onSuccess={() => {}} />
-        ) : (
-          <MyIncidentsList />
-        )}
+        <Suspense fallback={<DashboardSectionLoader />}>
+          {view === "report" ? (
+            <IncidentReportForm onSuccess={() => {}} />
+          ) : (
+            <MyIncidentsList />
+          )}
+        </Suspense>
       </div>
+    </div>
+  );
+}
+
+function DashboardSectionLoader() {
+  return (
+    <div className="flex min-h-[320px] w-full max-w-2xl items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/50 text-zinc-400">
+      Ładowanie widoku…
     </div>
   );
 }

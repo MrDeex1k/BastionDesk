@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "preview": "bunx --bun vite preview",
     "deps:install": "bun install --minimum-release-age 216000",
-    "deps:update": "bun update --latest --minimum-release-age 216000"
+    "deps:update": "bun update --latest --minimum-release-age 216000",
+    "doctor": "react-doctor . --verbose --diff"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -47,6 +48,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "react-doctor": "^0.2.8",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.59.3",
     "vite": "^8.0.12"

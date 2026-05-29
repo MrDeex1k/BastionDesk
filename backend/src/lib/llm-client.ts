@@ -42,6 +42,25 @@ const grpcObject = grpc.loadPackageDefinition(packageDefinition) as unknown as {
 
 const allowedCategories = new Set(["Czerwony", "Żółty", "Zielony"]);
 
+export class LlmServiceError extends Error {
+	constructor(
+		public code:
+			| "LLM_INVALID_REQUEST"
+			| "LLM_TIMEOUT"
+			| "LLM_UNAVAILABLE"
+			| "LLM_UPSTREAM_ERROR"
+			| "LLM_INVALID_RESPONSE",
+		message: string,
+		public statusCode: number,
+		public retryable: boolean,
+		public grpcStatus?: grpc.status,
+		public details?: string,
+	) {
+		super(message);
+		this.name = "LlmServiceError";
+	}
+}
+
 let client: {
 	ClassifyIncident: (
 		request: { incidentId: string; description: string },
@@ -70,10 +89,78 @@ function getClient() {
 	return client;
 }
 
+function createLlmGrpcError(error: grpc.ServiceError): LlmServiceError {
+	switch (error.code) {
+		case grpc.status.DEADLINE_EXCEEDED:
+			return new LlmServiceError(
+				"LLM_TIMEOUT",
+				"Usługa klasyfikacji nie odpowiedziała w wymaganym czasie",
+				504,
+				true,
+				error.code,
+				error.details,
+			);
+		case grpc.status.UNAVAILABLE:
+			return new LlmServiceError(
+				"LLM_UNAVAILABLE",
+				"Usługa klasyfikacji jest chwilowo niedostępna",
+				503,
+				true,
+				error.code,
+				error.details,
+			);
+		case grpc.status.RESOURCE_EXHAUSTED:
+			return new LlmServiceError(
+				"LLM_UNAVAILABLE",
+				"Usługa klasyfikacji jest przeciążona",
+				503,
+				true,
+				error.code,
+				error.details,
+			);
+		case grpc.status.INVALID_ARGUMENT:
+			return new LlmServiceError(
+				"LLM_INVALID_REQUEST",
+				"Usługa klasyfikacji odrzuciła nieprawidłowe dane wejściowe",
+				502,
+				false,
+				error.code,
+				error.details,
+			);
+		default:
+			return new LlmServiceError(
+				"LLM_UPSTREAM_ERROR",
+				"Usługa klasyfikacji zwróciła nieoczekiwany błąd",
+				502,
+				false,
+				error.code,
+				error.details,
+			);
+	}
+}
+
 export async function classifyIncident(
 	incidentId: string,
 	description: string,
 ): Promise<string> {
+	if (!incidentId.trim()) {
+		throw new LlmServiceError(
+			"LLM_INVALID_REQUEST",
+			"Brak identyfikatora incydentu dla klasyfikacji",
+			400,
+			false,
+		);
+	}
+
+	if (!description.trim()) {
+		throw new LlmServiceError(
+			"LLM_INVALID_REQUEST",
+			"Brak opisu incydentu do klasyfikacji",
+			400,
+			false,
+		);
+	}
+
 	const rpcClient = getClient();
 
 	return await new Promise((resolve, reject) => {
@@ -83,15 +170,20 @@ export async function classifyIncident(
 			{ deadline: Date.now() + env.LLM_RPC_TIMEOUT_MS },
 			(error, response) => {
 				if (error) {
-					reject(error);
+					reject(createLlmGrpcError(error));
 					return;
 				}
 
 				const category = response?.category;
 				if (!category || !allowedCategories.has(category)) {
 					reject(
-						new Error(
-							`Invalid category returned by LLM: ${category ?? "empty"}`,
+						new LlmServiceError(
+							"LLM_INVALID_RESPONSE",
+							"Usługa klasyfikacji zwróciła nieprawidłową kategorię",
+							502,
+							false,
+							undefined,
+							`category=${category ?? "empty"}`,
 						),
 					);
 					return;

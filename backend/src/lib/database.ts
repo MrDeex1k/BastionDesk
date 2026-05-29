@@ -5,11 +5,14 @@
  * Better-Auth używa osobnego połączenia przez pg Pool
  */
 
+import fs from "node:fs";
 import { SQL } from "bun";
+import { Pool, type QueryResultRow } from "pg";
 import { env } from "./env";
 
 // Bun SQL Instance (lazy singleton)
 let _sql: SQL | null = null;
+let _pool: Pool | null = null;
 
 /**
  * Pobierz instancję Bun SQL (lazy singleton)
@@ -38,6 +41,29 @@ export function getDb(): SQL {
 		console.log("[DATABASE] Bun SQL connection initialized");
 	}
 	return _sql;
+}
+
+/**
+ * Pobierz bezpieczny pool pg dla zapytań tekstowych z parametrami.
+ * Używany tam, gdzie kod nadal operuje na klasycznym SQL z placeholderami $1, $2...
+ */
+function getPgPool(): Pool {
+	if (!_pool) {
+		_pool = new Pool({
+			connectionString: env.DATABASE_URL,
+			ssl: {
+				rejectUnauthorized: true,
+				ca: fs.readFileSync(env.DB_TLS_CA_PATH, "utf8"),
+				cert: fs.readFileSync(env.DB_TLS_CERT_PATH, "utf8"),
+				key: fs.readFileSync(env.DB_TLS_KEY_PATH, "utf8"),
+			},
+			max: 20,
+			idleTimeoutMillis: 30000,
+			connectionTimeoutMillis: 2000,
+		});
+	}
+
+	return _pool;
 }
 
 /**
@@ -73,6 +99,12 @@ export async function closeDatabase(): Promise<void> {
 		_sql = null;
 		console.log("[DATABASE] Bun SQL connection closed");
 	}
+
+	if (_pool) {
+		await _pool.end();
+		_pool = null;
+		console.log("[DATABASE] pg Pool connection closed");
+	}
 }
 
 // Helper Functions - dla kompatybilności z istniejącym kodem
@@ -82,25 +114,19 @@ export async function closeDatabase(): Promise<void> {
  * @param queryText - tekst zapytania SQL
  * @param params - parametry zapytania (opcjonalne)
  */
-export async function query<T>(
+export async function query<T extends QueryResultRow>(
 	queryText: string,
 	params?: unknown[],
 ): Promise<T[]> {
-	const database = getDb();
-
-	if (params && params.length > 0) {
-		const result = await database.unsafe(queryText, params as never[]);
-		return result as T[];
-	}
-
-	const result = await database.unsafe(queryText);
-	return result as T[];
+	const pool = getPgPool();
+	const result = await pool.query<T>(queryText, params ?? []);
+	return result.rows;
 }
 
 /**
  * Wykonaj zapytanie SQL i zwróć pierwszy wynik
  */
-export async function queryOne<T>(
+export async function queryOne<T extends QueryResultRow>(
 	queryText: string,
 	params?: unknown[],
 ): Promise<T | null> {

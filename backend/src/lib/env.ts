@@ -31,8 +31,75 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 	return value.toLowerCase() === "true" || value === "1";
 }
 
+function parseOriginList(value: string, key: string): string[] {
+	const origins = value
+		.split(",")
+		.map((origin) => origin.trim())
+		.filter(Boolean);
+
+	if (origins.length === 0) {
+		throw new Error(
+			`Environment variable ${key} must include at least one origin`,
+		);
+	}
+
+	for (const origin of origins) {
+		validateOrigin(origin, key);
+	}
+
+	return origins;
+}
+
+function validateOrigin(value: string, key: string): string {
+	let parsed: URL;
+
+	try {
+		parsed = new URL(value);
+	} catch {
+		throw new Error(`Environment variable ${key} must be a valid URL origin`);
+	}
+
+	if (!["http:", "https:"].includes(parsed.protocol)) {
+		throw new Error(
+			`Environment variable ${key} must use http or https protocol`,
+		);
+	}
+
+	if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
+		throw new Error(
+			`Environment variable ${key} must be an origin without path, query or hash`,
+		);
+	}
+
+	if (parsed.origin.includes("*")) {
+		throw new Error(
+			`Environment variable ${key} cannot contain wildcard origins`,
+		);
+	}
+
+	return parsed.origin;
+}
+
+function validateUrl(value: string, key: string): URL {
+	let parsed: URL;
+
+	try {
+		parsed = new URL(value);
+	} catch {
+		throw new Error(`Environment variable ${key} must be a valid URL`);
+	}
+
+	if (!["http:", "https:"].includes(parsed.protocol)) {
+		throw new Error(
+			`Environment variable ${key} must use http or https protocol`,
+		);
+	}
+
+	return parsed;
+}
+
 //Konfiguracja zmiennych środowiskowych
-export const env = {
+const rawEnv = {
 	// Server
 	PORT: getEnvNumber("PORT", 3333),
 	NODE_ENV: getEnvVar("NODE_ENV"),
@@ -52,6 +119,7 @@ export const env = {
 	BETTER_AUTH_SECRET: getEnvVar("BETTER_AUTH_SECRET"),
 	BETTER_AUTH_URL: getEnvVar("BETTER_AUTH_URL"),
 	BETTER_AUTH_TRUSTED_ORIGINS: getEnvVar("BETTER_AUTH_TRUSTED_ORIGINS"),
+	CSRF_SECRET: getEnvVar("CSRF_SECRET"),
 
 	// WebAuthn / PassKeys
 	WEBAUTHN_RP_ID: getEnvVar("WEBAUTHN_RP_ID"),
@@ -91,6 +159,51 @@ export const env = {
 	FRONTEND_URL: getEnvVar("FRONTEND_URL"),
 } as const;
 
+const frontendUrl = validateUrl(rawEnv.FRONTEND_URL, "FRONTEND_URL");
+const betterAuthUrl = validateUrl(rawEnv.BETTER_AUTH_URL, "BETTER_AUTH_URL");
+const webauthnOrigin = validateOrigin(
+	rawEnv.WEBAUTHN_ORIGIN,
+	"WEBAUTHN_ORIGIN",
+);
+const corsOrigins = parseOriginList(rawEnv.CORS_ORIGIN, "CORS_ORIGIN");
+const trustedOrigins = parseOriginList(
+	rawEnv.BETTER_AUTH_TRUSTED_ORIGINS,
+	"BETTER_AUTH_TRUSTED_ORIGINS",
+);
+
+if (!corsOrigins.includes(frontendUrl.origin)) {
+	throw new Error("FRONTEND_URL origin must be included in CORS_ORIGIN");
+}
+
+if (!trustedOrigins.includes(frontendUrl.origin)) {
+	throw new Error(
+		"FRONTEND_URL origin must be included in BETTER_AUTH_TRUSTED_ORIGINS",
+	);
+}
+
+if (!trustedOrigins.includes(betterAuthUrl.origin)) {
+	throw new Error(
+		"BETTER_AUTH_URL origin must be included in BETTER_AUTH_TRUSTED_ORIGINS",
+	);
+}
+
+if (webauthnOrigin !== frontendUrl.origin) {
+	throw new Error("WEBAUTHN_ORIGIN must match FRONTEND_URL origin");
+}
+
+if (rawEnv.WEBAUTHN_RP_ID !== frontendUrl.hostname) {
+	throw new Error("WEBAUTHN_RP_ID must match FRONTEND_URL hostname");
+}
+
+export const env = {
+	...rawEnv,
+	FRONTEND_ORIGIN: frontendUrl.origin,
+	BETTER_AUTH_ORIGIN: betterAuthUrl.origin,
+	WEBAUTHN_ORIGIN: webauthnOrigin,
+	CORS_ORIGINS: corsOrigins,
+	BETTER_AUTH_TRUSTED_ORIGIN_LIST: trustedOrigins,
+} as const;
+
 // Tryb produkcyjny
 if (env.NODE_ENV === "production") {
 	if (env.BETTER_AUTH_SECRET.includes("dev-secret")) {
@@ -100,6 +213,24 @@ if (env.NODE_ENV === "production") {
 		throw new Error(
 			"BETTER_AUTH_SECRET must be at least 32 characters in production!",
 		);
+	}
+	if (env.CSRF_SECRET.length < 32) {
+		throw new Error(
+			"CSRF_SECRET must be at least 32 characters in production!",
+		);
+	}
+	for (const origin of [
+		env.FRONTEND_ORIGIN,
+		env.BETTER_AUTH_ORIGIN,
+		env.WEBAUTHN_ORIGIN,
+		...env.CORS_ORIGINS,
+		...env.BETTER_AUTH_TRUSTED_ORIGIN_LIST,
+	]) {
+		if (!origin.startsWith("https://")) {
+			throw new Error(
+				"FRONTEND_URL, BETTER_AUTH_URL, WEBAUTHN_ORIGIN, CORS_ORIGIN and BETTER_AUTH_TRUSTED_ORIGINS must use https in production",
+			);
+		}
 	}
 }
 

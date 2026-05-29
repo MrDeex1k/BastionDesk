@@ -19,14 +19,14 @@ import { requireOrganizationAccess } from "../shared/middleware.js";
 
 const router = Router();
 
-const ALLOWED_INCIDENT_SORT_FIELDS = new Set([
-	"createdAt",
-	"updatedAt",
-	"status",
-	"dataZgloszenia",
-	"userId",
-	"analystId",
-]);
+const INCIDENT_SORT_COLUMNS: Record<string, string> = {
+	createdAt: 'i."createdAt"',
+	updatedAt: 'i."updatedAt"',
+	status: "i.status",
+	dataZgloszenia: 'i."dataZgloszenia"',
+	userId: 'i."userId"',
+	analystId: 'i."analystId"',
+};
 
 function getIncidentOrderBy(
 	sortByValue: unknown,
@@ -35,15 +35,13 @@ function getIncidentOrderBy(
 	const sortBy = typeof sortByValue === "string" ? sortByValue : "createdAt";
 	const sortOrder =
 		typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
+	const sortColumn = INCIDENT_SORT_COLUMNS[sortBy];
 
-	if (
-		!ALLOWED_INCIDENT_SORT_FIELDS.has(sortBy) ||
-		!["asc", "desc"].includes(sortOrder)
-	) {
+	if (!sortColumn || !["asc", "desc"].includes(sortOrder)) {
 		return null;
 	}
 
-	return `i."${sortBy}" ${sortOrder}`;
+	return `${sortColumn} ${sortOrder.toUpperCase()}`;
 }
 
 /**
@@ -357,13 +355,6 @@ async function downloadFile(req: Request, res: Response) {
 		// lub raporty/sprawozdania z jego organizacji
 		// Dla screenshots i attachments - dostęp jeśli w organizacji
 		const isAdmin = authReq.memberRole === "admin";
-		console.log("[DOWNLOAD] Access check:", {
-			userId,
-			memberRole: authReq.memberRole,
-			isAdmin,
-			analystId: incident.analystId,
-			type,
-		});
 
 		const hasAccess =
 			isAdmin ||
@@ -374,7 +365,6 @@ async function downloadFile(req: Request, res: Response) {
 			type === "attachments";
 
 		if (!hasAccess) {
-			console.log("[DOWNLOAD] Access denied");
 			return res.status(403).json({
 				success: false,
 				error: {
@@ -412,10 +402,6 @@ async function downloadFile(req: Request, res: Response) {
 		);
 
 		if (!fileData?.metadata || !fileData?.path) {
-			console.log("[DOWNLOAD] No metadata or path found:", {
-				hasMetadata: !!fileData?.metadata,
-				hasPath: !!fileData?.path,
-			});
 			return res.status(404).json({
 				success: false,
 				error: {
@@ -425,14 +411,6 @@ async function downloadFile(req: Request, res: Response) {
 			});
 		}
 
-		console.log("[DOWNLOAD] File data:", {
-			type,
-			filename,
-			metadata: fileData.metadata,
-			path: fileData.path,
-			isArray: Array.isArray(fileData.metadata),
-		});
-
 		// Znajdź plik w metadanych
 		let fileMetadata: StoredFileMetadata | null = null;
 		let filePath: string | null = null;
@@ -440,9 +418,8 @@ async function downloadFile(req: Request, res: Response) {
 		let parsedMetadata: StoredFileMetadataPayload;
 		try {
 			parsedMetadata = parseStoredFileMetadata(fileData.metadata);
-			console.log("[DOWNLOAD] Parsed metadata:", parsedMetadata);
-		} catch (e) {
-			console.log("[DOWNLOAD] Failed to parse metadata JSON:", e);
+		} catch (_e) {
+			console.error("[DOWNLOAD] Failed to parse metadata JSON");
 			return res.status(500).json({
 				success: false,
 				error: {
@@ -459,24 +436,12 @@ async function downloadFile(req: Request, res: Response) {
 		} else if (parsedMetadata) {
 			// Dla pojedynczych plików - zawsze zwróć jeśli istnieje metadata
 			// Nie wymagamy dokładnego filename, bo dla każdego typu jest tylko jeden plik
-			const metaFilename =
-				parsedMetadata?.filename || parsedMetadata?.originalName;
-			console.log("[DOWNLOAD] Single file mode:", {
-				metaFilename,
-				requestedFilename: filename,
-			});
 			// Zawsze zwracamy plik jeśli istnieje - frontend może nie mieć aktualnej nazwy
 			fileMetadata = parsedMetadata;
 			filePath = fileData.path;
 		}
 
-		console.log("[DOWNLOAD] Result:", {
-			hasMetadata: !!fileMetadata,
-			filePath,
-		});
-
 		if (!fileMetadata || !filePath) {
-			console.log("[DOWNLOAD] File not found in metadata");
 			return res.status(404).json({
 				success: false,
 				error: {
@@ -1246,13 +1211,6 @@ async function getIncidentDetails(req: Request, res: Response) {
 				console.error("[ANALYST] Failed to parse analystStatementMetadata:", e);
 			}
 		}
-
-		console.log("[ANALYST] Sending incident metadata:", {
-			userScreenshotMetadata: incident.userScreenshotMetadata,
-			userAttachmentMetadata: incident.userAttachmentMetadata,
-			analystReportMetadata: incident.analystReportMetadata,
-			analystStatementMetadata: incident.analystStatementMetadata,
-		});
 
 		res.json({
 			success: true,

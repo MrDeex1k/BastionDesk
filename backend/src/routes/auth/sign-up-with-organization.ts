@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { auth } from "../../lib/auth.js";
 import { queryOne, sql } from "../../lib/database.js";
+import { requireCsrf } from "../../middleware/csrf.middleware.js";
 import {
 	createOrganizationSchema,
 	emailSchema,
@@ -55,6 +56,7 @@ type SignUpEmailResponse = {
  */
 router.post(
 	"/sign-up-with-organization/email",
+	requireCsrf,
 	async (req: Request, res: Response) => {
 		try {
 			const body = signUpWithOrganizationSchema.parse(req.body);

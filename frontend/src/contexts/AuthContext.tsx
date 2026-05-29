@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, organization } from "@/lib/auth-client";
+import { refreshCsrfToken } from "@/lib/csrf";
 
 /**
  * Typy dla sesji Better-Auth
@@ -119,6 +120,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firstOrganizationId,
     shouldActivateOrganization,
   ]);
+
+  useEffect(() => {
+    void refreshCsrfToken().catch(() => {
+      // apiFetch retries stale tokens lazily, so startup refresh can fail silently.
+    });
+  }, [session?.session?.id]);
 
   const activeMemberQuery = useQuery({
     queryKey: ["auth", "active-member", session?.user?.id, organizationId],

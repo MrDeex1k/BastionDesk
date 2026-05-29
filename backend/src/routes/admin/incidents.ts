@@ -16,6 +16,38 @@ import {
 
 const router = Router();
 
+interface AdminIncidentFilterOption {
+	id: string;
+	name: string | null;
+	email: string;
+	role: string | null;
+}
+
+const ADMIN_INCIDENT_SORT_COLUMNS: Record<string, string> = {
+	createdAt: 'i."createdAt"',
+	updatedAt: 'i."updatedAt"',
+	status: "i.status",
+	dataZgloszenia: 'i."dataZgloszenia"',
+	userId: 'i."userId"',
+	analystId: 'i."analystId"',
+};
+
+function getAdminIncidentOrderBy(
+	sortByValue: unknown,
+	sortOrderValue: unknown,
+): string | null {
+	const sortBy = typeof sortByValue === "string" ? sortByValue : "createdAt";
+	const sortOrder =
+		typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
+	const sortColumn = ADMIN_INCIDENT_SORT_COLUMNS[sortBy];
+
+	if (!sortColumn || !["asc", "desc"].includes(sortOrder)) {
+		return null;
+	}
+
+	return `${sortColumn} ${sortOrder.toUpperCase()}`;
+}
+
 /**
  * Pobierz wszystkie incydenty w organizacji administratora
  */
@@ -27,37 +59,19 @@ async function getAllIncidents(req: Request, res: Response) {
 		const page = Number(req.query.page) || 1;
 		const limit = Number(req.query.limit) || 20;
 		const status = req.query.status as string | undefined;
-		const userId = req.query.userId as string | undefined;
+		const userQuery = req.query.userQuery as string | undefined;
 		const analystId = req.query.analystId as string | undefined;
-		const sortBy = (req.query.sortBy as string) || "createdAt";
-		const sortOrder = (req.query.sortOrder as string) || "desc";
+		const orderBy = getAdminIncidentOrderBy(
+			req.query.sortBy,
+			req.query.sortOrder,
+		);
 
-		// Walidacja sortBy
-		const allowedSortFields = [
-			"createdAt",
-			"updatedAt",
-			"status",
-			"dataZgloszenia",
-			"userId",
-			"analystId",
-		];
-		if (!allowedSortFields.includes(sortBy)) {
+		if (!orderBy) {
 			return res.status(400).json({
 				success: false,
 				error: {
-					code: "INVALID_SORT_FIELD",
-					message: "Nieprawidłowe pole sortowania",
-				},
-			});
-		}
-
-		// Walidacja sortOrder
-		if (!["asc", "desc"].includes(sortOrder)) {
-			return res.status(400).json({
-				success: false,
-				error: {
-					code: "INVALID_SORT_ORDER",
-					message: "Nieprawidłowy kierunek sortowania",
+					code: "INVALID_SORT",
+					message: "Nieprawidłowe parametry sortowania",
 				},
 			});
 		}
@@ -72,9 +86,13 @@ async function getAllIncidents(req: Request, res: Response) {
 			paramIndex++;
 		}
 
-		if (userId) {
-			whereClause += ` AND i."userId" = $${paramIndex}`;
-			params.push(userId);
+		if (userQuery) {
+			whereClause += ` AND (
+				i."userId" ILIKE $${paramIndex}
+				OR COALESCE(u.name, '') ILIKE $${paramIndex}
+				OR COALESCE(u.email, '') ILIKE $${paramIndex}
+			)`;
+			params.push(`%${userQuery}%`);
 			paramIndex++;
 		}
 
@@ -91,7 +109,6 @@ async function getAllIncidents(req: Request, res: Response) {
 		const offset = (page - 1) * limit;
 
 		// Pobierz incydenty
-		const orderBy = `i."${sortBy}" ${sortOrder}`;
 		const incidents = await query<
 			Incident & { userName?: string; analystName?: string }
 		>(
@@ -200,6 +217,55 @@ async function getAllIncidents(req: Request, res: Response) {
 			error: {
 				code: "GET_INCIDENTS_ERROR",
 				message: "Nie udało się pobrać zgłoszeń",
+			},
+		});
+	}
+}
+
+async function getIncidentFilters(req: Request, res: Response) {
+	try {
+		const authReq = req as AuthenticatedRequest;
+		const organizationId = getRequiredOrganizationId(authReq, res);
+		if (!organizationId) return;
+
+		const analysts = await query<AdminIncidentFilterOption>(
+			`
+			SELECT DISTINCT
+				u.id,
+				u.name,
+				u.email,
+				m.role
+			FROM (
+				SELECT m."userId"
+				FROM member m
+				WHERE m."organizationId" = $1 AND m.role IN ('analityk', 'admin')
+				UNION
+				SELECT i."analystId" AS "userId"
+				FROM incidents i
+				WHERE i."organizationId" = $1 AND i."analystId" IS NOT NULL
+			) candidates
+			JOIN "user" u ON u.id = candidates."userId"
+			LEFT JOIN member m
+				ON m."organizationId" = $1
+				AND m."userId" = u.id
+			ORDER BY COALESCE(NULLIF(u.name, ''), u.email), u.id
+		`,
+			[organizationId],
+		);
+
+		res.json({
+			success: true,
+			data: {
+				analysts,
+			},
+		});
+	} catch (error) {
+		console.error("[ADMIN] Get incident filters error:", error);
+		res.status(500).json({
+			success: false,
+			error: {
+				code: "GET_INCIDENT_FILTERS_ERROR",
+				message: "Nie udało się pobrać filtrów incydentów",
 			},
 		});
 	}
@@ -344,6 +410,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 }
 
 // Routes
+router.get("/filters", getIncidentFilters);
 router.get("/", getAllIncidents);
 router.get("/:id", getIncidentDetails);
 
