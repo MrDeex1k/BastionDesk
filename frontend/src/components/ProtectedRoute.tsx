@@ -19,19 +19,19 @@ interface ProtectedRouteProps {
 
 /**
  * ProtectedRoute - Komponent ochrony tras wymagających autoryzacji
- * 
+ *
  * Sprawdza czy użytkownik jest zalogowany i czy ma odpowiednią rolę.
  * Jeśli nie - przekierowuje do strony logowania lub głównej.
- * 
+ *
  * @example
  * ```tsx
- * <Route 
- *   path="/admin-dashboard" 
+ * <Route
+ *   path="/admin-dashboard"
  *   element={
  *     <ProtectedRoute allowedRoles={["admin"]}>
  *       <AdminDashboardPage />
  *     </ProtectedRoute>
- *   } 
+ *   }
  * />
  * ```
  */

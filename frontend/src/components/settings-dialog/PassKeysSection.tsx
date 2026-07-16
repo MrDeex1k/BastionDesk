@@ -12,8 +12,7 @@ interface PassKeysSectionProps {
 
 const passKeyDateFormatter = new Intl.DateTimeFormat("pl-PL");
 
-const formatPassKeyDate = (value: string | Date) =>
-  passKeyDateFormatter.format(new Date(value));
+const formatPassKeyDate = (value: string | Date) => passKeyDateFormatter.format(new Date(value));
 
 export function PassKeysSection({
   passKeys,
@@ -64,9 +63,7 @@ export function PassKeysSection({
                     <Fingerprint className="size-4 text-violet-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">
-                      {pk.name}
-                    </p>
+                    <p className="text-sm font-medium text-zinc-200">{pk.name}</p>
                     <p className="text-xs text-zinc-500" suppressHydrationWarning>
                       Dodano: {formatPassKeyDate(pk.createdAt)}
                     </p>

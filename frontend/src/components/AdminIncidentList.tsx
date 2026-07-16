@@ -1,26 +1,11 @@
 import { lazy, Suspense, useCallback, useMemo, useReducer } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  AdminIncidentFiltersResponse,
-  IncidentsResponse,
-} from "@/ApiModel";
+import type { AdminIncidentFiltersResponse, IncidentsResponse } from "@/ApiModel";
 import { apiFetch } from "@/lib/api";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import {
@@ -34,13 +19,7 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { IncidentSummaryItem } from "./incident-list/IncidentSummaryItem";
 
 const IncidentDetails = lazy(() =>
@@ -155,10 +134,7 @@ function adminIncidentListReducer(
 }
 
 export function AdminIncidentList() {
-  const [state, dispatch] = useReducer(
-    adminIncidentListReducer,
-    initialAdminIncidentListState,
-  );
+  const [state, dispatch] = useReducer(adminIncidentListReducer, initialAdminIncidentListState);
   const queryClient = useQueryClient();
 
   const { data: filtersData } = useQuery<AdminIncidentFiltersResponse>({
@@ -235,13 +211,7 @@ export function AdminIncidentList() {
       state.analystFilter !== "all" ||
       state.sortBy !== "createdAt" ||
       state.sortOrder !== "desc",
-    [
-      state.analystFilter,
-      state.sortBy,
-      state.sortOrder,
-      state.statusFilter,
-      state.userQuery,
-    ],
+    [state.analystFilter, state.sortBy, state.sortOrder, state.statusFilter, state.userQuery],
   );
 
   const handleSelectIncident = useCallback((incidentId: string) => {
@@ -412,9 +382,7 @@ function AdminIncidentListHeader({
         <CardTitle className="flex items-center gap-2 text-2xl text-zinc-200">
           <ShieldAlert className="size-6 text-green-400" />
           Wszystkie incydenty w organizacji
-          {summary.isLoading && (
-            <Loader2 className="size-5 animate-spin text-blue-400" />
-          )}
+          {summary.isLoading && <Loader2 className="size-5 animate-spin text-blue-400" />}
         </CardTitle>
         <p className="mt-1 text-sm text-zinc-500">
           Wyświetlono {summary.incidentsCount} z {summary.totalCount} incydentów
@@ -432,9 +400,7 @@ function AdminIncidentListHeader({
           size="default"
           onClick={filters.onToggle}
           className={
-            filters.isVisible
-              ? "bg-blue-600 hover:bg-blue-700"
-              : "border-zinc-700 text-zinc-300"
+            filters.isVisible ? "bg-blue-600 hover:bg-blue-700" : "border-zinc-700 text-zinc-300"
           }
         >
           <Filter className="mr-2 size-4" />
@@ -555,9 +521,7 @@ function AdminIncidentFiltersPanel({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-zinc-400">
-          Szukaj użytkownika (ID, nazwa lub email)
-        </Label>
+        <Label className="text-xs text-zinc-400">Szukaj użytkownika (ID, nazwa lub email)</Label>
         <Input
           placeholder="Wpisz ID użytkownika, nazwę lub email..."
           value={userQuery}
@@ -708,9 +672,7 @@ function AdminIncidentPagination({
       <Button
         variant="ghost"
         size="sm"
-        onClick={() =>
-          onPageChange(page < totalPages ? page + 1 : page)
-        }
+        onClick={() => onPageChange(page < totalPages ? page + 1 : page)}
         disabled={page === totalPages || isLoading}
         className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
       >

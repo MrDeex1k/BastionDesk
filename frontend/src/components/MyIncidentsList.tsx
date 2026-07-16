@@ -22,14 +22,12 @@ export function MyIncidentsList() {
   const { data, isPending, isFetching, isError, isPlaceholderData } = useQuery<IncidentsResponse>({
     queryKey: ["myIncidents", { page, limit: LIMIT }],
     queryFn: async () => {
-      const response = await apiFetch(
-        `/api/incidents/my?page=${page}&limit=${LIMIT}`,
-      );
-      
+      const response = await apiFetch(`/api/incidents/my?page=${page}&limit=${LIMIT}`);
+
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
-      
+
       return response.json() as Promise<IncidentsResponse>;
     },
     placeholderData: keepPreviousData,
@@ -77,9 +75,7 @@ export function MyIncidentsList() {
                 />
               ))}
               {!isPending && data?.data.length === 0 && (
-                <div className="py-8 text-center text-zinc-500">
-                  Brak zgłoszeń do wyświetlenia.
-                </div>
+                <div className="py-8 text-center text-zinc-500">Brak zgłoszeń do wyświetlenia.</div>
               )}
             </div>
           )}
@@ -103,7 +99,11 @@ export function MyIncidentsList() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setPage((old) => (data?.pagination.totalPages && old < data.pagination.totalPages ? old + 1 : old))}
+            onClick={() =>
+              setPage((old) =>
+                data?.pagination.totalPages && old < data.pagination.totalPages ? old + 1 : old,
+              )
+            }
             disabled={page === data.pagination.totalPages || isPlaceholderData}
             className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
           >

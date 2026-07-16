@@ -22,7 +22,7 @@ export function ResetPasswordPage() {
   useEffect(() => {
     if (!token) {
       toast.error("Brak tokenu resetowania hasła");
-      navigate("/login");
+      void navigate("/login");
     }
   }, [token, navigate]);
 
@@ -38,14 +38,12 @@ export function ResetPasswordPage() {
       });
       toast.success("Hasło zostało zmienione pomyślnie");
       startTransition(() => {
-        navigate("/login");
+        void navigate("/login");
       });
     },
     onError: (err: unknown) => {
       const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Wystąpił błąd podczas zmiany hasła";
+        err instanceof Error ? err.message : "Wystąpił błąd podczas zmiany hasła";
       toast.error(errorMessage);
       setError(errorMessage);
     },
@@ -83,9 +81,7 @@ export function ResetPasswordPage() {
             <LockKeyhole className="size-12 text-blue-400" />
           </div>
           <h2 className="text-3xl mb-2 text-blue-300">Ustaw nowe hasło</h2>
-          <p className="text-zinc-400">
-            Wprowadź nowe hasło dla swojego konta
-          </p>
+          <p className="text-zinc-400">Wprowadź nowe hasło dla swojego konta</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">

@@ -26,8 +26,7 @@ export interface EmailResult {
 
 // Email Sender Class
 class EmailSender {
-	private transporter: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | null =
-		null;
+	private transporter: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | null = null;
 	private isVerified = false;
 	private connectionAttempts = 0;
 	private readonly MAX_CONNECTION_ATTEMPTS = 3;
@@ -36,11 +35,7 @@ class EmailSender {
 	private withTimeout<T>(promise: Promise<T>, operation: string): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
 			const timeoutId = setTimeout(() => {
-				reject(
-					new Error(
-						`Przekroczono limit czasu podczas operacji SMTP: ${operation}`,
-					),
-				);
+				reject(new Error(`Przekroczono limit czasu podczas operacji SMTP: ${operation}`));
 			}, this.CONNECTION_TIMEOUT);
 
 			void promise.then(
@@ -160,8 +155,7 @@ class EmailSender {
 			// Reset weryfikacji przy błędzie - następna wysyłka spróbuje ponownie
 			this.isVerified = false;
 
-			const errorMessage =
-				error instanceof Error ? error.message : "Unknown error";
+			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 			console.error(
 				`Błąd wysyłki emaila: ${options.subject} → ${this.maskEmail(options.to)}`,
 				errorMessage,

@@ -5,7 +5,7 @@ import { apiBaseUrl } from "./api";
 
 /**
  * Better Auth Client Configuration
- * 
+ *
  * Klient autoryzacji dla aplikacji BastionDesk.
  * Obsługuje:
  * - Email/hasło authentication
@@ -14,11 +14,8 @@ import { apiBaseUrl } from "./api";
  */
 export const authClient = createAuthClient({
   baseURL: apiBaseUrl || window.location.origin,
-  
-  plugins: [
-    organizationClient(),
-    passkeyClient(),
-  ],
+
+  plugins: [organizationClient(), passkeyClient()],
 
   fetchOptions: {
     onError(error) {
@@ -35,7 +32,7 @@ export const authClient = createAuthClient({
 
 /**
  * Wyeksportowane metody autoryzacji
- * 
+ *
  * signIn - Logowanie (email/hasło, social, passkey)
  * signUp - Rejestracja nowego użytkownika
  * signOut - Wylogowanie
@@ -43,10 +40,4 @@ export const authClient = createAuthClient({
  * organization - Metody zarządzania organizacją
  * passkey - Metody zarządzania PassKeys
  */
-export const {
-  signIn,
-  signUp,
-  signOut,
-  useSession,
-  organization,
-} = authClient;
+export const { signIn, signUp, signOut, useSession, organization } = authClient;

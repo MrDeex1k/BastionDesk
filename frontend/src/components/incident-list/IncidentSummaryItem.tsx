@@ -132,15 +132,10 @@ export const IncidentSummaryItem = memo(function IncidentSummaryItem({
             {status}
           </Badge>
           {showResolved && czyRozwiazany && (
-            <Badge className="bg-green-500/20 text-green-400 border-green-500/50">
-              Rozwiązany
-            </Badge>
+            <Badge className="bg-green-500/20 text-green-400 border-green-500/50">Rozwiązany</Badge>
           )}
           {llmCategory && (
-            <Badge
-              variant="outline"
-              className={`${getLlmCategoryColor(llmCategory)} gap-1`}
-            >
+            <Badge variant="outline" className={`${getLlmCategoryColor(llmCategory)} gap-1`}>
               <BrainCircuit className="size-3" />
               {llmCategory}
             </Badge>
@@ -152,14 +147,10 @@ export const IncidentSummaryItem = memo(function IncidentSummaryItem({
             </span>
           )}
         </div>
-        <span className="text-xs text-zinc-500">
-          {formatIncidentDate(dataZgloszenia)}
-        </span>
+        <span className="text-xs text-zinc-500">{formatIncidentDate(dataZgloszenia)}</span>
       </div>
 
-      <p className="mb-3 line-clamp-2 pr-6 text-sm text-zinc-300">
-        {userDescription}
-      </p>
+      <p className="mb-3 line-clamp-2 pr-6 text-sm text-zinc-300">{userDescription}</p>
 
       {(showAnalyst || showAttachments) && (
         <div className="flex items-center gap-4 text-xs text-zinc-500">

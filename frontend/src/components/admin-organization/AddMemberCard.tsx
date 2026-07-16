@@ -1,22 +1,10 @@
 import { memo } from "react";
 import { BarChart, Loader2, Mail, Shield, User, UserPlus } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 interface AddMemberCardProps {
   email: string;
@@ -43,8 +31,8 @@ export const AddMemberCard = memo(function AddMemberCard({
           Dodaj członka zespołu
         </CardTitle>
         <CardDescription className="text-zinc-400">
-          Zaproś nowego użytkownika wysyłając email lub dodaj istniejącego
-          użytkownika bezpośrednio do organizacji.
+          Zaproś nowego użytkownika wysyłając email lub dodaj istniejącego użytkownika bezpośrednio
+          do organizacji.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -76,28 +64,19 @@ export const AddMemberCard = memo(function AddMemberCard({
                   <SelectValue placeholder="Wybierz rolę" />
                 </SelectTrigger>
                 <SelectContent className="border-zinc-700 bg-zinc-900 text-white">
-                  <SelectItem
-                    value="pracownik"
-                    className="focus:bg-zinc-800 focus:text-white"
-                  >
+                  <SelectItem value="pracownik" className="focus:bg-zinc-800 focus:text-white">
                     <div className="flex items-center gap-2">
                       <User className="size-4 text-blue-400" />
                       <span>Pracownik</span>
                     </div>
                   </SelectItem>
-                  <SelectItem
-                    value="analityk"
-                    className="focus:bg-zinc-800 focus:text-white"
-                  >
+                  <SelectItem value="analityk" className="focus:bg-zinc-800 focus:text-white">
                     <div className="flex items-center gap-2">
                       <BarChart className="size-4 text-yellow-400" />
                       <span>Analityk</span>
                     </div>
                   </SelectItem>
-                  <SelectItem
-                    value="admin"
-                    className="focus:bg-zinc-800 focus:text-white"
-                  >
+                  <SelectItem value="admin" className="focus:bg-zinc-800 focus:text-white">
                     <div className="flex items-center gap-2">
                       <Shield className="size-4 text-red-400" />
                       <span>Administrator</span>
@@ -124,8 +103,8 @@ export const AddMemberCard = memo(function AddMemberCard({
             </Button>
           </div>
           <p className="text-center text-xs text-zinc-500">
-            Dodaj istniejącego użytkownika do organizacji. Użytkownik musi już
-            mieć konto w systemie.
+            Dodaj istniejącego użytkownika do organizacji. Użytkownik musi już mieć konto w
+            systemie.
           </p>
         </div>
       </CardContent>

@@ -1,11 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { ShieldCheck, Building2, Activity } from "lucide-react";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "../components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 
 const AdminIncidentList = lazy(() =>
   import("../components/AdminIncidentList").then((module) => ({
@@ -43,11 +38,7 @@ export function AdminDashboardPage() {
       </div>
 
       <div className="w-full max-w-7xl">
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="w-full gap-8"
-        >
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full gap-8">
           <div className="flex justify-center">
             <TabsList className="grid w-full max-w-md grid-cols-2 border border-zinc-800 bg-zinc-950/80">
               <TabsTrigger

@@ -83,9 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const firstOrganizationId = organizationsQuery.data?.[0]?.id ?? null;
   const shouldActivateOrganization =
-    Boolean(session?.user) &&
-    !organizationId &&
-    Boolean(firstOrganizationId);
+    Boolean(session?.user) && !organizationId && Boolean(firstOrganizationId);
 
   const activateOrganizationMutation = useMutation({
     mutationFn: async (nextOrganizationId: string) =>
@@ -115,11 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     void activateOrganizationMutation.mutateAsync(firstOrganizationId);
-  }, [
-    activateOrganizationMutation,
-    firstOrganizationId,
-    shouldActivateOrganization,
-  ]);
+  }, [activateOrganizationMutation, firstOrganizationId, shouldActivateOrganization]);
 
   useEffect(() => {
     void refreshCsrfToken().catch(() => {
@@ -164,15 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       organizationId,
       refetch,
     }),
-    [
-      combinedError,
-      isLoading,
-      isPending,
-      organizationId,
-      refetch,
-      role,
-      session,
-    ],
+    [combinedError, isLoading, isPending, organizationId, refetch, role, session],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -181,9 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 /**
  * Normalizuje nazwy ról z różnych formatów
  */
-function normalizeRole(
-  role: string | string[] | null | undefined,
-): UserRole | null {
+function normalizeRole(role: string | string[] | null | undefined): UserRole | null {
   // Jeśli role to tablica, weź pierwszą (Better-Auth może zwracać multiple roles)
   const roleString = Array.isArray(role) ? role[0] : role;
 

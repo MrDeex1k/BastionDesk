@@ -15,10 +15,6 @@ export const formatIncidentResponse = (_incident: Incident) => {
 	// Formatowanie odpowiedzi dla API
 };
 
-export const checkIncidentAccess = (
-	_incident: Incident,
-	_userId: string,
-	_userRole: string,
-) => {
+export const checkIncidentAccess = (_incident: Incident, _userId: string, _userRole: string) => {
 	// Sprawdzenie uprawnień dostępu do incydentu
 };

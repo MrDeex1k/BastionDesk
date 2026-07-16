@@ -7,10 +7,7 @@ interface DangerZoneSectionProps {
   onDeleteAccount: () => void;
 }
 
-export function DangerZoneSection({
-  isLoading,
-  onDeleteAccount,
-}: DangerZoneSectionProps) {
+export function DangerZoneSection({ isLoading, onDeleteAccount }: DangerZoneSectionProps) {
   return (
     <Card className="border-red-900/50 bg-red-950/20 shadow-sm">
       <CardHeader>
@@ -19,8 +16,7 @@ export function DangerZoneSection({
           Usuwanie konta
         </CardTitle>
         <CardDescription className="text-red-300/60">
-          Ta operacja jest nieodwracalna. Wszystkie Twoje dane zostaną trwale
-          usunięte.
+          Ta operacja jest nieodwracalna. Wszystkie Twoje dane zostaną trwale usunięte.
         </CardDescription>
       </CardHeader>
       <CardContent>

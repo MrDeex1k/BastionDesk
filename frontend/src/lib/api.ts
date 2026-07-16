@@ -1,14 +1,9 @@
 import { getCsrfToken, refreshCsrfToken, shouldAttachCsrfToken } from "./csrf";
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim() ?? "";
-const configuredApiTimeout = Number.parseInt(
-  import.meta.env.VITE_API_TIMEOUT_MS?.trim() ?? "",
-  10,
-);
+const configuredApiTimeout = Number.parseInt(import.meta.env.VITE_API_TIMEOUT_MS?.trim() ?? "", 10);
 const apiTimeoutMs =
-  Number.isFinite(configuredApiTimeout) && configuredApiTimeout > 0
-    ? configuredApiTimeout
-    : 15000;
+  Number.isFinite(configuredApiTimeout) && configuredApiTimeout > 0 ? configuredApiTimeout : 15000;
 
 export const apiBaseUrl = configuredApiUrl.replace(/\/$/, "");
 
@@ -79,11 +74,7 @@ function createTimeoutSignal(signal: AbortSignal | null | undefined) {
     if (signal.aborted) {
       controller.abort(signal.reason);
     } else {
-      signal.addEventListener(
-        "abort",
-        () => controller.abort(signal.reason),
-        { once: true },
-      );
+      signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
     }
   }
 
@@ -93,11 +84,7 @@ function createTimeoutSignal(signal: AbortSignal | null | undefined) {
   };
 }
 
-async function executeApiFetch(
-  path: string,
-  init: RequestInit,
-  allowRetry: boolean,
-) {
+async function executeApiFetch(path: string, init: RequestInit, allowRetry: boolean) {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   headers.set("Accept", headers.get("Accept") ?? "application/json");
@@ -125,11 +112,7 @@ async function executeApiFetch(
       );
     }
 
-    throw new ApiFetchError(
-      "NETWORK_ERROR",
-      "Nie udało się połączyć z serwerem",
-      { cause: error },
-    );
+    throw new ApiFetchError("NETWORK_ERROR", "Nie udało się połączyć z serwerem", { cause: error });
   } finally {
     cleanup();
   }

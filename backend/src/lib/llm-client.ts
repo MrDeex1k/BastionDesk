@@ -4,10 +4,7 @@ import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
 import { env } from "./env";
 
-const PROTO_PATH = path.resolve(
-	import.meta.dir,
-	"../../proto/incident_classifier.proto",
-);
+const PROTO_PATH = path.resolve(import.meta.dir, "../../proto/incident_classifier.proto");
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 	keepCase: false,
@@ -139,10 +136,7 @@ function createLlmGrpcError(error: grpc.ServiceError): LlmServiceError {
 	}
 }
 
-export async function classifyIncident(
-	incidentId: string,
-	description: string,
-): Promise<string> {
+export async function classifyIncident(incidentId: string, description: string): Promise<string> {
 	if (!incidentId.trim()) {
 		throw new LlmServiceError(
 			"LLM_INVALID_REQUEST",

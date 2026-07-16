@@ -1,20 +1,6 @@
 import { memo } from "react";
-import {
-  Check,
-  Copy,
-  Loader2,
-  MoreHorizontal,
-  RefreshCw,
-  Trash2,
-  Users,
-} from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
+import { Check, Copy, Loader2, MoreHorizontal, RefreshCw, Trash2, Users } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -24,14 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import type { OrganizationMember } from "@/ApiModel";
 import { RoleBadge } from "./RoleBadge";
 
@@ -78,9 +57,7 @@ export const MembersListCard = memo(function MembersListCard({
           disabled={isLoadingMembers}
           className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
         >
-          <RefreshCw
-            className={`size-4 ${isLoadingMembers ? "animate-spin" : ""}`}
-          />
+          <RefreshCw className={`size-4 ${isLoadingMembers ? "animate-spin" : ""}`} />
         </Button>
       </CardHeader>
       <CardContent>
@@ -90,51 +67,34 @@ export const MembersListCard = memo(function MembersListCard({
               <TableRow className="border-zinc-800 hover:bg-zinc-900/50">
                 <TableHead className="text-zinc-400">Użytkownik</TableHead>
                 <TableHead className="text-zinc-400">Rola</TableHead>
-                <TableHead className="text-zinc-400">
-                  Data dołączenia
-                </TableHead>
-                <TableHead className="text-zinc-400">
-                  ID Użytkownika
-                </TableHead>
-                <TableHead className="text-right text-zinc-400">
-                  Akcje
-                </TableHead>
+                <TableHead className="text-zinc-400">Data dołączenia</TableHead>
+                <TableHead className="text-zinc-400">ID Użytkownika</TableHead>
+                <TableHead className="text-right text-zinc-400">Akcje</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoadingMembers ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-8 text-center text-zinc-500"
-                  >
+                  <TableCell colSpan={5} className="py-8 text-center text-zinc-500">
                     <Loader2 className="mx-auto mb-2 size-8 animate-spin" />
                     Pobieranie listy członków…
                   </TableCell>
                 </TableRow>
               ) : members.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-8 text-center text-zinc-500"
-                  >
+                  <TableCell colSpan={5} className="py-8 text-center text-zinc-500">
                     Brak członków w organizacji (poza Tobą?)
                   </TableCell>
                 </TableRow>
               ) : (
                 members.map((member) => (
-                  <TableRow
-                    key={member.id}
-                    className="border-zinc-800 hover:bg-zinc-800/30"
-                  >
+                  <TableRow key={member.id} className="border-zinc-800 hover:bg-zinc-800/30">
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-zinc-200">
                           {member.user.name || "Brak nazwy"}
                         </span>
-                        <span className="text-sm text-zinc-500">
-                          {member.user.email}
-                        </span>
+                        <span className="text-sm text-zinc-500">{member.user.email}</span>
                       </div>
                     </TableCell>
                     <TableCell>

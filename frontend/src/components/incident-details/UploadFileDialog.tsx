@@ -56,8 +56,7 @@ export function UploadFileDialog({
           />
           {selectedFile && (
             <p className="mt-2 text-xs text-zinc-500">
-              Wybrano: {selectedFile.name} (
-              {(selectedFile.size / 1024).toFixed(2)} KB)
+              Wybrano: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
             </p>
           )}
         </div>

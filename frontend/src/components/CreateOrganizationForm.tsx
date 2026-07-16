@@ -86,11 +86,7 @@ type CreateOrganizationFormAction =
       type: "set-errors";
       errors: Pick<
         CreateOrganizationFormState,
-        | "emailError"
-        | "passwordError"
-        | "fullNameError"
-        | "orgNameError"
-        | "orgSlugError"
+        "emailError" | "passwordError" | "fullNameError" | "orgNameError" | "orgSlugError"
       >;
     }
   | {
@@ -200,30 +196,22 @@ function createOrganizationFormReducer(
   }
 }
 
-export function CreateOrganizationForm({
-  onBack,
-  onRegisterSuccess,
-}: CreateOrganizationFormProps) {
+export function CreateOrganizationForm({ onBack, onRegisterSuccess }: CreateOrganizationFormProps) {
   const [state, dispatch] = useReducer(
     createOrganizationFormReducer,
     initialCreateOrganizationFormState,
   );
   const queryClient = useQueryClient();
 
-  const setField = useCallback(
-    (field: CreateOrganizationFormField, value: string) => {
-      dispatch({ type: "set-field", field, value });
-    },
-    [],
-  );
+  const setField = useCallback((field: CreateOrganizationFormField, value: string) => {
+    dispatch({ type: "set-field", field, value });
+  }, []);
 
   const validateForm = useCallback(() => {
     const nextEmailError = validateEmail(state.email);
     const nextPasswordError = validatePassword(state.password);
     const nextFullNameError = validateFullName(state.fullName);
-    const nextOrgNameError = state.orgName.trim()
-      ? ""
-      : "Nazwa organizacji jest wymagana";
+    const nextOrgNameError = state.orgName.trim() ? "" : "Nazwa organizacji jest wymagana";
     const nextOrgSlugError = validateOrganizationSlug(state.orgSlug);
 
     dispatch({
@@ -244,36 +232,25 @@ export function CreateOrganizationForm({
       !nextOrgNameError &&
       !nextOrgSlugError
     );
-  }, [
-    state.email,
-    state.fullName,
-    state.orgName,
-    state.orgSlug,
-    state.password,
-  ]);
+  }, [state.email, state.fullName, state.orgName, state.orgSlug, state.password]);
 
   const createOrgMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiFetch(
-        "/api/auth/sign-up-with-organization/email",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: state.email,
-            password: state.password,
-            name: state.fullName,
-            organizationName: state.orgName,
-            organizationSlug: state.orgSlug,
-            organizationLogo: state.logoUrl || undefined,
-          }),
-        },
-      );
+      const response = await apiFetch("/api/auth/sign-up-with-organization/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: state.email,
+          password: state.password,
+          name: state.fullName,
+          organizationName: state.orgName,
+          organizationSlug: state.orgSlug,
+          organizationLogo: state.logoUrl || undefined,
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error(
-          await readJsonError(response, "Błąd tworzenia organizacji"),
-        );
+        throw new Error(await readJsonError(response, "Błąd tworzenia organizacji"));
       }
 
       return (await response.json()) as CreateOrganizationResponse;
@@ -329,10 +306,7 @@ export function CreateOrganizationForm({
             />
           </div>
 
-          <CreateOrganizationActions
-            isPending={createOrgMutation.isPending}
-            onBack={onBack}
-          />
+          <CreateOrganizationActions isPending={createOrgMutation.isPending} onBack={onBack} />
         </form>
       </Card>
     </div>
@@ -346,9 +320,7 @@ function CreateOrganizationIntro() {
         <Building2 className="size-12 text-purple-400" />
       </div>
       <h2 className="mb-2 text-3xl text-purple-300">Stwórz organizację</h2>
-      <p className="text-zinc-400">
-        Zarejestruj się i utwórz nową przestrzeń dla swojego zespołu
-      </p>
+      <p className="text-zinc-400">Zarejestruj się i utwórz nową przestrzeń dla swojego zespołu</p>
     </div>
   );
 }
@@ -368,18 +340,14 @@ function CreateOrganizationFieldSection({
 }) {
   return (
     <div className="space-y-6">
-      <h3 className="border-b border-zinc-700 pb-2 text-lg font-medium text-zinc-200">
-        {title}
-      </h3>
+      <h3 className="border-b border-zinc-700 pb-2 text-lg font-medium text-zinc-200">{title}</h3>
 
       {fields.map((fieldConfig) => (
         <CreateOrganizationInputField
           key={fieldConfig.field}
           config={fieldConfig}
           value={state[fieldConfig.field]}
-          error={
-            fieldConfig.errorField ? state[fieldConfig.errorField] : undefined
-          }
+          error={fieldConfig.errorField ? state[fieldConfig.errorField] : undefined}
           disabled={disabled}
           onValueChange={onFieldChange}
         />
@@ -415,9 +383,7 @@ function CreateOrganizationInputField({
           type={config.type}
           placeholder={config.placeholder}
           value={value}
-          onChange={(event) =>
-            onValueChange(config.field, event.target.value)
-          }
+          onChange={(event) => onValueChange(config.field, event.target.value)}
           className={FIELD_INPUT_CLASSNAME}
           required={config.required}
           disabled={disabled}

@@ -34,20 +34,12 @@ export interface AuthenticatedRequest extends Request {
 	memberRole?: UserRole;
 }
 
-export function getRequiredOrganizationId(
-	req: AuthenticatedRequest,
-	res: Response,
-): string | null {
+export function getRequiredOrganizationId(req: AuthenticatedRequest, res: Response): string | null {
 	if (req.organizationId) {
 		return req.organizationId;
 	}
 
-	sendErrorResponse(
-		res,
-		403,
-		"NO_ORGANIZATION",
-		"Użytkownik nie należy do żadnej organizacji",
-	);
+	sendErrorResponse(res, 403, "NO_ORGANIZATION", "Użytkownik nie należy do żadnej organizacji");
 	return null;
 }
 
@@ -62,7 +54,7 @@ export async function getSessionFromRequest(req: Request) {
 			headers: fromNodeHeaders(req.headers),
 		});
 		return session;
-	} catch (_error) {
+	} catch {
 		console.error("[AUTH] Failed to get session");
 		return null;
 	}
@@ -74,11 +66,7 @@ export async function getSessionFromRequest(req: Request) {
  * Middleware wymagający zalogowanego użytkownika
  * Dodaje `req.user` i `req.session` do requestu
  */
-export function requireAuth(
-	req: Request,
-	res: Response,
-	next: NextFunction,
-): void {
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
 	getSessionFromRequest(req)
 		.then((sessionData) => {
 			if (!sessionData?.session || !sessionData?.user) {
@@ -87,10 +75,8 @@ export function requireAuth(
 			}
 
 			// Dodaj dane użytkownika i sesji do requestu
-			(req as AuthenticatedRequest).user =
-				sessionData.user as AuthenticatedUser;
-			(req as AuthenticatedRequest).session =
-				sessionData.session as AuthenticatedSession;
+			(req as AuthenticatedRequest).user = sessionData.user as AuthenticatedUser;
+			(req as AuthenticatedRequest).session = sessionData.session as AuthenticatedSession;
 
 			next();
 		})
@@ -104,18 +90,12 @@ export function requireAuth(
  * Middleware opcjonalnie pobierający sesję (nie wymaga zalogowania)
  * Jeśli użytkownik jest zalogowany, dodaje `req.user` i `req.session`
  */
-export function optionalAuth(
-	req: Request,
-	_res: Response,
-	next: NextFunction,
-): void {
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
 	getSessionFromRequest(req)
 		.then((sessionData) => {
 			if (sessionData?.session && sessionData?.user) {
-				(req as AuthenticatedRequest).user =
-					sessionData.user as AuthenticatedUser;
-				(req as AuthenticatedRequest).session =
-					sessionData.session as AuthenticatedSession;
+				(req as AuthenticatedRequest).user = sessionData.user as AuthenticatedUser;
+				(req as AuthenticatedRequest).session = sessionData.session as AuthenticatedSession;
 			}
 			next();
 		})
@@ -139,11 +119,7 @@ export function optionalAuth(
  * router.get('/reports', requireAuth, requireRole(['admin', 'analityk']), handler)
  */
 export function requireRole(allowedRoles: UserRole[]) {
-	return async (
-		req: Request,
-		res: Response,
-		next: NextFunction,
-	): Promise<void> => {
+	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 		const authReq = req as AuthenticatedRequest;
 
 		if (!authReq.user) {
@@ -202,12 +178,7 @@ export function requireRole(allowedRoles: UserRole[]) {
 			next();
 		} catch (error) {
 			console.error("[AUTH] Role check error:", error);
-			sendErrorResponse(
-				res,
-				500,
-				"ROLE_CHECK_ERROR",
-				"Błąd sprawdzania uprawnień",
-			);
+			sendErrorResponse(res, 500, "ROLE_CHECK_ERROR", "Błąd sprawdzania uprawnień");
 		}
 	};
 }
@@ -216,11 +187,7 @@ export function requireRole(allowedRoles: UserRole[]) {
  * Middleware wymagający przynależności do organizacji
  * Nie sprawdza konkretnej roli, tylko czy użytkownik należy do jakiejś organizacji
  */
-export function requireOrganization(
-	req: Request,
-	res: Response,
-	next: NextFunction,
-): void {
+export function requireOrganization(req: Request, res: Response, next: NextFunction): void {
 	const authReq = req as AuthenticatedRequest;
 
 	if (!authReq.user) {
@@ -271,14 +238,8 @@ export function requireOrganization(
  * Middleware sprawdzający czy użytkownik jest właścicielem zasobu
  * @param getResourceOwnerId - funkcja zwracająca ID właściciela zasobu
  */
-export function requireOwnership(
-	getResourceOwnerId: (req: Request) => Promise<string | null>,
-) {
-	return async (
-		req: Request,
-		res: Response,
-		next: NextFunction,
-	): Promise<void> => {
+export function requireOwnership(getResourceOwnerId: (req: Request) => Promise<string | null>) {
+	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 		const authReq = req as AuthenticatedRequest;
 
 		if (!authReq.user) {

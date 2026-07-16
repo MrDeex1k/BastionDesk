@@ -64,9 +64,7 @@ export async function getObjectBuffer(key: string): Promise<Buffer | null> {
 /**
  * Pobierz obiekt jako JSON
  */
-export async function getObjectJson<T = unknown>(
-	key: string,
-): Promise<T | null> {
+export async function getObjectJson<T = unknown>(key: string): Promise<T | null> {
 	try {
 		const file = getClient().file(key);
 		const exists = await file.exists();

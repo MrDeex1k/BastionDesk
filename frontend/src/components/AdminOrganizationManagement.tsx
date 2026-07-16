@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useReducer } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type {
-  OrganizationMember,
-  OrganizationMembersResponse,
-} from "@/ApiModel";
+import type { OrganizationMember, OrganizationMembersResponse } from "@/ApiModel";
 import { apiFetch, readJsonError } from "@/lib/api";
 import { AddMemberCard } from "./admin-organization/AddMemberCard";
 import { DeleteMemberDialog } from "./admin-organization/DeleteMemberDialog";
@@ -21,12 +18,11 @@ type AdminOrganizationManagementAction =
   | { type: "set-role"; value: string }
   | { type: "set-member-to-delete"; value: OrganizationMember | null };
 
-const initialAdminOrganizationManagementState: AdminOrganizationManagementState =
-  {
-    email: "",
-    role: "pracownik",
-    memberToDelete: null,
-  };
+const initialAdminOrganizationManagementState: AdminOrganizationManagementState = {
+  email: "",
+  role: "pracownik",
+  memberToDelete: null,
+};
 
 const organizationMembersQueryKey = ["organizationMembers"] as const;
 
@@ -78,14 +74,11 @@ export function AdminOrganizationManagement() {
 
   const addMemberMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiFetch(
-        "/api/auth/organization/add-member-by-email",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: state.email, role: state.role }),
-        },
-      );
+      const response = await apiFetch("/api/auth/organization/add-member-by-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: state.email, role: state.role }),
+      });
 
       const data = await response.json();
       if (!response.ok) {
@@ -108,40 +101,25 @@ export function AdminOrganizationManagement() {
           : undefined;
 
       if (apiError?.code === "USER_NOT_FOUND") {
-        toast.error(
-          "Użytkownik o podanym adresie email nie istnieje w systemie",
-        );
+        toast.error("Użytkownik o podanym adresie email nie istnieje w systemie");
       } else if (apiError?.code === "ALREADY_MEMBER") {
         toast.error("Użytkownik jest już członkiem tej organizacji");
       } else {
-        toast.error(
-          apiError?.message || "Wystąpił błąd podczas dodawania użytkownika",
-        );
+        toast.error(apiError?.message || "Wystąpił błąd podczas dodawania użytkownika");
       }
     },
   });
 
   const updateRoleMutation = useMutation({
-    mutationFn: async ({
-      memberId,
-      role,
-    }: {
-      memberId: string;
-      role: string;
-    }) => {
-      const response = await apiFetch(
-        "/api/auth/organization/update-member-role",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ memberId, role }),
-        },
-      );
+    mutationFn: async ({ memberId, role }: { memberId: string; role: string }) => {
+      const response = await apiFetch("/api/auth/organization/update-member-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, role }),
+      });
 
       if (!response.ok) {
-        throw new Error(
-          await readJsonError(response, "Nie udało się zmienić roli"),
-        );
+        throw new Error(await readJsonError(response, "Nie udało się zmienić roli"));
       }
     },
     onSuccess: async () => {
@@ -164,9 +142,7 @@ export function AdminOrganizationManagement() {
       });
 
       if (!response.ok) {
-        throw new Error(
-          await readJsonError(response, "Nie udało się usunąć członka"),
-        );
+        throw new Error(await readJsonError(response, "Nie udało się usunąć członka"));
       }
     },
     onSuccess: async () => {
@@ -210,7 +186,7 @@ export function AdminOrganizationManagement() {
   }, [removeMemberMutation, state.memberToDelete]);
 
   const handleCopyUserId = useCallback((userId: string) => {
-    navigator.clipboard.writeText(userId);
+    void navigator.clipboard.writeText(userId);
     toast.success("Skopiowano ID użytkownika");
   }, []);
 

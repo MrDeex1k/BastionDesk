@@ -16,13 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 interface TimeSeriesPoint {
   date: string;
@@ -90,30 +84,18 @@ export default function AnalyticsCharts({
               <Calendar className="size-5 text-blue-400" />
               Metryki czasowe
             </CardTitle>
-            <Select
-              value={period.toString()}
-              onValueChange={(val) => onPeriodChange(Number(val))}
-            >
+            <Select value={period.toString()} onValueChange={(val) => onPeriodChange(Number(val))}>
               <SelectTrigger className="w-[180px] border-zinc-700 bg-zinc-900 text-zinc-300">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border-zinc-700 bg-zinc-900 text-zinc-200">
-                <SelectItem
-                  value="7"
-                  className="text-white focus:bg-blue-500/20 focus:text-white"
-                >
+                <SelectItem value="7" className="text-white focus:bg-blue-500/20 focus:text-white">
                   Ostatnie 7 dni
                 </SelectItem>
-                <SelectItem
-                  value="30"
-                  className="text-white focus:bg-blue-500/20 focus:text-white"
-                >
+                <SelectItem value="30" className="text-white focus:bg-blue-500/20 focus:text-white">
                   Ostatnie 30 dni
                 </SelectItem>
-                <SelectItem
-                  value="90"
-                  className="text-white focus:bg-blue-500/20 focus:text-white"
-                >
+                <SelectItem value="90" className="text-white focus:bg-blue-500/20 focus:text-white">
                   Ostatnie 90 dni
                 </SelectItem>
                 <SelectItem
@@ -128,11 +110,7 @@ export default function AnalyticsCharts({
         </CardHeader>
         <CardContent>
           <div className="h-[300px] w-full min-w-0">
-            {metricsLoading ? (
-              <ChartLoader />
-            ) : (
-              <MetricsLineChart data={timeSeriesData} />
-            )}
+            {metricsLoading ? <ChartLoader /> : <MetricsLineChart data={timeSeriesData} />}
           </div>
         </CardContent>
       </Card>
@@ -145,13 +123,9 @@ export default function AnalyticsCharts({
               Rozkład statusów
             </CardTitle>
           </CardHeader>
-        <CardContent>
-          <div className="h-[300px] w-full min-w-0">
-              {statsLoading ? (
-                <ChartLoader />
-              ) : (
-                <StatusBarChart data={statusBreakdown} />
-              )}
+          <CardContent>
+            <div className="h-[300px] w-full min-w-0">
+              {statsLoading ? <ChartLoader /> : <StatusBarChart data={statusBreakdown} />}
             </div>
           </CardContent>
         </Card>
@@ -163,13 +137,9 @@ export default function AnalyticsCharts({
               Kategorie LLM
             </CardTitle>
           </CardHeader>
-        <CardContent>
-          <div className="h-[300px] w-full min-w-0">
-              {statsLoading ? (
-                <ChartLoader />
-              ) : (
-                <CategoryPieChart data={categoryBreakdown} />
-              )}
+          <CardContent>
+            <div className="h-[300px] w-full min-w-0">
+              {statsLoading ? <ChartLoader /> : <CategoryPieChart data={categoryBreakdown} />}
             </div>
           </CardContent>
         </Card>
@@ -186,30 +156,13 @@ function ChartLoader() {
   );
 }
 
-function MetricsLineChart({
-  data,
-}: {
-  data: TimeSeriesPoint[];
-}) {
+function MetricsLineChart({ data }: { data: TimeSeriesPoint[] }) {
   return (
-    <ResponsiveContainer
-      width="100%"
-      height="100%"
-      minWidth={0}
-      minHeight={0}
-      debounce={1}
-    >
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={1}>
       <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis
-          dataKey="date"
-          stroke="#64748b"
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
-        />
-        <YAxis
-          stroke="#64748b"
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
-        />
+        <XAxis dataKey="date" stroke="#64748b" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+        <YAxis stroke="#64748b" tick={{ fill: "#94a3b8", fontSize: 12 }} />
         <Tooltip contentStyle={tooltipStyle} />
         <Legend wrapperStyle={{ color: "#94a3b8" }} />
         <Line
@@ -233,30 +186,12 @@ function MetricsLineChart({
   );
 }
 
-function StatusBarChart({
-  data,
-}: {
-  data: StatusBreakdownItem[];
-}) {
+function StatusBarChart({ data }: { data: StatusBreakdownItem[] }) {
   return (
-    <ResponsiveContainer
-      width="100%"
-      height="100%"
-      minWidth={0}
-      minHeight={0}
-      debounce={1}
-    >
-      <BarChart
-        data={data}
-        layout="vertical"
-        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-      >
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={1}>
+      <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis
-          type="number"
-          stroke="#64748b"
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
-        />
+        <XAxis type="number" stroke="#64748b" tick={{ fill: "#94a3b8", fontSize: 12 }} />
         <YAxis
           type="category"
           dataKey="status"
@@ -266,17 +201,9 @@ function StatusBarChart({
         />
         <Tooltip contentStyle={tooltipStyle} />
         <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-          <LabelList
-            dataKey="count"
-            position="right"
-            fill="#e2e8f0"
-            fontSize={12}
-          />
+          <LabelList dataKey="count" position="right" fill="#e2e8f0" fontSize={12} />
           {data.map((entry) => (
-            <Cell
-              key={entry.status}
-              fill={STATUS_COLORS[entry.status] || "#64748b"}
-            />
+            <Cell key={entry.status} fill={STATUS_COLORS[entry.status] || "#64748b"} />
           ))}
         </Bar>
       </BarChart>
@@ -284,19 +211,9 @@ function StatusBarChart({
   );
 }
 
-function CategoryPieChart({
-  data,
-}: {
-  data: CategoryBreakdownItem[];
-}) {
+function CategoryPieChart({ data }: { data: CategoryBreakdownItem[] }) {
   return (
-    <ResponsiveContainer
-      width="100%"
-      height="100%"
-      minWidth={0}
-      minHeight={0}
-      debounce={1}
-    >
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={1}>
       <PieChart>
         <Pie
           data={data}
@@ -310,10 +227,7 @@ function CategoryPieChart({
           nameKey="category"
         >
           {data.map((entry) => (
-            <Cell
-              key={entry.category}
-              fill={CATEGORY_COLORS[entry.category] || "#64748b"}
-            />
+            <Cell key={entry.category} fill={CATEGORY_COLORS[entry.category] || "#64748b"} />
           ))}
         </Pie>
         <Tooltip contentStyle={tooltipStyle} />

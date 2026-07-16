@@ -28,13 +28,9 @@ const INCIDENT_SORT_COLUMNS: Record<string, string> = {
 	analystId: 'i."analystId"',
 };
 
-function getIncidentOrderBy(
-	sortByValue: unknown,
-	sortOrderValue: unknown,
-): string | null {
+function getIncidentOrderBy(sortByValue: unknown, sortOrderValue: unknown): string | null {
 	const sortBy = typeof sortByValue === "string" ? sortByValue : "createdAt";
-	const sortOrder =
-		typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
+	const sortOrder = typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
 	const sortColumn = INCIDENT_SORT_COLUMNS[sortBy];
 
 	if (!sortColumn || !["asc", "desc"].includes(sortOrder)) {
@@ -316,9 +312,7 @@ async function downloadFile(req: Request, res: Response) {
 		}
 
 		// Walidacja typu pliku
-		if (
-			!["screenshots", "attachments", "reports", "statements"].includes(type)
-		) {
+		if (!["screenshots", "attachments", "reports", "statements"].includes(type)) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -418,7 +412,7 @@ async function downloadFile(req: Request, res: Response) {
 		let parsedMetadata: StoredFileMetadataPayload;
 		try {
 			parsedMetadata = parseStoredFileMetadata(fileData.metadata);
-		} catch (_e) {
+		} catch {
 			console.error("[DOWNLOAD] Failed to parse metadata JSON");
 			return res.status(500).json({
 				success: false,
@@ -465,18 +459,11 @@ async function downloadFile(req: Request, res: Response) {
 		}
 
 		// Ustaw odpowiednie nagłówki i zwróć plik
-		res.setHeader(
-			"Content-Type",
-			fileMetadata.mimeType || "application/octet-stream",
-		);
+		res.setHeader("Content-Type", fileMetadata.mimeType || "application/octet-stream");
 
 		// Użyj prawdziwej nazwy pliku z metadanych (nie z URL)
-		const realFilename =
-			fileMetadata.filename || fileMetadata.originalName || filename;
-		res.setHeader(
-			"Content-Disposition",
-			createContentDispositionHeader(realFilename),
-		);
+		const realFilename = fileMetadata.filename || fileMetadata.originalName || filename;
+		res.setHeader("Content-Disposition", createContentDispositionHeader(realFilename));
 
 		res.setHeader("Content-Length", fileBuffer.length);
 		res.send(fileBuffer);
@@ -493,11 +480,7 @@ async function downloadFile(req: Request, res: Response) {
 }
 
 // GET /analyst/incidents/:id/files/:type/:filename - Pobieranie plików z przypisanych incydentów
-router.get(
-	"/:id/files/:type/:filename",
-	requireOrganizationAccess,
-	downloadFile,
-);
+router.get("/:id/files/:type/:filename", requireOrganizationAccess, downloadFile);
 
 /**
  * Przypisanie incydentu do siebie
@@ -649,8 +632,7 @@ async function unassignIncident(req: Request, res: Response) {
 
 		// Sprawdź czy użytkownik ma prawo oddać incydent do puli
 		// Admin może oddawać wszystkie incydenty, analityk tylko przypisane do niego
-		const canUnassign =
-			incident.analystId === userId || authReq.memberRole === "admin";
+		const canUnassign = incident.analystId === userId || authReq.memberRole === "admin";
 
 		if (!canUnassign) {
 			return res.status(403).json({
@@ -791,8 +773,7 @@ async function updateIncidentStatus(req: Request, res: Response) {
 
 		// Sprawdź czy analityk ma prawo zmienić status
 		// Admin może zmieniać wszystko, analityk tylko przypisane do niego incydenty
-		const canModify =
-			incident.analystId === userId || authReq.memberRole === "admin";
+		const canModify = incident.analystId === userId || authReq.memberRole === "admin";
 
 		if (!canModify) {
 			return res.status(403).json({
@@ -935,8 +916,7 @@ async function updateIncidentNotes(req: Request, res: Response) {
 		}
 
 		// Sprawdź czy analityk ma prawo edytować notatki
-		const canModify =
-			incident.analystId === userId || authReq.memberRole === "admin";
+		const canModify = incident.analystId === userId || authReq.memberRole === "admin";
 
 		if (!canModify) {
 			return res.status(403).json({
@@ -1033,8 +1013,7 @@ async function resolveIncident(req: Request, res: Response) {
 		}
 
 		// Sprawdź czy analityk ma prawo oznaczyć jako rozwiązane
-		const canResolve =
-			incident.analystId === userId || authReq.memberRole === "admin";
+		const canResolve = incident.analystId === userId || authReq.memberRole === "admin";
 
 		if (!canResolve) {
 			return res.status(403).json({
@@ -1111,9 +1090,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 			});
 		}
 
-		const incident = await queryOne<
-			Incident & { userName?: string; analystName?: string }
-		>(
+		const incident = await queryOne<Incident & { userName?: string; analystName?: string }>(
 			`
 			SELECT
 				i.id,
@@ -1165,9 +1142,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 			typeof incident.userScreenshotMetadata === "string"
 		) {
 			try {
-				incident.userScreenshotMetadata = JSON.parse(
-					incident.userScreenshotMetadata,
-				);
+				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
 			} catch (e) {
 				console.error("[ANALYST] Failed to parse userScreenshotMetadata:", e);
 			}
@@ -1178,22 +1153,15 @@ async function getIncidentDetails(req: Request, res: Response) {
 			typeof incident.userAttachmentMetadata === "string"
 		) {
 			try {
-				incident.userAttachmentMetadata = JSON.parse(
-					incident.userAttachmentMetadata,
-				);
+				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
 			} catch (e) {
 				console.error("[ANALYST] Failed to parse userAttachmentMetadata:", e);
 			}
 		}
 
-		if (
-			incident.analystReportMetadata &&
-			typeof incident.analystReportMetadata === "string"
-		) {
+		if (incident.analystReportMetadata && typeof incident.analystReportMetadata === "string") {
 			try {
-				incident.analystReportMetadata = JSON.parse(
-					incident.analystReportMetadata,
-				);
+				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
 			} catch (e) {
 				console.error("[ANALYST] Failed to parse analystReportMetadata:", e);
 			}
@@ -1204,9 +1172,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 			typeof incident.analystStatementMetadata === "string"
 		) {
 			try {
-				incident.analystStatementMetadata = JSON.parse(
-					incident.analystStatementMetadata,
-				);
+				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
 			} catch (e) {
 				console.error("[ANALYST] Failed to parse analystStatementMetadata:", e);
 			}
@@ -1273,10 +1239,7 @@ async function uploadSingleFile(
 			},
 		};
 	} catch (error) {
-		console.error(
-			`[UPLOAD] Failed to upload ${type} file ${file.filename}:`,
-			error,
-		);
+		console.error(`[UPLOAD] Failed to upload ${type} file ${file.filename}:`, error);
 		throw new Error(`Nie udało się przesłać pliku ${file.filename}`);
 	}
 }
@@ -1342,8 +1305,7 @@ async function uploadReport(req: Request, res: Response) {
 		}
 
 		// Sprawdź czy analityk ma prawo uploadować raport
-		const canUpload =
-			incident.analystId === userId || authReq.memberRole === "admin";
+		const canUpload = incident.analystId === userId || authReq.memberRole === "admin";
 
 		if (!canUpload) {
 			return res.status(403).json({
@@ -1365,9 +1327,7 @@ async function uploadReport(req: Request, res: Response) {
 				error: {
 					code: "REPORT_UPLOAD_ERROR",
 					message:
-						error instanceof Error
-							? error.message
-							: "Nie udało się przesłać raportu",
+						error instanceof Error ? error.message : "Nie udało się przesłać raportu",
 				},
 			});
 		}
@@ -1379,12 +1339,7 @@ async function uploadReport(req: Request, res: Response) {
 			SET "analystReportPath" = $1, "analystReportMetadata" = $2, "analystReportData" = now(), status = 'Raport złożony', "updatedAt" = now()
 			WHERE id = $3 AND "organizationId" = $4
 		`,
-			[
-				uploadedReport.path,
-				JSON.stringify(uploadedReport.metadata),
-				id,
-				organizationId,
-			],
+			[uploadedReport.path, JSON.stringify(uploadedReport.metadata), id, organizationId],
 		);
 
 		res.json({
@@ -1469,8 +1424,7 @@ async function uploadStatement(req: Request, res: Response) {
 		}
 
 		// Sprawdź czy analityk ma prawo uploadować sprawozdanie
-		const canUpload =
-			incident.analystId === userId || authReq.memberRole === "admin";
+		const canUpload = incident.analystId === userId || authReq.memberRole === "admin";
 
 		if (!canUpload) {
 			return res.status(403).json({
@@ -1489,8 +1443,7 @@ async function uploadStatement(req: Request, res: Response) {
 				success: false,
 				error: {
 					code: "CANNOT_UPLOAD_STATEMENT_WITH_STATUS",
-					message:
-						"Sprawozdanie można uploadować tylko gdy raport jest już złożony",
+					message: "Sprawozdanie można uploadować tylko gdy raport jest już złożony",
 				},
 			});
 		}
@@ -1498,11 +1451,7 @@ async function uploadStatement(req: Request, res: Response) {
 		// Upload sprawozdania do storage
 		let uploadedStatement: UploadedIncidentFile;
 		try {
-			uploadedStatement = await uploadSingleFile(
-				statementData,
-				id,
-				"statements",
-			);
+			uploadedStatement = await uploadSingleFile(statementData, id, "statements");
 		} catch (error) {
 			return res.status(500).json({
 				success: false,

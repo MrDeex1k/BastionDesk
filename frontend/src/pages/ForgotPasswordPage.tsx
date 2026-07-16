@@ -4,7 +4,5 @@ import { useNavigate } from "react-router-dom";
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
 
-  return (
-    <ForgotPasswordForm onBack={() => navigate("/login")} />
-  );
+  return <ForgotPasswordForm onBack={() => navigate("/login")} />;
 }
