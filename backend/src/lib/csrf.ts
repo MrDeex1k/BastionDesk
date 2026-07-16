@@ -9,29 +9,23 @@ export const CSRF_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 
 const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-export function parseCookies(
-	cookieHeader: string | string[] | undefined,
-): Record<string, string> {
-	const rawHeader = Array.isArray(cookieHeader)
-		? cookieHeader.join(";")
-		: cookieHeader;
+export function parseCookies(cookieHeader: string | string[] | undefined): Record<string, string> {
+	const rawHeader = Array.isArray(cookieHeader) ? cookieHeader.join(";") : cookieHeader;
 
 	if (!rawHeader) {
 		return {};
 	}
 
-	return rawHeader
-		.split(";")
-		.reduce<Record<string, string>>((cookies, chunk) => {
-			const [name, ...valueParts] = chunk.trim().split("=");
-			if (!name || valueParts.length === 0) {
-				return cookies;
-			}
-
-			const value = valueParts.join("=");
-			cookies[name] = decodeURIComponent(value);
+	return rawHeader.split(";").reduce<Record<string, string>>((cookies, chunk) => {
+		const [name, ...valueParts] = chunk.trim().split("=");
+		if (!name || valueParts.length === 0) {
 			return cookies;
-		}, {});
+		}
+
+		const value = valueParts.join("=");
+		cookies[name] = decodeURIComponent(value);
+		return cookies;
+	}, {});
 }
 
 export function isCsrfSafeMethod(method: string): boolean {
@@ -106,11 +100,7 @@ export function verifyCsrfToken(token: string, subject: string): boolean {
 	return safeCompare(signature, expectedSignature);
 }
 
-function signCsrfPayload(
-	subject: string,
-	nonce: string,
-	expiresAt: string,
-): string {
+function signCsrfPayload(subject: string, nonce: string, expiresAt: string): string {
 	return crypto
 		.createHmac("sha256", env.CSRF_SECRET)
 		.update(`${subject}:${nonce}:${expiresAt}`)

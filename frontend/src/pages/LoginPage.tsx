@@ -7,7 +7,7 @@ interface LoginPageProps {
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
-  
+
   const handleLoginSuccess = () => {
     onLogin();
   };

@@ -3,7 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Activity, User, UserX, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { AnalystIncidentList } from "../components/AnalystIncidentList";
-import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "../components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  DialogTitle,
+  DialogDescription,
+} from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 
 const IncidentReportForm = lazy(() =>
@@ -17,7 +23,7 @@ export function AnalystDashboardPage() {
   const queryClient = useQueryClient();
   const handleIncidentCreated = useCallback(() => {
     setIsCreateDialogOpen(false);
-    queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
+    void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
   }, [queryClient]);
 
   return (
@@ -26,9 +32,7 @@ export function AnalystDashboardPage() {
         <div className="mb-2 inline-flex rounded-full border border-violet-500/20 bg-violet-500/10 p-4">
           <Activity className="size-12 text-purple-400" />
         </div>
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-100">
-          Panel Analityka
-        </h1>
+        <h1 className="text-4xl font-semibold tracking-tight text-zinc-100">Panel Analityka</h1>
         <p className="mt-3 max-w-2xl text-lg text-zinc-400">
           Zarządzaj incydentami bezpieczeństwa w twojej organizacji.
         </p>
@@ -37,14 +41,14 @@ export function AnalystDashboardPage() {
       <Tabs defaultValue="assigned" className="w-full">
         <div className="mb-6 flex items-center justify-center gap-4">
           <TabsList className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-1">
-              <TabsTrigger
+            <TabsTrigger
               value="assigned"
               className="px-6 py-2 text-white/85 hover:text-white data-[state=active]:bg-blue-600 data-[state=active]:text-white"
             >
               <User className="mr-2 size-4" />
               Przypisane do mnie
             </TabsTrigger>
-              <TabsTrigger
+            <TabsTrigger
               value="unassigned"
               className="px-6 py-2 text-white/85 hover:text-white data-[state=active]:bg-violet-600 data-[state=active]:text-white"
             >

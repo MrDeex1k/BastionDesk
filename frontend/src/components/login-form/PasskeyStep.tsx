@@ -9,12 +9,7 @@ interface PasskeyStepProps {
   onBackToEmail: () => void;
 }
 
-export function PasskeyStep({
-  email,
-  isPending,
-  onLogin,
-  onBackToEmail,
-}: PasskeyStepProps) {
+export function PasskeyStep({ email, isPending, onLogin, onBackToEmail }: PasskeyStepProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-2">

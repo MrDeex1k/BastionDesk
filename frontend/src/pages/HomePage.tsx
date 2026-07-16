@@ -1,10 +1,4 @@
-import {
-  Shield,
-  Users,
-  Building2,
-  AlertTriangle,
-  Lock,
-} from "lucide-react";
+import { Shield, Users, Building2, AlertTriangle, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -15,20 +9,15 @@ export function HomePage() {
   return (
     <>
       <div className="mx-auto mb-16 max-w-4xl text-center">
-        <h2 className="mb-6 text-5xl tracking-tight text-zinc-100">
-          Witaj w BastionDesk
-        </h2>
+        <h2 className="mb-6 text-5xl tracking-tight text-zinc-100">Witaj w BastionDesk</h2>
 
         <p className="mb-4 text-xl text-zinc-300">
-          Profesjonalny system zgłaszania i zarządzania
-          incydentami bezpieczeństwa
+          Profesjonalny system zgłaszania i zarządzania incydentami bezpieczeństwa
         </p>
 
         <p className="mx-auto max-w-2xl text-zinc-400">
-          Chronimy Twoją organizację poprzez szybkie
-          reagowanie na zagrożenia. Zgłaszaj incydenty,
-          śledź postępy i współpracuj z zespołem
-          bezpieczeństwa w czasie rzeczywistym.
+          Chronimy Twoją organizację poprzez szybkie reagowanie na zagrożenia. Zgłaszaj incydenty,
+          śledź postępy i współpracuj z zespołem bezpieczeństwa w czasie rzeczywistym.
         </p>
       </div>
 
@@ -40,12 +29,9 @@ export function HomePage() {
               <Lock className="size-8 text-blue-400" />
             </div>
             <div>
-              <h3 className="mb-2 text-xl text-blue-200">
-                Zaloguj się
-              </h3>
+              <h3 className="mb-2 text-xl text-blue-200">Zaloguj się</h3>
               <p className="mb-6 text-sm text-zinc-400">
-                Masz już konto? Zaloguj się i uzyskaj
-                dostęp do swojego panelu.
+                Masz już konto? Zaloguj się i uzyskaj dostęp do swojego panelu.
               </p>
             </div>
             <Button
@@ -64,12 +50,9 @@ export function HomePage() {
               <Users className="size-8 text-cyan-400" />
             </div>
             <div>
-              <h3 className="mb-2 text-xl text-cyan-200">
-                Dołącz do nas
-              </h3>
+              <h3 className="mb-2 text-xl text-cyan-200">Dołącz do nas</h3>
               <p className="mb-6 text-sm text-zinc-400">
-                Stwórz konto, a następnie dołącz do
-                organizacji
+                Stwórz konto, a następnie dołącz do organizacji
               </p>
             </div>
             <Button
@@ -88,13 +71,9 @@ export function HomePage() {
               <Building2 className="size-8 text-emerald-400" />
             </div>
             <div>
-              <h3 className="mb-2 text-xl text-emerald-200">
-                Stwórz organizację
-              </h3>
+              <h3 className="mb-2 text-xl text-emerald-200">Stwórz organizację</h3>
               <p className="mb-6 text-sm text-zinc-400">
-                Jesteś administratorem? Stwórz nową
-                organizację i zacznij zarządzać
-                bezpieczeństwem.
+                Jesteś administratorem? Stwórz nową organizację i zacznij zarządzać bezpieczeństwem.
               </p>
             </div>
             <Button
@@ -110,40 +89,29 @@ export function HomePage() {
 
       {/* Features Section */}
       <div className="max-w-4xl mx-auto">
-        <h3 className="mb-8 text-center text-zinc-300">
-          Kluczowe funkcje systemu
-        </h3>
+        <h3 className="mb-8 text-center text-zinc-300">Kluczowe funkcje systemu</h3>
         <div className="grid gap-6 md:grid-cols-3">
           <div className="flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
             <AlertTriangle className="size-6 text-yellow-400" />
-            <h4 className="text-zinc-200">
-              Szybkie zgłaszanie
-            </h4>
+            <h4 className="text-zinc-200">Szybkie zgłaszanie</h4>
             <p className="text-sm text-zinc-400">
-              Błyskawiczne zgłaszanie incydentów z
-              dowolnego miejsca
+              Błyskawiczne zgłaszanie incydentów z dowolnego miejsca
             </p>
           </div>
 
           <div className="flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
             <Shield className="size-6 text-blue-400" />
-            <h4 className="text-zinc-200">
-              Analiza zagrożeń
-            </h4>
+            <h4 className="text-zinc-200">Analiza zagrożeń</h4>
             <p className="text-sm text-zinc-400">
-              Światowej klasy eksperci, którzy pomogą w
-              analizie zagrożeń
+              Światowej klasy eksperci, którzy pomogą w analizie zagrożeń
             </p>
           </div>
 
           <div className="flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
             <Users className="size-6 text-cyan-400" />
-            <h4 className="text-zinc-200">
-              Współpraca zespołowa
-            </h4>
+            <h4 className="text-zinc-200">Współpraca zespołowa</h4>
             <p className="text-sm text-zinc-400">
-              Efektywna wymiana informacji, pomiędzy
-              użytkownikami
+              Efektywna wymiana informacji, pomiędzy użytkownikami
             </p>
           </div>
         </div>

@@ -32,13 +32,9 @@ const ADMIN_INCIDENT_SORT_COLUMNS: Record<string, string> = {
 	analystId: 'i."analystId"',
 };
 
-function getAdminIncidentOrderBy(
-	sortByValue: unknown,
-	sortOrderValue: unknown,
-): string | null {
+function getAdminIncidentOrderBy(sortByValue: unknown, sortOrderValue: unknown): string | null {
 	const sortBy = typeof sortByValue === "string" ? sortByValue : "createdAt";
-	const sortOrder =
-		typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
+	const sortOrder = typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
 	const sortColumn = ADMIN_INCIDENT_SORT_COLUMNS[sortBy];
 
 	if (!sortColumn || !["asc", "desc"].includes(sortOrder)) {
@@ -61,10 +57,7 @@ async function getAllIncidents(req: Request, res: Response) {
 		const status = req.query.status as string | undefined;
 		const userQuery = req.query.userQuery as string | undefined;
 		const analystId = req.query.analystId as string | undefined;
-		const orderBy = getAdminIncidentOrderBy(
-			req.query.sortBy,
-			req.query.sortOrder,
-		);
+		const orderBy = getAdminIncidentOrderBy(req.query.sortBy, req.query.sortOrder);
 
 		if (!orderBy) {
 			return res.status(400).json({
@@ -109,9 +102,7 @@ async function getAllIncidents(req: Request, res: Response) {
 		const offset = (page - 1) * limit;
 
 		// Pobierz incydenty
-		const incidents = await query<
-			Incident & { userName?: string; analystName?: string }
-		>(
+		const incidents = await query<Incident & { userName?: string; analystName?: string }>(
 			`
 			SELECT
 				i.id,
@@ -153,27 +144,21 @@ async function getAllIncidents(req: Request, res: Response) {
 		incidents.forEach((incident) => {
 			if (typeof incident.userScreenshotMetadata === "string") {
 				try {
-					incident.userScreenshotMetadata = JSON.parse(
-						incident.userScreenshotMetadata,
-					);
+					incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
 				} catch (e) {
 					console.error("[ADMIN] Failed to parse userScreenshotMetadata:", e);
 				}
 			}
 			if (typeof incident.userAttachmentMetadata === "string") {
 				try {
-					incident.userAttachmentMetadata = JSON.parse(
-						incident.userAttachmentMetadata,
-					);
+					incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
 				} catch (e) {
 					console.error("[ADMIN] Failed to parse userAttachmentMetadata:", e);
 				}
 			}
 			if (typeof incident.analystReportMetadata === "string") {
 				try {
-					incident.analystReportMetadata = JSON.parse(
-						incident.analystReportMetadata,
-					);
+					incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
 				} catch (e) {
 					console.error("[ADMIN] Failed to parse analystReportMetadata:", e);
 				}
@@ -292,11 +277,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 		}
 
 		// Prosta walidacja UUID
-		if (
-			!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-				id,
-			)
-		) {
+		if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -306,9 +287,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 			});
 		}
 
-		const incident = await queryOne<
-			Incident & { userName?: string; analystName?: string }
-		>(
+		const incident = await queryOne<Incident & { userName?: string; analystName?: string }>(
 			`
 			SELECT
 				i.id,
@@ -349,8 +328,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 				success: false,
 				error: {
 					code: "INCIDENT_NOT_FOUND",
-					message:
-						"Zgłoszenie nie zostało znalezione lub nie masz do niego dostępu",
+					message: "Zgłoszenie nie zostało znalezione lub nie masz do niego dostępu",
 				},
 			});
 		}
@@ -358,36 +336,28 @@ async function getIncidentDetails(req: Request, res: Response) {
 		// Parsuj metadata z JSON stringów do obiektów
 		if (typeof incident.userScreenshotMetadata === "string") {
 			try {
-				incident.userScreenshotMetadata = JSON.parse(
-					incident.userScreenshotMetadata,
-				);
+				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
 			} catch (e) {
 				console.error("[ADMIN] Failed to parse userScreenshotMetadata:", e);
 			}
 		}
 		if (typeof incident.userAttachmentMetadata === "string") {
 			try {
-				incident.userAttachmentMetadata = JSON.parse(
-					incident.userAttachmentMetadata,
-				);
+				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
 			} catch (e) {
 				console.error("[ADMIN] Failed to parse userAttachmentMetadata:", e);
 			}
 		}
 		if (typeof incident.analystReportMetadata === "string") {
 			try {
-				incident.analystReportMetadata = JSON.parse(
-					incident.analystReportMetadata,
-				);
+				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
 			} catch (e) {
 				console.error("[ADMIN] Failed to parse analystReportMetadata:", e);
 			}
 		}
 		if (typeof incident.analystStatementMetadata === "string") {
 			try {
-				incident.analystStatementMetadata = JSON.parse(
-					incident.analystStatementMetadata,
-				);
+				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
 			} catch (e) {
 				console.error("[ADMIN] Failed to parse analystStatementMetadata:", e);
 			}
@@ -436,9 +406,7 @@ async function downloadFile(req: Request, res: Response) {
 		}
 
 		// Walidacja typu pliku
-		if (
-			!["screenshots", "attachments", "reports", "statements"].includes(type)
-		) {
+		if (!["screenshots", "attachments", "reports", "statements"].includes(type)) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -545,15 +513,9 @@ async function downloadFile(req: Request, res: Response) {
 		}
 
 		// Ustaw odpowiednie nagłówki i zwróć plik
-		res.setHeader(
-			"Content-Type",
-			fileMetadata.mimeType || "application/octet-stream",
-		);
+		res.setHeader("Content-Type", fileMetadata.mimeType || "application/octet-stream");
 
-		res.setHeader(
-			"Content-Disposition",
-			createContentDispositionHeader(filename),
-		);
+		res.setHeader("Content-Disposition", createContentDispositionHeader(filename));
 		res.setHeader("Content-Length", fileBuffer.length);
 		res.send(fileBuffer);
 	} catch (error) {

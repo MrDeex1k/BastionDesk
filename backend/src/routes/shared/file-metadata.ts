@@ -9,26 +9,18 @@ export interface StoredFileMetadata {
 	etag?: string;
 }
 
-export type StoredFileMetadataPayload =
-	| StoredFileMetadata
-	| StoredFileMetadata[]
-	| null;
+export type StoredFileMetadataPayload = StoredFileMetadata | StoredFileMetadata[] | null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function isStoredFileMetadata(
-	value: unknown,
-): value is StoredFileMetadata {
+export function isStoredFileMetadata(value: unknown): value is StoredFileMetadata {
 	return isRecord(value);
 }
 
-export function parseStoredFileMetadata(
-	metadata: unknown,
-): StoredFileMetadataPayload {
-	const parsed =
-		typeof metadata === "string" ? (JSON.parse(metadata) as unknown) : metadata;
+export function parseStoredFileMetadata(metadata: unknown): StoredFileMetadataPayload {
+	const parsed = typeof metadata === "string" ? (JSON.parse(metadata) as unknown) : metadata;
 
 	if (Array.isArray(parsed)) {
 		return parsed.filter(isStoredFileMetadata);
@@ -41,9 +33,7 @@ export function parseStoredFileMetadata(
 	return null;
 }
 
-export function getMetadataFilename(
-	metadata: StoredFileMetadata,
-): string | null {
+export function getMetadataFilename(metadata: StoredFileMetadata): string | null {
 	return metadata.originalName ?? metadata.filename ?? null;
 }
 
@@ -56,9 +46,7 @@ export function findStoredFileMetadata(
 	}
 
 	if (Array.isArray(metadata)) {
-		return (
-			metadata.find((file) => getMetadataFilename(file) === filename) ?? null
-		);
+		return metadata.find((file) => getMetadataFilename(file) === filename) ?? null;
 	}
 
 	return getMetadataFilename(metadata) === filename ? metadata : null;
@@ -68,9 +56,7 @@ function toAsciiHeaderFilename(filename: string): string {
 	return Array.from(filename, (character) => {
 		const codePoint = character.codePointAt(0) ?? 0;
 		const isPrintableAscii = codePoint >= 0x20 && codePoint <= 0x7e;
-		return isPrintableAscii && character !== `"` && character !== "\\"
-			? character
-			: "_";
+		return isPrintableAscii && character !== `"` && character !== "\\" ? character : "_";
 	}).join("");
 }
 

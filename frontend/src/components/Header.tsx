@@ -49,12 +49,10 @@ export function Header({
         >
           <div className="text-left">
             <h1 className="text-lg font-semibold text-blue-300">BastionDesk</h1>
-            <p className="text-xs text-zinc-400">
-              Zarządzanie bezpieczeństwem
-            </p>
+            <p className="text-xs text-zinc-400">Zarządzanie bezpieczeństwem</p>
           </div>
         </button>
-        
+
         {/* Centered Icon (Decorative) */}
         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
           <div className="relative">
@@ -106,12 +104,7 @@ export function Header({
 
 function SettingsButtonFallback() {
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      disabled
-      className="text-zinc-400 opacity-70"
-    >
+    <Button variant="ghost" size="icon" disabled className="text-zinc-400 opacity-70">
       <Shield className="size-5" />
       <span className="sr-only">Ładowanie ustawień</span>
     </Button>

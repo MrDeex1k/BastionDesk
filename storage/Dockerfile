@@ -1,4 +1,4 @@
-FROM busybox:1.37.0-musl AS wget-src
+FROM busybox:1.38.0-musl AS wget-src
 
 FROM minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
 

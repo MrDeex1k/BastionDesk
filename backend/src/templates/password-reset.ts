@@ -14,9 +14,7 @@ export interface PasswordResetEmailData {
 /**
  * Generuje HTML emaila resetującego hasło
  */
-export function generatePasswordResetEmailHtml(
-	data: PasswordResetEmailData,
-): string {
+export function generatePasswordResetEmailHtml(data: PasswordResetEmailData): string {
 	const { userName, userEmail, resetUrl } = data;
 
 	return `

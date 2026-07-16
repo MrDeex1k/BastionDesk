@@ -3,9 +3,7 @@ import { sendErrorResponse } from "../../lib/api-response.js";
 import { queryOne } from "../../lib/database.js";
 import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
-export const requireRole = (
-	requiredRole: "admin" | "analityk" | "pracownik",
-) => {
+export const requireRole = (requiredRole: "admin" | "analityk" | "pracownik") => {
 	return (req: Request, res: Response, next: NextFunction) => {
 		const authReq = req as AuthenticatedRequest;
 
@@ -34,20 +32,11 @@ export const requireRole = (
 	};
 };
 
-export const requireAuth = (
-	req: Request,
-	res: Response,
-	next: NextFunction,
-) => {
+export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
 	const authReq = req as AuthenticatedRequest;
 	// Sprawdź czy użytkownik jest zalogowany
 	if (!authReq.user) {
-		return sendErrorResponse(
-			res,
-			401,
-			"UNAUTHORIZED",
-			"Authentication required",
-		);
+		return sendErrorResponse(res, 401, "UNAUTHORIZED", "Authentication required");
 	}
 	next();
 };
@@ -56,21 +45,12 @@ export const requireAuth = (
  * Middleware sprawdzający czy użytkownik ma dostęp do konkretnego incydentu
  * Sprawdza czy incydent należy do tej samej organizacji co użytkownik
  */
-export const requireOrganizationAccess = (
-	req: Request,
-	res: Response,
-	next: NextFunction,
-) => {
+export const requireOrganizationAccess = (req: Request, res: Response, next: NextFunction) => {
 	const authReq = req as AuthenticatedRequest;
 	const incidentId = req.params.id;
 
 	if (!incidentId) {
-		return sendErrorResponse(
-			res,
-			400,
-			"MISSING_INCIDENT_ID",
-			"Brak ID incydentu",
-		);
+		return sendErrorResponse(res, 400, "MISSING_INCIDENT_ID", "Brak ID incydentu");
 	}
 
 	if (!authReq.organizationId) {

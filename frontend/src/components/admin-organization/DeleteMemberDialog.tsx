@@ -26,16 +26,12 @@ export const DeleteMemberDialog = memo(function DeleteMemberDialog({
     <AlertDialog open={!!memberToDelete} onOpenChange={onOpenChange}>
       <AlertDialogContent className="border-zinc-800 bg-zinc-900 text-zinc-100">
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            Czy na pewno chcesz usunąć tego użytkownika?
-          </AlertDialogTitle>
+          <AlertDialogTitle>Czy na pewno chcesz usunąć tego użytkownika?</AlertDialogTitle>
           <AlertDialogDescription className="text-zinc-400">
             Użytkownik{" "}
-            <span className="font-medium text-zinc-200">
-              {memberToDelete?.user.name}
-            </span>{" "}
-            ({memberToDelete?.user.email}) straci dostęp do organizacji. Tej
-            operacji nie można cofnąć.
+            <span className="font-medium text-zinc-200">{memberToDelete?.user.name}</span> (
+            {memberToDelete?.user.email}) straci dostęp do organizacji. Tej operacji nie można
+            cofnąć.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

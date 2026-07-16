@@ -57,9 +57,7 @@ export function PasswordStep({
             disabled={isPending}
           />
         </div>
-        {passwordError && (
-          <p className="text-red-500 text-sm">{passwordError}</p>
-        )}
+        {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
       </div>
 
       <div className="flex items-center justify-between text-sm">

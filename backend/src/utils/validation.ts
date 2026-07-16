@@ -4,9 +4,7 @@ import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { sendErrorResponse } from "../lib/api-response";
 
-export const uuidSchema = z
-	.string()
-	.uuid({ message: "Nieprawidłowy format UUID" });
+export const uuidSchema = z.string().uuid({ message: "Nieprawidłowy format UUID" });
 
 export const emailSchema = z
 	.string()
@@ -102,10 +100,7 @@ type ValidateTarget = "body" | "query" | "params";
  * router.post('/incidents', validate(createIncidentSchema, 'body'), handler)
  * router.get('/incidents', validate(incidentQuerySchema, 'query'), handler)
  */
-export function validate<T extends z.ZodTypeAny>(
-	schema: T,
-	target: ValidateTarget = "body",
-) {
+export function validate<T extends z.ZodTypeAny>(schema: T, target: ValidateTarget = "body") {
 	return (req: Request, res: Response, next: NextFunction): void => {
 		try {
 			const data = req[target];
@@ -178,13 +173,7 @@ export function validateMultiple(schemas: {
 		}
 
 		if (errors.length > 0) {
-			sendErrorResponse(
-				res,
-				400,
-				"VALIDATION_ERROR",
-				"Błąd walidacji danych",
-				errors,
-			);
+			sendErrorResponse(res, 400, "VALIDATION_ERROR", "Błąd walidacji danych", errors);
 			return;
 		}
 
@@ -193,9 +182,7 @@ export function validateMultiple(schemas: {
 }
 
 export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
-export type UpdateIncidentStatusInput = z.infer<
-	typeof updateIncidentStatusSchema
->;
+export type UpdateIncidentStatusInput = z.infer<typeof updateIncidentStatusSchema>;
 export type UpdateIncidentNoteInput = z.infer<typeof updateIncidentNoteSchema>;
 export type ResolveIncidentInput = z.infer<typeof resolveIncidentSchema>;
 export type IncidentQueryInput = z.infer<typeof incidentQuerySchema>;

@@ -1,7 +1,4 @@
-export type {
-  MetricsResponse,
-  StatsResponse,
-} from "./analytics";
+export type { MetricsResponse, StatsResponse } from "./analytics";
 export type { PassKey } from "./auth";
 export type {
   AdminIncidentAnalystFilter,
@@ -11,7 +8,4 @@ export type {
   IncidentDetailResponse,
   IncidentsResponse,
 } from "./incident";
-export type {
-  OrganizationMember,
-  OrganizationMembersResponse,
-} from "./organization";
+export type { OrganizationMember, OrganizationMembersResponse } from "./organization";

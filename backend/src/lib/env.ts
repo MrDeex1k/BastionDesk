@@ -38,9 +38,7 @@ function parseOriginList(value: string, key: string): string[] {
 		.filter(Boolean);
 
 	if (origins.length === 0) {
-		throw new Error(
-			`Environment variable ${key} must include at least one origin`,
-		);
+		throw new Error(`Environment variable ${key} must include at least one origin`);
 	}
 
 	for (const origin of origins) {
@@ -60,9 +58,7 @@ function validateOrigin(value: string, key: string): string {
 	}
 
 	if (!["http:", "https:"].includes(parsed.protocol)) {
-		throw new Error(
-			`Environment variable ${key} must use http or https protocol`,
-		);
+		throw new Error(`Environment variable ${key} must use http or https protocol`);
 	}
 
 	if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
@@ -72,9 +68,7 @@ function validateOrigin(value: string, key: string): string {
 	}
 
 	if (parsed.origin.includes("*")) {
-		throw new Error(
-			`Environment variable ${key} cannot contain wildcard origins`,
-		);
+		throw new Error(`Environment variable ${key} cannot contain wildcard origins`);
 	}
 
 	return parsed.origin;
@@ -90,9 +84,7 @@ function validateUrl(value: string, key: string): URL {
 	}
 
 	if (!["http:", "https:"].includes(parsed.protocol)) {
-		throw new Error(
-			`Environment variable ${key} must use http or https protocol`,
-		);
+		throw new Error(`Environment variable ${key} must use http or https protocol`);
 	}
 
 	return parsed;
@@ -161,10 +153,7 @@ const rawEnv = {
 
 const frontendUrl = validateUrl(rawEnv.FRONTEND_URL, "FRONTEND_URL");
 const betterAuthUrl = validateUrl(rawEnv.BETTER_AUTH_URL, "BETTER_AUTH_URL");
-const webauthnOrigin = validateOrigin(
-	rawEnv.WEBAUTHN_ORIGIN,
-	"WEBAUTHN_ORIGIN",
-);
+const webauthnOrigin = validateOrigin(rawEnv.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
 const corsOrigins = parseOriginList(rawEnv.CORS_ORIGIN, "CORS_ORIGIN");
 const trustedOrigins = parseOriginList(
 	rawEnv.BETTER_AUTH_TRUSTED_ORIGINS,
@@ -176,15 +165,11 @@ if (!corsOrigins.includes(frontendUrl.origin)) {
 }
 
 if (!trustedOrigins.includes(frontendUrl.origin)) {
-	throw new Error(
-		"FRONTEND_URL origin must be included in BETTER_AUTH_TRUSTED_ORIGINS",
-	);
+	throw new Error("FRONTEND_URL origin must be included in BETTER_AUTH_TRUSTED_ORIGINS");
 }
 
 if (!trustedOrigins.includes(betterAuthUrl.origin)) {
-	throw new Error(
-		"BETTER_AUTH_URL origin must be included in BETTER_AUTH_TRUSTED_ORIGINS",
-	);
+	throw new Error("BETTER_AUTH_URL origin must be included in BETTER_AUTH_TRUSTED_ORIGINS");
 }
 
 if (webauthnOrigin !== frontendUrl.origin) {
@@ -210,14 +195,10 @@ if (env.NODE_ENV === "production") {
 		throw new Error("BETTER_AUTH_SECRET must be changed in production!");
 	}
 	if (env.BETTER_AUTH_SECRET.length < 32) {
-		throw new Error(
-			"BETTER_AUTH_SECRET must be at least 32 characters in production!",
-		);
+		throw new Error("BETTER_AUTH_SECRET must be at least 32 characters in production!");
 	}
 	if (env.CSRF_SECRET.length < 32) {
-		throw new Error(
-			"CSRF_SECRET must be at least 32 characters in production!",
-		);
+		throw new Error("CSRF_SECRET must be at least 32 characters in production!");
 	}
 	for (const origin of [
 		env.FRONTEND_ORIGIN,

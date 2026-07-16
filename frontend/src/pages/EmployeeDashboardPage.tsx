@@ -22,9 +22,7 @@ export function EmployeeDashboardPage() {
         <div className="mb-2 inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 p-4">
           <Users className="size-12 text-blue-400" />
         </div>
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-100">
-          Panel Pracownika
-        </h1>
+        <h1 className="text-4xl font-semibold tracking-tight text-zinc-100">Panel Pracownika</h1>
         <p className="mx-auto mt-3 max-w-2xl text-lg text-zinc-400">
           Zgłaszaj incydenty i śledź status swoich zgłoszeń w czasie rzeczywistym.
         </p>
@@ -52,11 +50,7 @@ export function EmployeeDashboardPage() {
 
       <div className="w-full flex justify-center">
         <Suspense fallback={<DashboardSectionLoader />}>
-          {view === "report" ? (
-            <IncidentReportForm onSuccess={() => {}} />
-          ) : (
-            <MyIncidentsList />
-          )}
+          {view === "report" ? <IncidentReportForm onSuccess={() => {}} /> : <MyIncidentsList />}
         </Suspense>
       </div>
     </div>

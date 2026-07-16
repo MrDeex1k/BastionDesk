@@ -1,21 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import type { IncidentDetail, IncidentDetailResponse } from "@/ApiModel";
 import { apiFetch } from "@/lib/api";
 import { Button } from "./ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { Textarea } from "./ui/textarea";
@@ -65,8 +54,7 @@ const getStatusColor = (status: string) => {
     lowerStatus.includes("sprawozdanie")
   )
     return "bg-green-500/20 text-green-400 border-green-500/50";
-  if (lowerStatus.includes("odrzucone"))
-    return "bg-red-500/20 text-red-400 border-red-500/50";
+  if (lowerStatus.includes("odrzucone")) return "bg-red-500/20 text-red-400 border-red-500/50";
   return "border-zinc-500/50 bg-zinc-500/20 text-zinc-300";
 };
 
@@ -164,11 +152,11 @@ function useIncidentDetailsActions({
     },
     onSuccess: () => {
       toast.success("Incydent został przypisany do Ciebie");
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["incident", incidentId],
         exact: false,
       });
-      queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
+      void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
       toast.error("Nie udało się przypisać incydentu");
@@ -203,7 +191,7 @@ function useIncidentDetailsActions({
           } as IncidentDetail,
         }),
       );
-      queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
+      void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
       onBack();
     },
     onError: () => {
@@ -213,21 +201,18 @@ function useIncidentDetailsActions({
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      const response = await apiFetch(
-        `/api/analyst/incidents/${incidentId}/status`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: newStatus }),
-        },
-      );
+      const response = await apiFetch(`/api/analyst/incidents/${incidentId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
       if (!response.ok) throw new Error("Failed to update status");
       return response.json();
     },
     onSuccess: (_data: unknown, variables) => {
       toast.success(`Status zmieniony na: ${variables}`);
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
+      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
       toast.error("Nie udało się zmienić statusu");
@@ -236,13 +221,10 @@ function useIncidentDetailsActions({
 
   const resolveMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiFetch(
-        `/api/analyst/incidents/${incidentId}/resolve`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+      const response = await apiFetch(`/api/analyst/incidents/${incidentId}/resolve`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+      });
 
       if (!response.ok) throw new Error("Failed to resolve incident");
 
@@ -250,8 +232,8 @@ function useIncidentDetailsActions({
     },
     onSuccess: () => {
       toast.success("Incydent oznaczony jako rozwiązany");
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
+      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
       toast.error("Nie udało się oznaczyć incydentu jako rozwiązany");
@@ -260,14 +242,11 @@ function useIncidentDetailsActions({
 
   const notesMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiFetch(
-        `/api/analyst/incidents/${incidentId}/notes`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ notes: noteContent }),
-        },
-      );
+      const response = await apiFetch(`/api/analyst/incidents/${incidentId}/notes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: noteContent }),
+      });
 
       if (!response.ok) throw new Error("Failed to update notes");
 
@@ -275,7 +254,7 @@ function useIncidentDetailsActions({
     },
     onSuccess: () => {
       toast.success("Notatka została zapisana");
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
     },
     onError: () => {
       toast.error("Nie udało się zapisać notatki");
@@ -283,10 +262,7 @@ function useIncidentDetailsActions({
   });
 
   const downloadFile = useCallback(
-    async (
-      type: "reports" | "statements" | "screenshots" | "attachments",
-      filename: string,
-    ) => {
+    async (type: "reports" | "statements" | "screenshots" | "attachments", filename: string) => {
       try {
         let url = "";
         if (mode === "admin") {
@@ -347,11 +323,7 @@ function useIncidentDetailsActions({
   };
 }
 
-export function IncidentDetails({
-  incidentId,
-  onBack,
-  mode = "employee",
-}: IncidentDetailsProps) {
+export function IncidentDetails({ incidentId, onBack, mode = "employee" }: IncidentDetailsProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const currentAnalystId = user?.id || null;
@@ -405,12 +377,7 @@ export function IncidentDetails({
       incidentIdValue && noteDraft.incidentId === incidentIdValue
         ? noteDraft.value
         : (incidentAnalystNote ?? ""),
-    [
-      incidentAnalystNote,
-      incidentIdValue,
-      noteDraft.incidentId,
-      noteDraft.value,
-    ],
+    [incidentAnalystNote, incidentIdValue, noteDraft.incidentId, noteDraft.value],
   );
   const isAssignedToMe = incident?.analystId === currentAnalystId;
   const nextTransitions = useMemo(
@@ -471,14 +438,8 @@ export function IncidentDetails({
         <div className="flex flex-col items-center gap-4 text-red-400">
           <ShieldAlert className="size-12" />
           <h3 className="text-xl font-semibold">Błąd pobierania danych</h3>
-          <p className="text-zinc-400">
-            Nie udało się załadować szczegółów incydentu.
-          </p>
-          <Button
-            onClick={onBack}
-            variant="outline"
-            className="mt-4 border-zinc-700 text-zinc-300"
-          >
+          <p className="text-zinc-400">Nie udało się załadować szczegółów incydentu.</p>
+          <Button onClick={onBack} variant="outline" className="mt-4 border-zinc-700 text-zinc-300">
             Wróć do listy
           </Button>
         </div>
@@ -646,10 +607,7 @@ function IncidentHeader({
           </Badge>
 
           {mode === "admin" && incident.analystId && (
-            <UnassignButton
-              isPending={unassignPending}
-              onClick={onUnassign}
-            />
+            <UnassignButton isPending={unassignPending} onClick={onUnassign} />
           )}
 
           {mode === "analyst" && isAssignedToMe && (
@@ -703,10 +661,7 @@ function IncidentHeader({
                 ))}
 
               {isAssignedToMe && (
-                <UnassignButton
-                  isPending={unassignPending}
-                  onClick={onUnassign}
-                />
+                <UnassignButton isPending={unassignPending} onClick={onUnassign} />
               )}
             </>
           )}
@@ -724,13 +679,7 @@ function formatLocalizedDateTime(value: string | null | undefined) {
   return new Date(value).toLocaleString("pl-PL");
 }
 
-function UnassignButton({
-  isPending,
-  onClick,
-}: {
-  isPending: boolean;
-  onClick: () => void;
-}) {
+function UnassignButton({ isPending, onClick }: { isPending: boolean; onClick: () => void }) {
   return (
     <Button
       size="sm"
@@ -827,9 +776,7 @@ function IncidentServiceSection({
       {incident.analystName && (
         <div className="mb-2 text-sm text-zinc-400">
           Analityk prowadzący:{" "}
-          <span className="font-medium text-zinc-100">
-            {incident.analystName}
-          </span>
+          <span className="font-medium text-zinc-100">{incident.analystName}</span>
         </div>
       )}
 
@@ -867,10 +814,7 @@ function IncidentServiceSection({
         label="Dostępny raport końcowy"
         filename={incident.analystReportMetadata?.filename || "Raport"}
         onDownload={() =>
-          onDownload(
-            "reports",
-            incident.analystReportMetadata?.filename || "report",
-          )
+          onDownload("reports", incident.analystReportMetadata?.filename || "report")
         }
       />
       <AnalystFileDownload
@@ -879,10 +823,7 @@ function IncidentServiceSection({
         label="Dostępne sprawozdanie końcowe"
         filename={incident.analystStatementMetadata?.filename || "Sprawozdanie"}
         onDownload={() =>
-          onDownload(
-            "statements",
-            incident.analystStatementMetadata?.filename || "statement",
-          )
+          onDownload("statements", incident.analystStatementMetadata?.filename || "statement")
         }
       />
     </div>
@@ -917,7 +858,8 @@ function AnalystFileDownload({
         }
       : {
           border: "border-purple-500/20",
-          button: "border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
+          button:
+            "border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300",
           icon: "bg-purple-500/20 text-purple-400",
           label: "text-purple-400",
           wrapper: "bg-purple-500/10",
@@ -934,12 +876,7 @@ function AnalystFileDownload({
         <p className={`text-sm font-medium ${classes.label}`}>{label}</p>
         <p className="text-xs text-zinc-500">{filename}</p>
       </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className={classes.button}
-        onClick={onDownload}
-      >
+      <Button size="sm" variant="outline" className={classes.button} onClick={onDownload}>
         Pobierz
       </Button>
     </div>

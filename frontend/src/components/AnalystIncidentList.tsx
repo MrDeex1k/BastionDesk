@@ -5,13 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Loader2, 
-  User, 
-  UserX,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, User, UserX } from "lucide-react";
 import { IncidentSummaryItem } from "./incident-list/IncidentSummaryItem";
 
 const IncidentDetails = lazy(() =>
@@ -21,7 +15,7 @@ const IncidentDetails = lazy(() =>
 );
 
 interface AnalystIncidentListProps {
-  type: 'assigned' | 'unassigned';
+  type: "assigned" | "unassigned";
 }
 
 export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
@@ -32,15 +26,16 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
   const { data, isPending, isFetching, isError, isPlaceholderData } = useQuery<IncidentsResponse>({
     queryKey: ["analystIncidents", { type, page, limit: LIMIT }],
     queryFn: async () => {
-      const endpoint = type === 'assigned' ? '/api/analyst/incidents/assigned' : '/api/analyst/incidents/unassigned';
-      const response = await apiFetch(
-        `${endpoint}?page=${page}&limit=${LIMIT}&sortOrder=desc`,
-      );
-      
+      const endpoint =
+        type === "assigned"
+          ? "/api/analyst/incidents/assigned"
+          : "/api/analyst/incidents/unassigned";
+      const response = await apiFetch(`${endpoint}?page=${page}&limit=${LIMIT}&sortOrder=desc`);
+
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
-      
+
       return response.json() as Promise<IncidentsResponse>;
     },
     placeholderData: keepPreviousData,
@@ -63,12 +58,12 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
       <CardHeader>
         <CardTitle className="flex items-center justify-between text-2xl text-zinc-100">
           <div className="flex items-center gap-3">
-            {type === 'assigned' ? (
+            {type === "assigned" ? (
               <User className="size-6 text-blue-400" />
             ) : (
               <UserX className="size-6 text-purple-400" />
             )}
-            {type === 'assigned' ? 'Moje przypisane zgłoszenia' : 'Nieprzypisane incydenty'}
+            {type === "assigned" ? "Moje przypisane zgłoszenia" : "Nieprzypisane incydenty"}
           </div>
           {isFetching && <Loader2 className="size-5 animate-spin text-blue-400" />}
         </CardTitle>
@@ -99,9 +94,7 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
                 />
               ))}
               {!isPending && data?.data.length === 0 && (
-                <div className="py-8 text-center text-zinc-500">
-                  Brak zgłoszeń do wyświetlenia.
-                </div>
+                <div className="py-8 text-center text-zinc-500">Brak zgłoszeń do wyświetlenia.</div>
               )}
             </div>
           )}
@@ -125,7 +118,11 @@ export function AnalystIncidentList({ type }: AnalystIncidentListProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setPage((old) => (data?.pagination.totalPages && old < data.pagination.totalPages ? old + 1 : old))}
+            onClick={() =>
+              setPage((old) =>
+                data?.pagination.totalPages && old < data.pagination.totalPages ? old + 1 : old,
+              )
+            }
             disabled={page === data.pagination.totalPages || isPlaceholderData}
             className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
           >

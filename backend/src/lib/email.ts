@@ -60,9 +60,7 @@ export interface SendResetPasswordEmailParams {
  * WAŻNE: Funkcja jest wywoływana przez Better-Auth z `void` aby uniknąć timing attacks.
  * Better-Auth nie czeka na zakończenie wysyłki emaila.
  */
-export async function sendVerificationEmail(
-	params: SendVerificationEmailParams,
-): Promise<void> {
+export async function sendVerificationEmail(params: SendVerificationEmailParams): Promise<void> {
 	const { user, url, token } = params;
 
 	try {
@@ -85,7 +83,7 @@ export async function sendVerificationEmail(
 		if (!result.success) {
 			console.error("Nie udało się wysłać emaila weryfikacyjnego");
 		}
-	} catch (_error) {
+	} catch {
 		console.error("Błąd podczas wysyłki emaila weryfikacyjnego");
 	}
 }
@@ -96,9 +94,7 @@ export async function sendVerificationEmail(
  * WAŻNE: Funkcja jest wywoływana przez Better-Auth z `void` aby uniknąć timing attacks.
  * Better-Auth nie czeka na zakończenie wysyłki emaila.
  */
-export async function sendResetPasswordEmail(
-	params: SendResetPasswordEmailParams,
-): Promise<void> {
+export async function sendResetPasswordEmail(params: SendResetPasswordEmailParams): Promise<void> {
 	const { user, url, token } = params;
 
 	try {
@@ -121,7 +117,7 @@ export async function sendResetPasswordEmail(
 		if (!result.success) {
 			console.error("Nie udało się wysłać emaila resetującego hasło");
 		}
-	} catch (_error) {
+	} catch {
 		console.error("Błąd podczas wysyłki emaila resetującego hasło");
 	}
 }

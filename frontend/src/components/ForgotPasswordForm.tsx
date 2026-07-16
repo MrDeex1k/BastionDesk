@@ -29,18 +29,16 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
       // Wywołanie Better-Auth API do resetu hasła
       // UWAGA: System emailowy nie jest jeszcze skonfigurowany na backendzie
       const response = await apiFetch("/api/auth/forget-password", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
           redirectTo: `${window.location.origin}/reset-password`,
-        })
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(
-          await readJsonError(response, "Błąd wysyłania żądania resetu"),
-        );
+        throw new Error(await readJsonError(response, "Błąd wysyłania żądania resetu"));
       }
 
       return response.json();
@@ -56,9 +54,10 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
     onError: (error: Error) => {
       setMessage({
         type: "error",
-        text: error.message || "Nie udało się wysłać żądania resetu. Spróbuj ponownie za kilka minut!",
+        text:
+          error.message || "Nie udało się wysłać żądania resetu. Spróbuj ponownie za kilka minut!",
       });
-    }
+    },
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,9 +104,7 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
                 disabled={forgotPasswordMutation.isPending}
               />
             </div>
-            {emailError && (
-              <p className="text-red-400 text-sm">{emailError}</p>
-            )}
+            {emailError && <p className="text-red-400 text-sm">{emailError}</p>}
           </div>
 
           {message && (

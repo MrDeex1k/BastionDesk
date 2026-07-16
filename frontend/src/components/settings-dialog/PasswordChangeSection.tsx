@@ -73,9 +73,7 @@ export function PasswordChangeSection({
                 id="confirm-password"
                 type="password"
                 value={confirmPassword}
-                onChange={(event) =>
-                  onConfirmPasswordChange(event.target.value)
-                }
+                onChange={(event) => onConfirmPasswordChange(event.target.value)}
                 className="border-zinc-600 bg-zinc-950 text-white focus-visible:border-blue-500 focus-visible:ring-blue-500/50"
                 required
               />

@@ -1,11 +1,11 @@
 .env
 dist
 .env.*
-!.env.example
 db.sql
+.agents
 .DS_Store
 node_modules
-/frontend/.agents
-infra/tls/dev/
 __pycache__/
 .maintainer/
+!.env.example
+infra/tls/dev/

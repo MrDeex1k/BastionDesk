@@ -4,11 +4,7 @@ import { z } from "zod";
 import { auth } from "../../lib/auth.js";
 import { queryOne, sql } from "../../lib/database.js";
 import { requireCsrf } from "../../middleware/csrf.middleware.js";
-import {
-	createOrganizationSchema,
-	emailSchema,
-	passwordSchema,
-} from "../../utils/validation.js";
+import { createOrganizationSchema, emailSchema, passwordSchema } from "../../utils/validation.js";
 
 const router = Router();
 
@@ -18,9 +14,7 @@ const router = Router();
  * Note: `set-cookie` can include attributes (Path, HttpOnly, Expires, etc.).
  * We only need `Cookie: <name>=<value>` to authenticate the follow-up request.
  */
-function extractBetterAuthCookie(
-	setCookieHeader: string | null,
-): string | null {
+function extractBetterAuthCookie(setCookieHeader: string | null): string | null {
 	if (!setCookieHeader) return null;
 	// We match the cookie pair only (name=value) without attributes.
 	const match = setCookieHeader.match(/(better-auth\.[^=]+=[^;]+)/);
@@ -128,8 +122,7 @@ router.post(
 					success: false,
 					error: {
 						code: "ORGANIZATION_CREATE_ERROR",
-						message:
-							"Konto zostało utworzone, ale nie udało się utworzyć organizacji",
+						message: "Konto zostało utworzone, ale nie udało się utworzyć organizacji",
 					},
 				});
 			}

@@ -4,21 +4,10 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card } from "./ui/card";
-import {
-  UserPlus,
-  Mail,
-  KeyRound,
-  User,
-  ArrowLeft,
-  Loader2,
-} from "lucide-react";
+import { UserPlus, Mail, KeyRound, User, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { signUp } from "@/lib/auth-client";
-import {
-  validateEmail,
-  validateFullName,
-  validatePassword,
-} from "@/lib/validation";
+import { validateEmail, validateFullName, validatePassword } from "@/lib/validation";
 
 interface RegisterFormProps {
   onBack: () => void;
@@ -42,10 +31,7 @@ type RegisterFormAction =
     }
   | {
       type: "set-errors";
-      errors: Pick<
-        RegisterFormState,
-        "emailError" | "passwordError" | "fullNameError"
-      >;
+      errors: Pick<RegisterFormState, "emailError" | "passwordError" | "fullNameError">;
     }
   | {
       type: "reset";
@@ -83,10 +69,7 @@ function registerFormReducer(
 }
 
 export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
-  const [state, dispatch] = useReducer(
-    registerFormReducer,
-    initialRegisterFormState,
-  );
+  const [state, dispatch] = useReducer(registerFormReducer, initialRegisterFormState);
   const queryClient = useQueryClient();
 
   const validateForm = () => {
@@ -182,9 +165,7 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
                 disabled={registerMutation.isPending}
               />
             </div>
-            {state.fullNameError && (
-              <p className="text-sm text-red-500">{state.fullNameError}</p>
-            )}
+            {state.fullNameError && <p className="text-sm text-red-500">{state.fullNameError}</p>}
           </div>
 
           <div className="space-y-2">
@@ -210,9 +191,7 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
                 disabled={registerMutation.isPending}
               />
             </div>
-            {state.emailError && (
-              <p className="text-sm text-red-500">{state.emailError}</p>
-            )}
+            {state.emailError && <p className="text-sm text-red-500">{state.emailError}</p>}
           </div>
 
           <div className="space-y-2">
@@ -238,9 +217,7 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
                 disabled={registerMutation.isPending}
               />
             </div>
-            {state.passwordError && (
-              <p className="text-sm text-red-500">{state.passwordError}</p>
-            )}
+            {state.passwordError && <p className="text-sm text-red-500">{state.passwordError}</p>}
           </div>
 
           <Button

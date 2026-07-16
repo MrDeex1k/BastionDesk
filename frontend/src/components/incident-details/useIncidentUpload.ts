@@ -9,14 +9,9 @@ interface UseIncidentUploadArgs {
   queryClient: QueryClient;
 }
 
-export function useIncidentUpload({
-  incidentId,
-  queryClient,
-}: UseIncidentUploadArgs) {
+export function useIncidentUpload({ incidentId, queryClient }: UseIncidentUploadArgs) {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
-  const [uploadType, setUploadType] = useState<"report" | "statement" | null>(
-    null,
-  );
+  const [uploadType, setUploadType] = useState<"report" | "statement" | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const uploadFileMutation = useMutation({
@@ -34,14 +29,11 @@ export function useIncidentUpload({
         },
       };
 
-      const response = await apiFetch(
-        `/api/analyst/incidents/${incidentId}/${apiEndpoint}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-        },
-      );
+      const response = await apiFetch(`/api/analyst/incidents/${incidentId}/${apiEndpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
 
       if (!response.ok) throw new Error(`Failed to upload ${uploadType}`);
 
@@ -57,8 +49,8 @@ export function useIncidentUpload({
       setIsUploadDialogOpen(false);
       setSelectedFile(null);
       setUploadType(null);
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
+      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
       toast.error("Wystąpił błąd podczas wysyłania pliku");

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useReducer,
-  useState,
-} from "react";
+import { useCallback, useEffect, useEffectEvent, useReducer, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -51,10 +45,7 @@ const initialSettingsState: SettingsState = {
   pendingAction: null,
 };
 
-function settingsReducer(
-  state: SettingsState,
-  action: SettingsAction,
-): SettingsState {
+function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
   switch (action.type) {
     case "setConfirmPassword":
       return { ...state, confirmPassword: action.value };
@@ -82,10 +73,7 @@ function settingsReducer(
 
 export function SettingsDialog() {
   const [isOpen, setIsOpen] = useState(false);
-  const [state, dispatch] = useReducer(
-    settingsReducer,
-    initialSettingsState,
-  );
+  const [state, dispatch] = useReducer(settingsReducer, initialSettingsState);
 
   const fetchPassKeys = useCallback(async () => {
     dispatch({ type: "setIsLoadingPassKeys", value: true });
@@ -201,9 +189,7 @@ export function SettingsDialog() {
 
   const handleDeleteAccount = useCallback(async () => {
     if (
-      !window.confirm(
-        "Czy na pewno chcesz usunąć swoje konto? Ta operacja jest nieodwracalna.",
-      )
+      !window.confirm("Czy na pewno chcesz usunąć swoje konto? Ta operacja jest nieodwracalna.")
     ) {
       return;
     }
@@ -282,15 +268,9 @@ export function SettingsDialog() {
               newPassword={state.newPassword}
               confirmPassword={state.confirmPassword}
               isLoading={state.pendingAction === "password"}
-              onOldPasswordChange={(value) =>
-                dispatch({ type: "setOldPassword", value })
-              }
-              onNewPasswordChange={(value) =>
-                dispatch({ type: "setNewPassword", value })
-              }
-              onConfirmPasswordChange={(value) =>
-                dispatch({ type: "setConfirmPassword", value })
-              }
+              onOldPasswordChange={(value) => dispatch({ type: "setOldPassword", value })}
+              onNewPasswordChange={(value) => dispatch({ type: "setNewPassword", value })}
+              onConfirmPasswordChange={(value) => dispatch({ type: "setConfirmPassword", value })}
               onSubmit={handleChangePassword}
             />
           </TabsContent>

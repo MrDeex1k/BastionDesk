@@ -24,16 +24,13 @@ export function IncidentFileCard({
   mode,
   onDownload,
 }: IncidentFileCardProps) {
-  const filename =
-    metadata?.originalName || metadata?.filename || fallbackFilename;
+  const filename = metadata?.originalName || metadata?.filename || fallbackFilename;
   const hasFile = Boolean(path);
 
   return (
     <div
       className={`flex items-center gap-3 rounded-lg border p-4 ${
-        hasFile
-          ? "bg-blue-500/5 border-blue-500/20"
-          : "bg-zinc-950/30 border-zinc-800"
+        hasFile ? "bg-blue-500/5 border-blue-500/20" : "bg-zinc-950/30 border-zinc-800"
       }`}
     >
       <div
@@ -45,11 +42,7 @@ export function IncidentFileCard({
       </div>
       <div className="flex-1 overflow-hidden">
         <p className="text-sm font-medium text-zinc-300">{title}</p>
-        <p
-          className={`text-xs truncate ${
-            hasFile ? "text-green-400" : "text-zinc-500"
-          }`}
-        >
+        <p className={`text-xs truncate ${hasFile ? "text-green-400" : "text-zinc-500"}`}>
           {hasFile ? filename : "Brak pliku"}
         </p>
       </div>

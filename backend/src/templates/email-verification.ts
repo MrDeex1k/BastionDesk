@@ -14,9 +14,7 @@ export interface VerificationEmailData {
 /**
  * Generuje HTML emaila weryfikacyjnego
  */
-export function generateVerificationEmailHtml(
-	data: VerificationEmailData,
-): string {
+export function generateVerificationEmailHtml(data: VerificationEmailData): string {
 	const { userName, userEmail, verificationUrl } = data;
 
 	return `

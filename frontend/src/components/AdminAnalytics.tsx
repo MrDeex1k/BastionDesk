@@ -1,22 +1,12 @@
 import { lazy, Suspense, type ReactNode, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Activity,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  Shield,
-  TrendingUp,
-  Users,
-} from "lucide-react";
+import { Activity, CheckCircle2, Clock, Loader2, Shield, TrendingUp, Users } from "lucide-react";
 import type { MetricsResponse, StatsResponse } from "@/ApiModel";
 import { apiFetch } from "@/lib/api";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
-const AnalyticsCharts = lazy(
-  () => import("./admin-analytics/AnalyticsCharts"),
-);
+const AnalyticsCharts = lazy(() => import("./admin-analytics/AnalyticsCharts"));
 
 const formatResolutionTime = (
   avgTime: { days: number; hours: number; minutes: number } | number,
@@ -50,9 +40,7 @@ export function AdminAnalytics() {
   const { data: metricsData, isLoading: metricsLoading } = useQuery({
     queryKey: ["adminMetrics", period],
     queryFn: async () => {
-      const response = await apiFetch(
-        `/api/admin/analytics/metrics?period=${period}`,
-      );
+      const response = await apiFetch(`/api/admin/analytics/metrics?period=${period}`);
 
       if (!response.ok) throw new Error("Failed to fetch metrics");
 
@@ -76,10 +64,7 @@ export function AdminAnalytics() {
     [metrics],
   );
 
-  const statusBreakdown = useMemo(
-    () => stats?.statusBreakdown || [],
-    [stats?.statusBreakdown],
-  );
+  const statusBreakdown = useMemo(() => stats?.statusBreakdown || [], [stats?.statusBreakdown]);
 
   const categoryBreakdown = useMemo(
     () => stats?.categoryBreakdown || [],
@@ -88,10 +73,7 @@ export function AdminAnalytics() {
 
   const topUsers = useMemo(() => metrics?.topUsers || [], [metrics?.topUsers]);
 
-  const topAnalysts = useMemo(
-    () => metrics?.topAnalysts || [],
-    [metrics?.topAnalysts],
-  );
+  const topAnalysts = useMemo(() => metrics?.topAnalysts || [], [metrics?.topAnalysts]);
   const topUserItems = useMemo(
     () =>
       topUsers.map((user) => ({
@@ -127,18 +109,12 @@ export function AdminAnalytics() {
         <StatsCard
           title="Rozwiązane"
           value={statsLoading ? "..." : stats?.resolvedIncidents}
-          description={
-            statsLoading ? "" : `${stats?.resolvedPercentage}% wszystkich`
-          }
+          description={statsLoading ? "" : `${stats?.resolvedPercentage}% wszystkich`}
           icon={<CheckCircle2 className="size-4 text-green-400" />}
         />
         <StatsCard
           title="Średni czas rozwiązania"
-          value={
-            statsLoading
-              ? "..."
-              : formatResolutionTime(stats?.avgResolutionTime ?? 0)
-          }
+          value={statsLoading ? "..." : formatResolutionTime(stats?.avgResolutionTime ?? 0)}
           description="Dla rozwiązanych incydentów"
           icon={<Clock className="size-4 text-yellow-400" />}
         />

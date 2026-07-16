@@ -69,10 +69,7 @@ function incidentReportReducer(
 }
 
 export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
-  const [state, dispatch] = useReducer(
-    incidentReportReducer,
-    initialIncidentReportState,
-  );
+  const [state, dispatch] = useReducer(incidentReportReducer, initialIncidentReportState);
   const screenshotInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -86,9 +83,7 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.message || "Wystąpił błąd podczas wysyłania zgłoszenia",
-        );
+        throw new Error(errorData.message || "Wystąpił błąd podczas wysyłania zgłoszenia");
       }
 
       return response.json();
@@ -112,10 +107,7 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
       if (onSuccess) onSuccess();
 
       // Hide success message after 5 seconds
-      setTimeout(
-        () => dispatch({ type: "set-show-success", value: false }),
-        5000,
-      );
+      setTimeout(() => dispatch({ type: "set-show-success", value: false }), 5000);
     },
     onError: (error) => {
       toast.error("Nie udało się wysłać zgłoszenia", {
@@ -185,7 +177,8 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
             <CheckCircle2 className="size-4" />
             <AlertTitle>Sukces!</AlertTitle>
             <AlertDescription>
-              Twoje zgłoszenie zostało wysłane pomyślnie. Zespół bezpieczeństwa wkrótce się nim zajmie.
+              Twoje zgłoszenie zostało wysłane pomyślnie. Zespół bezpieczeństwa wkrótce się nim
+              zajmie.
             </AlertDescription>
           </Alert>
         )}
@@ -318,8 +311,8 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
             </div>
           </div>
 
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             className="w-full bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg shadow-blue-500/20"
             size="lg"
             disabled={incidentMutation.isPending}

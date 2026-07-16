@@ -100,12 +100,7 @@ function sendError(
  * Główny middleware do obsługi błędów
  * Musi być zarejestrowany jako ostatni middleware
  */
-export function errorHandler(
-	err: Error,
-	req: Request,
-	res: Response,
-	_next: NextFunction,
-): void {
+export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction): void {
 	if (res.headersSent) {
 		return;
 	}
@@ -126,13 +121,7 @@ export function errorHandler(
 			message: issue.message,
 		}));
 
-		sendError(
-			res,
-			400,
-			"VALIDATION_ERROR",
-			"Błąd walidacji danych",
-			formattedErrors,
-		);
+		sendError(res, 400, "VALIDATION_ERROR", "Błąd walidacji danych", formattedErrors);
 		return;
 	}
 
@@ -166,16 +155,8 @@ export function errorHandler(
 	}
 
 	const operationalError = err as Error & { code?: string; syscall?: string };
-	if (
-		operationalError.name === "AbortError" ||
-		operationalError.code === "ETIMEDOUT"
-	) {
-		sendError(
-			res,
-			504,
-			"GATEWAY_TIMEOUT",
-			"Przekroczono czas oczekiwania na usługę zależną",
-		);
+	if (operationalError.name === "AbortError" || operationalError.code === "ETIMEDOUT") {
+		sendError(res, 504, "GATEWAY_TIMEOUT", "Przekroczono czas oczekiwania na usługę zależną");
 		return;
 	}
 
@@ -184,20 +165,12 @@ export function errorHandler(
 			operationalError.code ?? "",
 		)
 	) {
-		sendError(
-			res,
-			503,
-			"SERVICE_UNAVAILABLE",
-			"Usługa zależna jest chwilowo niedostępna",
-		);
+		sendError(res, 503, "SERVICE_UNAVAILABLE", "Usługa zależna jest chwilowo niedostępna");
 		return;
 	}
 
 	// Obsługa błędów bazy danych PostgreSQL
-	if (
-		err.name === "PostgresError" ||
-		(err as { code?: string }).code?.startsWith("23")
-	) {
+	if (err.name === "PostgresError" || (err as { code?: string }).code?.startsWith("23")) {
 		const pgError = err as { code?: string; constraint?: string };
 
 		// Unique violation

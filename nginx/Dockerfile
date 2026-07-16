@@ -1,4 +1,4 @@
-FROM nginx:1.31.1-alpine
+FROM nginx:1.31.2-alpine3.23
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 

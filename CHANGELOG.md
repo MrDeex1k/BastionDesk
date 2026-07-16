@@ -2,6 +2,37 @@
 
 All notable changes to BastionDesk will be documented in this file.
 
+## [1.0.2] - 2026-07-16
+
+Maintenance release focused on developer tooling, reproducible dependency resolution and refreshed container foundations for the supported Docker Compose deployment.
+
+### Changed
+
+- Migrated frontend linting from ESLint and backend checks from Biome to type-aware OxLint.
+- Added OxFmt as the formatter for the frontend and backend and normalized the existing TypeScript and TSX sources.
+- Updated the frontend and backend toolchain to TypeScript `7.0.2`.
+- Updated frontend ECMAScript compilation targets and libraries from `ES2025` to `ESNext`.
+- Updated frontend and backend dependencies and regenerated their Bun lockfiles.
+- Replaced semver ranges in Bun package manifests with exact dependency versions for more reproducible installations.
+- Reduced the Bun dependency release-age gate from 60 hours to 48 hours while retaining protection from freshly published package versions.
+- Updated the `llm_service` Python dependencies and regenerated its `uv.lock` file.
+- Replaced Python dependency ranges in `llm_service/pyproject.toml` with exact `==` version pins.
+- Reduced the `uv` dependency release-age gate from 60 hours to 48 hours to match the Bun policy.
+- Updated the README technology overview to reflect the Oxc toolchain.
+
+### Infrastructure
+
+- Updated public and frontend nginx images from `nginx:1.31.1-alpine` to `nginx:1.31.2-alpine3.23`.
+- Updated PgBouncer from `edoburu/pgbouncer:v1.25.1-p0` to `edoburu/pgbouncer:v1.25.2-p0`.
+- Updated BusyBox helper stages from `busybox:1.37.0-musl` to `busybox:1.38.0-musl`.
+- Updated the `llm_service` builder and runtime images from `ghcr.io/astral-sh/uv:0.11.7-python3.13-trixie-slim` to `ghcr.io/astral-sh/uv:0.11.28-python3.13-trixie-slim`.
+
+### Known Notes
+
+- `1.0.2` remains within the `fresh install only` release model.
+- The supported deployment model remains self-hosted Docker Compose through the existing public entrypoint at `http://localhost:4567`.
+- This release does not intentionally change the application API, database schema or user-facing feature set.
+
 ## [1.0.1] - 2026-05-29
 
 Patch release focused on security hardening, deployment cleanup, admin incident filtering improvements and safer runtime behavior for the supported Docker Compose installation.

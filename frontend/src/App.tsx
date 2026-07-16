@@ -1,19 +1,7 @@
-import {
-  BrowserRouter as Router,
-  Navigate,
-  Route,
-  Routes,
-  useNavigate,
-} from "react-router-dom";
+import { BrowserRouter as Router, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster, toast } from "sonner";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  type ComponentType,
-} from "react";
+import { lazy, Suspense, useCallback, useEffect, type ComponentType } from "react";
 import { AuthProvider } from "./contexts/AuthContext";
 import { useAuth } from "./hooks/useAuth";
 import { signOut } from "./lib/auth-client";
@@ -26,14 +14,8 @@ import "./App.css";
 const queryClient = new QueryClient();
 
 const HomePage = lazyPage(() => import("./pages/HomePage"), "HomePage");
-const LoginPage = lazyPage<{ onLogin: () => void }>(
-  () => import("./pages/LoginPage"),
-  "LoginPage",
-);
-const RegisterPage = lazyPage(
-  () => import("./pages/RegisterPage"),
-  "RegisterPage",
-);
+const LoginPage = lazyPage<{ onLogin: () => void }>(() => import("./pages/LoginPage"), "LoginPage");
+const RegisterPage = lazyPage(() => import("./pages/RegisterPage"), "RegisterPage");
 const CreateOrganizationPage = lazyPage(
   () => import("./pages/CreateOrganizationPage"),
   "CreateOrganizationPage",
@@ -46,10 +28,7 @@ const ForgotPasswordPage = lazyPage(
   () => import("./pages/ForgotPasswordPage"),
   "ForgotPasswordPage",
 );
-const ResetPasswordPage = lazyPage(
-  () => import("./pages/ResetPasswordPage"),
-  "ResetPasswordPage",
-);
+const ResetPasswordPage = lazyPage(() => import("./pages/ResetPasswordPage"), "ResetPasswordPage");
 const AdminDashboardPage = lazyPage(
   () => import("./pages/AdminDashboardPage"),
   "AdminDashboardPage",
@@ -71,16 +50,16 @@ function AppContent() {
     if (session && role && !isLoading) {
       switch (role) {
         case "admin":
-          navigate("/admin-dashboard");
+          void navigate("/admin-dashboard");
           break;
         case "analityk":
-          navigate("/analyst-dashboard");
+          void navigate("/analyst-dashboard");
           break;
         case "pracownik":
-          navigate("/employee-dashboard");
+          void navigate("/employee-dashboard");
           break;
         default:
-          navigate("/");
+          void navigate("/");
       }
     }
   }, [session, role, isLoading, navigate]);
@@ -89,7 +68,7 @@ function AppContent() {
     await signOut();
     queryClient.clear();
     toast.success("Wylogowano pomyślnie");
-    navigate("/");
+    void navigate("/");
   }, [navigate]);
 
   const handleLogin = useCallback(() => {
@@ -103,13 +82,13 @@ function AppContent() {
 
     switch (role) {
       case "admin":
-        navigate("/admin-dashboard");
+        void navigate("/admin-dashboard");
         break;
       case "analityk":
-        navigate("/analyst-dashboard");
+        void navigate("/analyst-dashboard");
         break;
       case "pracownik":
-        navigate("/employee-dashboard");
+        void navigate("/employee-dashboard");
         break;
     }
   }, [navigate, role]);
@@ -118,12 +97,12 @@ function AppContent() {
     if (session) {
       handleDashboardClick();
     } else {
-      navigate("/");
+      void navigate("/");
     }
   }, [handleDashboardClick, navigate, session]);
 
   const handleLoginClick = useCallback(() => {
-    navigate("/login");
+    void navigate("/login");
   }, [navigate]);
 
   return (
@@ -142,18 +121,9 @@ function AppContent() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route
-              path="/create-organization"
-              element={<CreateOrganizationPage />}
-            />
-            <Route
-              path="/waiting-for-organization"
-              element={<WaitingForOrganizationPage />}
-            />
-            <Route
-              path="/forgot-password"
-              element={<ForgotPasswordPage />}
-            />
+            <Route path="/create-organization" element={<CreateOrganizationPage />} />
+            <Route path="/waiting-for-organization" element={<WaitingForOrganizationPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             <Route
@@ -205,10 +175,7 @@ function RouteLoader() {
 function lazyPage<
   TProps = Record<string, never>,
   TModule extends Record<string, unknown> = Record<string, unknown>,
->(
-  load: () => Promise<TModule>,
-  exportName: keyof TModule,
-) {
+>(load: () => Promise<TModule>, exportName: keyof TModule) {
   return lazy(async () => {
     const module = await load();
 

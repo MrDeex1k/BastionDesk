@@ -73,10 +73,7 @@ function getPgPool(): Pool {
  * @example
  * const users = await sql`SELECT * FROM users WHERE active = ${true}`;
  */
-export function sql(
-	strings: TemplateStringsArray,
-	...values: unknown[]
-): Promise<unknown[]> {
+export function sql(strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]> {
 	return getDb()(strings, ...values);
 }
 
@@ -146,9 +143,7 @@ export async function queryOne<T extends QueryResultRow>(
  *   await tx`INSERT INTO logs (action) VALUES (${'user_created'})`;
  * });
  */
-export async function transaction<T>(
-	callback: (tx: SQL) => Promise<T>,
-): Promise<T> {
+export async function transaction<T>(callback: (tx: SQL) => Promise<T>): Promise<T> {
 	const database = getDb();
 	return await database.begin(callback);
 }

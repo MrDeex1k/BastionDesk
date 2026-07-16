@@ -62,10 +62,7 @@ const initialLoginFormState: LoginFormState = {
   isCheckingEmail: false,
 };
 
-function loginFormReducer(
-  state: LoginFormState,
-  action: LoginFormAction,
-): LoginFormState {
+function loginFormReducer(state: LoginFormState, action: LoginFormAction): LoginFormState {
   switch (action.type) {
     case "set-field":
       return {
@@ -99,11 +96,7 @@ function loginFormReducer(
   }
 }
 
-export function LoginForm({
-  onBack,
-  onForgotPassword,
-  onLoginSuccess,
-}: LoginFormProps) {
+export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFormProps) {
   const [state, dispatch] = useReducer(loginFormReducer, initialLoginFormState);
   const queryClient = useQueryClient();
 
@@ -184,9 +177,7 @@ export function LoginForm({
       });
 
       if (error) {
-        throw new Error(
-          getAuthErrorMessage(error, "Nieprawidłowy adres email lub hasło"),
-        );
+        throw new Error(getAuthErrorMessage(error, "Nieprawidłowy adres email lub hasło"));
       }
 
       return data;
@@ -264,9 +255,7 @@ export function LoginForm({
             email={state.email}
             emailError={state.emailError}
             isCheckingEmail={state.isCheckingEmail}
-            onEmailChange={(value) =>
-              dispatch({ type: "set-field", field: "email", value })
-            }
+            onEmailChange={(value) => dispatch({ type: "set-field", field: "email", value })}
             onSubmit={handleEmailSubmit}
             onBack={onBack}
           />
@@ -285,9 +274,7 @@ export function LoginForm({
             password={state.password}
             passwordError={state.passwordError}
             isPending={loginMutation.isPending}
-            onPasswordChange={(value) =>
-              dispatch({ type: "set-field", field: "password", value })
-            }
+            onPasswordChange={(value) => dispatch({ type: "set-field", field: "password", value })}
             onSubmit={handlePasswordSubmit}
             onBackToEmail={handleBackToEmail}
             onForgotPassword={onForgotPassword}

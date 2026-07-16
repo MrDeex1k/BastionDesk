@@ -20,11 +20,7 @@ import {
 } from "../middleware/auth.middleware";
 import { asyncHandler } from "../middleware/error.middleware";
 import type { FileMetadata, Incident, IncidentCategory } from "../types";
-import {
-	generateStorageKey,
-	parseMultipartFormData,
-	validateFile,
-} from "../utils/file.helper";
+import { generateStorageKey, parseMultipartFormData, validateFile } from "../utils/file.helper";
 import {
 	createIncidentSchema,
 	paginationSchema,
@@ -70,15 +66,9 @@ function getAnalystScopedIncidentWhere(
 /**
  * Asynchroniczna analiza kategorii incydentu za pomocą LLM_SERVICE
  */
-async function analyzeIncidentCategory(
-	incidentId: string,
-	description: string,
-) {
+async function analyzeIncidentCategory(incidentId: string, description: string) {
 	try {
-		const category = (await classifyIncident(
-			incidentId,
-			description,
-		)) as IncidentCategory;
+		const category = (await classifyIncident(incidentId, description)) as IncidentCategory;
 
 		// Aktualizuj kategorię w bazie danych
 		await query('UPDATE incidents SET "llmCategory" = $1 WHERE id = $2', [
@@ -146,11 +136,9 @@ router.post(
 			);
 
 			// Upload do MinIO
-			await storageClient.putObject(
-				screenshotPath,
-				Buffer.from(files.screenshot.buffer),
-				{ contentType: files.screenshot.metadata.mimeType },
-			);
+			await storageClient.putObject(screenshotPath, Buffer.from(files.screenshot.buffer), {
+				contentType: files.screenshot.metadata.mimeType,
+			});
 
 			screenshotMetadata = files.screenshot.metadata;
 		}
@@ -165,11 +153,9 @@ router.post(
 			);
 
 			// Upload do MinIO
-			await storageClient.putObject(
-				attachmentPath,
-				Buffer.from(files.attachment.buffer),
-				{ contentType: files.attachment.metadata.mimeType },
-			);
+			await storageClient.putObject(attachmentPath, Buffer.from(files.attachment.buffer), {
+				contentType: files.attachment.metadata.mimeType,
+			});
 
 			attachmentMetadata = files.attachment.metadata;
 		}
@@ -209,9 +195,7 @@ router.post(
 		});
 
 		// Asynchroniczna analiza kategorii przez LLM_SERVICE
-		analyzeIncidentCategory(incident.id, validatedFields.userDescription).catch(
-			console.error,
-		);
+		analyzeIncidentCategory(incident.id, validatedFields.userDescription).catch(console.error);
 	}),
 );
 
@@ -252,14 +236,9 @@ router.get(
 				typeof incident.userScreenshotMetadata === "string"
 			) {
 				try {
-					incident.userScreenshotMetadata = JSON.parse(
-						incident.userScreenshotMetadata,
-					);
+					incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
 				} catch (e) {
-					console.error(
-						"[INCIDENTS] Failed to parse userScreenshotMetadata:",
-						e,
-					);
+					console.error("[INCIDENTS] Failed to parse userScreenshotMetadata:", e);
 				}
 			}
 			if (
@@ -267,14 +246,9 @@ router.get(
 				typeof incident.userAttachmentMetadata === "string"
 			) {
 				try {
-					incident.userAttachmentMetadata = JSON.parse(
-						incident.userAttachmentMetadata,
-					);
+					incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
 				} catch (e) {
-					console.error(
-						"[INCIDENTS] Failed to parse userAttachmentMetadata:",
-						e,
-					);
+					console.error("[INCIDENTS] Failed to parse userAttachmentMetadata:", e);
 				}
 			}
 			if (
@@ -282,14 +256,9 @@ router.get(
 				typeof incident.analystReportMetadata === "string"
 			) {
 				try {
-					incident.analystReportMetadata = JSON.parse(
-						incident.analystReportMetadata,
-					);
+					incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
 				} catch (e) {
-					console.error(
-						"[INCIDENTS] Failed to parse analystReportMetadata:",
-						e,
-					);
+					console.error("[INCIDENTS] Failed to parse analystReportMetadata:", e);
 				}
 			}
 			if (
@@ -301,10 +270,7 @@ router.get(
 						incident.analystStatementMetadata,
 					);
 				} catch (e) {
-					console.error(
-						"[INCIDENTS] Failed to parse analystStatementMetadata:",
-						e,
-					);
+					console.error("[INCIDENTS] Failed to parse analystStatementMetadata:", e);
 				}
 			}
 		});
@@ -379,9 +345,7 @@ router.get(
 			typeof incident.userScreenshotMetadata === "string"
 		) {
 			try {
-				incident.userScreenshotMetadata = JSON.parse(
-					incident.userScreenshotMetadata,
-				);
+				incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
 			} catch (e) {
 				console.error("[INCIDENTS] Failed to parse userScreenshotMetadata:", e);
 			}
@@ -391,21 +355,14 @@ router.get(
 			typeof incident.userAttachmentMetadata === "string"
 		) {
 			try {
-				incident.userAttachmentMetadata = JSON.parse(
-					incident.userAttachmentMetadata,
-				);
+				incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
 			} catch (e) {
 				console.error("[INCIDENTS] Failed to parse userAttachmentMetadata:", e);
 			}
 		}
-		if (
-			incident.analystReportMetadata &&
-			typeof incident.analystReportMetadata === "string"
-		) {
+		if (incident.analystReportMetadata && typeof incident.analystReportMetadata === "string") {
 			try {
-				incident.analystReportMetadata = JSON.parse(
-					incident.analystReportMetadata,
-				);
+				incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
 			} catch (e) {
 				console.error("[INCIDENTS] Failed to parse analystReportMetadata:", e);
 			}
@@ -415,14 +372,9 @@ router.get(
 			typeof incident.analystStatementMetadata === "string"
 		) {
 			try {
-				incident.analystStatementMetadata = JSON.parse(
-					incident.analystStatementMetadata,
-				);
+				incident.analystStatementMetadata = JSON.parse(incident.analystStatementMetadata);
 			} catch (e) {
-				console.error(
-					"[INCIDENTS] Failed to parse analystStatementMetadata:",
-					e,
-				);
+				console.error("[INCIDENTS] Failed to parse analystStatementMetadata:", e);
 			}
 		}
 
@@ -583,8 +535,7 @@ router.post(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message:
-						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -624,8 +575,7 @@ router.patch(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message:
-						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -665,8 +615,7 @@ router.patch(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message:
-						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -707,8 +656,7 @@ router.patch(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message:
-						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -748,18 +696,12 @@ router.post(
 		validateFile(files.report, "report");
 
 		// Generuj ścieżkę w MinIO
-		const reportPath = generateStorageKey(
-			id,
-			"report",
-			files.report.metadata.originalName,
-		);
+		const reportPath = generateStorageKey(id, "report", files.report.metadata.originalName);
 
 		// Upload do MinIO
-		await storageClient.putObject(
-			reportPath,
-			Buffer.from(files.report.buffer),
-			{ contentType: files.report.metadata.mimeType },
-		);
+		await storageClient.putObject(reportPath, Buffer.from(files.report.buffer), {
+			contentType: files.report.metadata.mimeType,
+		});
 		const { clause, params } = getAnalystScopedIncidentWhere(req, id);
 
 		const incident = await queryOne<Incident>(
@@ -781,8 +723,7 @@ router.post(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message:
-						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -829,11 +770,9 @@ router.post(
 		);
 
 		// Upload do MinIO
-		await storageClient.putObject(
-			statementPath,
-			Buffer.from(files.statement.buffer),
-			{ contentType: files.statement.metadata.mimeType },
-		);
+		await storageClient.putObject(statementPath, Buffer.from(files.statement.buffer), {
+			contentType: files.statement.metadata.mimeType,
+		});
 		const { clause, params } = getAnalystScopedIncidentWhere(req, id);
 
 		const incident = await queryOne<Incident>(
@@ -855,8 +794,7 @@ router.post(
 				success: false,
 				error: {
 					code: "NOT_FOUND",
-					message:
-						"Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
+					message: "Incydent nie został znaleziony lub nie jest przypisany do Ciebie",
 				},
 			});
 		}
@@ -882,10 +820,7 @@ router.get(
 		const id = uuidSchema.parse(req.params.id);
 		const { fileType } = req.params;
 
-		if (
-			!fileType ||
-			!["screenshot", "attachment", "report", "statement"].includes(fileType)
-		) {
+		if (!fileType || !["screenshot", "attachment", "report", "statement"].includes(fileType)) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -1045,9 +980,7 @@ router.get(
 
 		// Procent rozwiązanych
 		const resolvedPercentage =
-			totalIncidents > 0
-				? ((resolvedIncidents / totalIncidents) * 100).toFixed(2)
-				: "0.00";
+			totalIncidents > 0 ? ((resolvedIncidents / totalIncidents) * 100).toFixed(2) : "0.00";
 
 		// Średni czas rozwiązywania (w sekundach)
 		const avgTimeResult = await queryOne<{ avg_seconds: string }>(
@@ -1110,9 +1043,7 @@ async function downloadFile(req: Request, res: Response) {
 		}
 
 		// Walidacja typu pliku
-		if (
-			!["screenshots", "attachments", "reports", "statements"].includes(type)
-		) {
+		if (!["screenshots", "attachments", "reports", "statements"].includes(type)) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -1139,8 +1070,7 @@ async function downloadFile(req: Request, res: Response) {
 				success: false,
 				error: {
 					code: "INCIDENT_NOT_FOUND",
-					message:
-						"Zgłoszenie nie zostało znalezione lub nie masz do niego dostępu",
+					message: "Zgłoszenie nie zostało znalezione lub nie masz do niego dostępu",
 				},
 			});
 		}
@@ -1185,7 +1115,7 @@ async function downloadFile(req: Request, res: Response) {
 		let parsedMetadata: StoredFileMetadataPayload;
 		try {
 			parsedMetadata = parseStoredFileMetadata(fileData.metadata);
-		} catch (_e) {
+		} catch {
 			return res.status(500).json({
 				success: false,
 				error: {
@@ -1233,17 +1163,10 @@ async function downloadFile(req: Request, res: Response) {
 		}
 
 		// Ustaw odpowiednie nagłówki i zwróć plik
-		res.setHeader(
-			"Content-Type",
-			fileMetadata.mimeType || "application/octet-stream",
-		);
+		res.setHeader("Content-Type", fileMetadata.mimeType || "application/octet-stream");
 
-		const realFilename =
-			fileMetadata.filename || fileMetadata.originalName || filename;
-		res.setHeader(
-			"Content-Disposition",
-			createContentDispositionHeader(realFilename),
-		);
+		const realFilename = fileMetadata.filename || fileMetadata.originalName || filename;
+		res.setHeader("Content-Disposition", createContentDispositionHeader(realFilename));
 
 		res.setHeader("Content-Length", fileBuffer.length);
 		res.send(fileBuffer);

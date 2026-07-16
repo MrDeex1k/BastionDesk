@@ -54,9 +54,7 @@ export interface ParsedFormData {
  *
  * UWAGA: Wymaga aby Express nie używał body-parsera dla tego endpointa!
  */
-export async function parseMultipartFormData(
-	req: Request,
-): Promise<ParsedFormData> {
+export async function parseMultipartFormData(req: Request): Promise<ParsedFormData> {
 	const contentType = req.headers["content-type"];
 
 	if (!contentType?.includes("multipart/form-data")) {
@@ -73,9 +71,9 @@ export async function parseMultipartFormData(
 		const webRequest = new Request(`http://localhost${req.url}`, {
 			method: req.method,
 			headers: req.headers as Record<string, string>,
-			// biome-ignore lint/suspicious/noExplicitAny: Express req jest ReadableStream-compatible
+			// oxlint-disable-next-line typescript/no-explicit-any -- Express req jest ReadableStream-compatible
 			body: req as any,
-			// biome-ignore lint/suspicious/noExplicitAny: Bun rozszerza Request API
+			// oxlint-disable-next-line typescript/no-explicit-any -- Bun rozszerza Request API
 			duplex: "half" as any,
 		});
 
@@ -103,18 +101,17 @@ export async function parseMultipartFormData(
 				};
 			} else {
 				// To jest zwykłe pole tekstowe
-				fields[key] = String(value);
+				if (typeof value !== "string") {
+					throw new TypeError("Nieobsługiwany typ pola formularza");
+				}
+				fields[key] = value;
 			}
 		}
 
 		return { fields, files };
 	} catch (error) {
 		console.error("[FILE] Failed to parse multipart/form-data:", error);
-		throw new AppError(
-			400,
-			"PARSE_ERROR",
-			"Nie udało się sparsować danych formularza",
-		);
+		throw new AppError(400, "PARSE_ERROR", "Nie udało się sparsować danych formularza");
 	}
 }
 
@@ -155,9 +152,7 @@ export function generateStorageKey(
 ): string {
 	const timestamp = Date.now();
 	const _extension = originalName.split(".").pop() || "bin";
-	const sanitizedName = originalName
-		.replace(/[^a-zA-Z0-9.-]/g, "_")
-		.substring(0, 50);
+	const sanitizedName = originalName.replace(/[^a-zA-Z0-9.-]/g, "_").substring(0, 50);
 
 	return `incidents/${incidentId}/${fileType}_${timestamp}_${sanitizedName}`;
 }

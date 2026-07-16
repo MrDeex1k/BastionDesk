@@ -25,14 +25,10 @@ function sendCsrfError(res: Response, code: string, message: string): Response {
 	return sendErrorResponse(res, 403, code, message);
 }
 
-export async function issueCsrfToken(
-	req: Request,
-	res: Response,
-): Promise<void> {
+export async function issueCsrfToken(req: Request, res: Response): Promise<void> {
 	const cookies = parseCookies(req.headers.cookie);
 	const sessionData = await getSessionFromRequest(req);
-	const subject =
-		sessionData?.session?.id ?? getOrCreateAnonymousCsrfSeed(cookies, res);
+	const subject = sessionData?.session?.id ?? getOrCreateAnonymousCsrfSeed(cookies, res);
 	const token = generateCsrfToken(subject);
 
 	setCsrfTokenCookie(res, token);
@@ -45,22 +41,14 @@ export async function issueCsrfToken(
 	});
 }
 
-export async function requireCsrf(
-	req: Request,
-	res: Response,
-	next: NextFunction,
-): Promise<void> {
+export async function requireCsrf(req: Request, res: Response, next: NextFunction): Promise<void> {
 	if (isCsrfSafeMethod(req.method)) {
 		next();
 		return;
 	}
 
 	if (!isAllowedOrigin(req.headers.origin)) {
-		sendCsrfError(
-			res,
-			"CSRF_ORIGIN_INVALID",
-			"Żądanie pochodzi z niedozwolonego origin",
-		);
+		sendCsrfError(res, "CSRF_ORIGIN_INVALID", "Żądanie pochodzi z niedozwolonego origin");
 		return;
 	}
 
@@ -74,24 +62,15 @@ export async function requireCsrf(
 	}
 
 	if (cookieToken !== headerToken) {
-		sendCsrfError(
-			res,
-			"CSRF_TOKEN_MISMATCH",
-			"Token CSRF nie zgadza się z wartością cookie",
-		);
+		sendCsrfError(res, "CSRF_TOKEN_MISMATCH", "Token CSRF nie zgadza się z wartością cookie");
 		return;
 	}
 
 	const sessionData = await getSessionFromRequest(req);
-	const subject =
-		sessionData?.session?.id ?? getOrCreateAnonymousCsrfSeed(cookies);
+	const subject = sessionData?.session?.id ?? getOrCreateAnonymousCsrfSeed(cookies);
 
 	if (!verifyCsrfToken(headerToken, subject)) {
-		sendCsrfError(
-			res,
-			"CSRF_TOKEN_INVALID",
-			"Token CSRF jest nieprawidłowy lub wygasł",
-		);
+		sendCsrfError(res, "CSRF_TOKEN_INVALID", "Token CSRF jest nieprawidłowy lub wygasł");
 		return;
 	}
 
