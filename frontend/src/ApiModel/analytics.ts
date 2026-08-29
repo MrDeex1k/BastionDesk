@@ -31,6 +31,9 @@ interface AdminMetrics {
   period: {
     days: number;
     startDate: string;
+    endDate: string;
+    timezone: string;
+    groupBy: "day" | "week" | "month";
   };
   timeSeries: {
     incidentsCreated: Array<{ date: string; count: number }>;
@@ -51,3 +54,17 @@ interface AdminMetrics {
 export type StatsResponse = ApiResponse<AdminStats>;
 
 export type MetricsResponse = ApiResponse<AdminMetrics>;
+
+export interface AdminMetricsQueryInput {
+  range: { lastDays: number } | { from: string; to: string };
+  timezone?: string;
+  groupBy?: "day" | "week" | "month";
+  filters?: {
+    statuses?: string[];
+    categories?: string[];
+    analystIds?: string[];
+  };
+  metrics?: Array<
+    "incidentsCreated" | "incidentsResolved" | "averageResolutionTime" | "topUsers" | "topAnalysts"
+  >;
+}

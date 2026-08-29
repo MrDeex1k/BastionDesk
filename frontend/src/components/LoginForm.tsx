@@ -1,4 +1,4 @@
-import { Fingerprint, Lock } from "lucide-react";
+import { CircleAlert, Fingerprint, Lock } from "lucide-react";
 import { useReducer } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -12,11 +12,13 @@ import { Card } from "./ui/card";
 import { EmailStep } from "./login-form/EmailStep";
 import { PasskeyStep } from "./login-form/PasskeyStep";
 import { PasswordStep } from "./login-form/PasswordStep";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 interface LoginFormProps {
   onBack: () => void;
   onForgotPassword: () => void;
-  onLoginSuccess: () => void;
+  onLoginSuccess: () => Promise<void>;
+  notice?: string;
 }
 
 type LoginStep = "email" | "password" | "passkey";
@@ -96,33 +98,33 @@ function loginFormReducer(state: LoginFormState, action: LoginFormAction): Login
   }
 }
 
-export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFormProps) {
+function getAuthErrorMessage(authError: unknown, fallbackMessage: string) {
+  if (!authError || typeof authError !== "object") {
+    return fallbackMessage;
+  }
+
+  const message = "message" in authError ? authError.message : undefined;
+
+  if (typeof message === "string" && message.trim().length > 0) {
+    return message;
+  }
+
+  if (
+    message &&
+    typeof message === "object" &&
+    "message" in message &&
+    typeof message.message === "string" &&
+    message.message.trim().length > 0
+  ) {
+    return message.message;
+  }
+
+  return fallbackMessage;
+}
+
+export function LoginForm({ notice, onBack, onForgotPassword, onLoginSuccess }: LoginFormProps) {
   const [state, dispatch] = useReducer(loginFormReducer, initialLoginFormState);
   const queryClient = useQueryClient();
-
-  const getAuthErrorMessage = (authError: unknown, fallbackMessage: string) => {
-    if (!authError || typeof authError !== "object") {
-      return fallbackMessage;
-    }
-
-    const message = "message" in authError ? authError.message : undefined;
-
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message;
-    }
-
-    if (
-      message &&
-      typeof message === "object" &&
-      "message" in message &&
-      typeof message.message === "string" &&
-      message.message.trim().length > 0
-    ) {
-      return message.message;
-    }
-
-    return fallbackMessage;
-  };
 
   const validateEmail = (value: string) => {
     const error = getEmailError(value);
@@ -182,10 +184,15 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
 
       return data;
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["auth"] });
-      toast.success("Zalogowano pomyślnie!");
-      onLoginSuccess();
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ["auth"] });
+        await onLoginSuccess();
+        toast.success("Zalogowano pomyślnie!");
+      } catch {
+        toast.warning("Zalogowano, ale nie udało się odświeżyć widoku. Przeładowuję aplikację…");
+        window.location.assign("/");
+      }
     },
     onError: (error: Error) => {
       dispatch({
@@ -207,10 +214,15 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
 
       return data;
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["auth"] });
-      toast.success("Zalogowano pomyślnie używając PassKey");
-      onLoginSuccess();
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ["auth"] });
+        await onLoginSuccess();
+        toast.success("Zalogowano pomyślnie używając PassKey");
+      } catch {
+        toast.warning("Zalogowano, ale nie udało się odświeżyć widoku. Przeładowuję aplikację…");
+        window.location.assign("/");
+      }
     },
     onError: (error: Error) => {
       toast.error(`Błąd logowania PassKey: ${error.message}`);
@@ -249,6 +261,14 @@ export function LoginForm({ onBack, onForgotPassword, onLoginSuccess }: LoginFor
             {state.step === "passkey" && "Użyj klucza PassKey aby się zalogować"}
           </p>
         </div>
+
+        {notice && (
+          <Alert variant="destructive" className="mb-6 border-red-900/60 bg-red-950/30">
+            <CircleAlert />
+            <AlertTitle>Nieprawidłowy link resetowania hasła</AlertTitle>
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        )}
 
         {state.step === "email" && (
           <EmailStep

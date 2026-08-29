@@ -59,6 +59,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   Czerwony: "#ef4444",
 };
 
+const PERIOD_ITEMS = [
+  { value: "7", label: "Ostatnie 7 dni" },
+  { value: "30", label: "Ostatnie 30 dni" },
+  { value: "90", label: "Ostatnie 90 dni" },
+  { value: "365", label: "Ostatni rok" },
+] as const;
+
 const tooltipStyle = {
   backgroundColor: "#1e293b",
   border: "1px solid #334155",
@@ -84,26 +91,24 @@ export default function AnalyticsCharts({
               <Calendar className="size-5 text-blue-400" />
               Metryki czasowe
             </CardTitle>
-            <Select value={period.toString()} onValueChange={(val) => onPeriodChange(Number(val))}>
+            <Select
+              items={PERIOD_ITEMS}
+              value={period.toString()}
+              onValueChange={(val) => onPeriodChange(Number(val))}
+            >
               <SelectTrigger className="w-[180px] border-zinc-700 bg-zinc-900 text-zinc-300">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border-zinc-700 bg-zinc-900 text-zinc-200">
-                <SelectItem value="7" className="text-white focus:bg-blue-500/20 focus:text-white">
-                  Ostatnie 7 dni
-                </SelectItem>
-                <SelectItem value="30" className="text-white focus:bg-blue-500/20 focus:text-white">
-                  Ostatnie 30 dni
-                </SelectItem>
-                <SelectItem value="90" className="text-white focus:bg-blue-500/20 focus:text-white">
-                  Ostatnie 90 dni
-                </SelectItem>
-                <SelectItem
-                  value="365"
-                  className="text-white focus:bg-blue-500/20 focus:text-white"
-                >
-                  Ostatni rok
-                </SelectItem>
+                {PERIOD_ITEMS.map((item) => (
+                  <SelectItem
+                    key={item.value}
+                    value={item.value}
+                    className="text-white focus:bg-blue-500/20 focus:text-white"
+                  >
+                    {item.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

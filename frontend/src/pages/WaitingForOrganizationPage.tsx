@@ -1,6 +1,6 @@
 import { ShieldCheck, ArrowRight } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 
 export function WaitingForOrganizationPage() {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export function WaitingForOrganizationPage() {
 
       <div className="pt-8">
         <Button
-          onClick={() => navigate("/")}
+          onClick={() => navigate({ to: "/" })}
           className="border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
           size="lg"
         >

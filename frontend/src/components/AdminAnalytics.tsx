@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, CheckCircle2, Clock, Loader2, Shield, TrendingUp, Users } from "lucide-react";
-import type { MetricsResponse, StatsResponse } from "@/ApiModel";
+import type { AdminMetricsQueryInput, MetricsResponse, StatsResponse } from "@/ApiModel";
 import { apiFetch } from "@/lib/api";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -40,7 +40,16 @@ export function AdminAnalytics() {
   const { data: metricsData, isLoading: metricsLoading } = useQuery({
     queryKey: ["adminMetrics", period],
     queryFn: async () => {
-      const response = await apiFetch(`/api/admin/analytics/metrics?period=${period}`);
+      const query: AdminMetricsQueryInput = {
+        range: { lastDays: period },
+        timezone: "Europe/Warsaw",
+        groupBy: "day",
+      };
+      const response = await apiFetch("/api/admin/analytics/metrics", {
+        method: "QUERY",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(query),
+      });
 
       if (!response.ok) throw new Error("Failed to fetch metrics");
 

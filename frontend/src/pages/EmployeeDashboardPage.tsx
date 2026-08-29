@@ -32,7 +32,7 @@ export function EmployeeDashboardPage() {
         <Button
           onClick={() => setView(view === "report" ? "list" : "report")}
           size="lg"
-          className="min-w-[250px] w-full border border-blue-500/50 bg-zinc-900/80 font-semibold tracking-wide text-blue-300 shadow-[0_0_15px_-3px_rgba(59,130,246,0.2)] backdrop-blur-sm transition-all duration-300 hover:border-blue-400 hover:bg-zinc-800 md:w-auto"
+          className="min-w-[250px] w-full border border-blue-500/50 bg-zinc-900/80 font-semibold tracking-wide text-blue-300 shadow-[0_0_15px_-3px_rgba(59,130,246,0.2)] backdrop-blur-sm transition-[background-color,border-color] duration-300 hover:border-blue-400 hover:bg-zinc-800 md:w-auto"
         >
           {view === "report" ? (
             <>

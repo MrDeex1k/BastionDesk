@@ -1,8 +1,8 @@
 import { ForgotPasswordForm } from "../components/ForgotPasswordForm";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
 
-  return <ForgotPasswordForm onBack={() => navigate("/login")} />;
+  return <ForgotPasswordForm onBack={() => navigate({ to: "/login" })} />;
 }

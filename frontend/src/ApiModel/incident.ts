@@ -54,3 +54,26 @@ export interface AdminIncidentAnalystFilter {
 export type AdminIncidentFiltersResponse = ApiResponse<{
   analysts: AdminIncidentAnalystFilter[];
 }>;
+
+export interface AdminIncidentsQueryInput {
+  pagination: {
+    page: number;
+    limit: number;
+  };
+  filters?: {
+    statuses?: string[];
+    search?: string;
+    analystIds?: string[];
+    assignment?: "all" | "assigned" | "unassigned";
+    resolved?: boolean;
+    createdAt?: {
+      from?: string;
+      to?: string;
+    };
+    categories?: string[];
+  };
+  sort: Array<{
+    field: "createdAt" | "updatedAt" | "status" | "dataZgloszenia" | "userId" | "analystId";
+    direction: "asc" | "desc";
+  }>;
+}

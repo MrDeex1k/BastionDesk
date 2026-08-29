@@ -217,15 +217,17 @@ export function SettingsDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-zinc-400 hover:bg-white/5 hover:text-white"
-        >
-          <Settings className="size-5" />
-          <span className="sr-only">Ustawienia</span>
-        </Button>
+      <DialogTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-zinc-400 hover:bg-white/5 hover:text-white"
+          />
+        }
+      >
+        <Settings className="size-5" />
+        <span className="sr-only">Ustawienia</span>
       </DialogTrigger>
       <DialogContent className="border-zinc-700 bg-zinc-950 text-zinc-100 shadow-2xl shadow-black/50 sm:max-w-[600px]">
         <DialogHeader>
@@ -242,14 +244,14 @@ export function SettingsDialog() {
           <TabsList className="grid w-full grid-cols-2 border border-zinc-700 bg-zinc-900">
             <TabsTrigger
               value="security"
-              className="text-white/85 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+              className="text-white/85 data-active:bg-blue-600 data-active:text-white"
             >
               <ShieldIcon className="mr-2 size-4" />
               Bezpieczeństwo
             </TabsTrigger>
             <TabsTrigger
               value="danger"
-              className="text-white/85 data-[state=active]:bg-red-600 data-[state=active]:text-white"
+              className="text-white/85 data-active:bg-red-600 data-active:text-white"
             >
               <Trash2 className="mr-2 size-4" />
               Usunięcie konta

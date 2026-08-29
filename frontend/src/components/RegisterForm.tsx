@@ -11,7 +11,7 @@ import { validateEmail, validateFullName, validatePassword } from "@/lib/validat
 
 interface RegisterFormProps {
   onBack: () => void;
-  onRegisterSuccess: () => void;
+  onRegisterSuccess: () => Promise<void>;
 }
 
 interface RegisterFormState {
@@ -103,11 +103,18 @@ export function RegisterForm({ onBack, onRegisterSuccess }: RegisterFormProps) {
 
       return data;
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["auth"] });
-      dispatch({ type: "reset" });
-      toast.success("Rejestracja zakończona pomyślnie!");
-      onRegisterSuccess();
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ["auth"] });
+        dispatch({ type: "reset" });
+        await onRegisterSuccess();
+        toast.success("Rejestracja zakończona pomyślnie!");
+      } catch {
+        toast.warning(
+          "Konto utworzono, ale nie udało się odświeżyć widoku. Przeładowuję aplikację…",
+        );
+        window.location.assign("/");
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message);

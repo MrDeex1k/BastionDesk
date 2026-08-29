@@ -1,5 +1,5 @@
 import { Shield, Users, Building2, AlertTriangle, Lock } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 
@@ -23,7 +23,7 @@ export function HomePage() {
 
       {/* Action Cards */}
       <div className="mx-auto mb-16 grid max-w-5xl gap-6 md:grid-cols-3">
-        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10">
+        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-[border-color,box-shadow] duration-300 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10">
           <div className="flex h-full flex-col items-center gap-4 text-center">
             <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
               <Lock className="size-8 text-blue-400" />
@@ -35,7 +35,7 @@ export function HomePage() {
               </p>
             </div>
             <Button
-              onClick={() => navigate("/login")}
+              onClick={() => navigate({ to: "/login" })}
               className="mt-auto w-full bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700"
               size="lg"
             >
@@ -44,7 +44,7 @@ export function HomePage() {
           </div>
         </Card>
 
-        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-all duration-300 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/10">
+        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-[border-color,box-shadow] duration-300 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/10">
           <div className="flex h-full flex-col items-center gap-4 text-center">
             <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
               <Users className="size-8 text-cyan-400" />
@@ -56,7 +56,7 @@ export function HomePage() {
               </p>
             </div>
             <Button
-              onClick={() => navigate("/register")}
+              onClick={() => navigate({ to: "/register" })}
               className="mt-auto w-full bg-cyan-600 text-white shadow-lg shadow-cyan-500/20 hover:bg-cyan-700"
               size="lg"
             >
@@ -65,7 +65,7 @@ export function HomePage() {
           </div>
         </Card>
 
-        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-all duration-300 hover:border-emerald-500/50 hover:shadow-xl hover:shadow-emerald-500/10">
+        <Card className="border-zinc-800 bg-linear-to-br from-zinc-900/95 to-zinc-800/85 p-6 transition-[border-color,box-shadow] duration-300 hover:border-emerald-500/50 hover:shadow-xl hover:shadow-emerald-500/10">
           <div className="flex h-full flex-col items-center gap-4 text-center">
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
               <Building2 className="size-8 text-emerald-400" />
@@ -77,7 +77,7 @@ export function HomePage() {
               </p>
             </div>
             <Button
-              onClick={() => navigate("/create-organization")}
+              onClick={() => navigate({ to: "/create-organization" })}
               className="mt-auto w-full bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-700"
               size="lg"
             >

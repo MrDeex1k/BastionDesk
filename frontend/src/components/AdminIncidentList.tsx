@@ -1,6 +1,10 @@
 import { lazy, Suspense, useCallback, useMemo, useReducer } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminIncidentFiltersResponse, IncidentsResponse } from "@/ApiModel";
+import type {
+  AdminIncidentFiltersResponse,
+  AdminIncidentsQueryInput,
+  IncidentsResponse,
+} from "@/ApiModel";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
@@ -151,28 +155,32 @@ export function AdminIncidentList() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams({
-      page: state.page.toString(),
-      limit: LIMIT.toString(),
-      sortBy: state.sortBy,
-      sortOrder: state.sortOrder,
-    });
+  const queryInput = useMemo<AdminIncidentsQueryInput>(() => {
+    const analystIsSelected = !["all", "unassigned"].includes(state.analystFilter);
 
-    if (state.statusFilter !== "all") {
-      params.append("status", state.statusFilter);
-    }
-    if (state.userQuery) {
-      params.append("userQuery", state.userQuery);
-    }
-    if (state.analystFilter !== "all") {
-      params.append(
-        "analystId",
-        state.analystFilter === "unassigned" ? "null" : state.analystFilter,
-      );
-    }
-
-    return params.toString();
+    return {
+      pagination: {
+        page: state.page,
+        limit: LIMIT,
+      },
+      filters: {
+        statuses: state.statusFilter === "all" ? undefined : [state.statusFilter],
+        search: state.userQuery.trim() || undefined,
+        analystIds: analystIsSelected ? [state.analystFilter] : undefined,
+        assignment:
+          state.analystFilter === "unassigned"
+            ? "unassigned"
+            : analystIsSelected
+              ? "assigned"
+              : "all",
+      },
+      sort: [
+        {
+          field: state.sortBy as AdminIncidentsQueryInput["sort"][number]["field"],
+          direction: state.sortOrder,
+        },
+      ],
+    };
   }, [
     state.analystFilter,
     state.page,
@@ -183,17 +191,13 @@ export function AdminIncidentList() {
   ]);
 
   const { data, isPending, isFetching, isError, isPlaceholderData } = useQuery<IncidentsResponse>({
-    queryKey: [
-      "adminIncidents",
-      state.page,
-      state.statusFilter,
-      state.userQuery,
-      state.analystFilter,
-      state.sortBy,
-      state.sortOrder,
-    ],
+    queryKey: ["adminIncidents", queryInput],
     queryFn: async () => {
-      const response = await apiFetch(`/api/admin/incidents?${queryString}`);
+      const response = await apiFetch("/api/admin/incidents", {
+        method: "QUERY",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(queryInput),
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch incidents");
@@ -427,11 +431,13 @@ function CreateIncidentDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button className="bg-green-600 text-white shadow-lg shadow-green-900/20 hover:bg-green-700">
-          <Plus className="mr-2 size-4" />
-          Zgłoś incydent
-        </Button>
+      <DialogTrigger
+        render={
+          <Button className="bg-green-600 text-white shadow-lg shadow-green-900/20 hover:bg-green-700" />
+        }
+      >
+        <Plus className="mr-2 size-4" />
+        Zgłoś incydent
       </DialogTrigger>
       <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-950 text-zinc-200">
         <DialogTitle className="sr-only">Zgłoś incydent</DialogTitle>
@@ -559,7 +565,7 @@ function FilterSelectField({
   return (
     <div className="space-y-2">
       <Label className="text-xs text-zinc-400">{label}</Label>
-      <Select value={value} onValueChange={onValueChange}>
+      <Select items={options} value={value} onValueChange={onValueChange}>
         <SelectTrigger className="border-zinc-700 bg-zinc-900 text-zinc-300">
           <SelectValue />
         </SelectTrigger>

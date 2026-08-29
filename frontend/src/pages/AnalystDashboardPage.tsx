@@ -43,14 +43,14 @@ export function AnalystDashboardPage() {
           <TabsList className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-1">
             <TabsTrigger
               value="assigned"
-              className="px-6 py-2 text-white/85 hover:text-white data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+              className="px-6 py-2 text-white/85 hover:text-white data-active:bg-blue-600 data-active:text-white"
             >
               <User className="mr-2 size-4" />
               Przypisane do mnie
             </TabsTrigger>
             <TabsTrigger
               value="unassigned"
-              className="px-6 py-2 text-white/85 hover:text-white data-[state=active]:bg-violet-600 data-[state=active]:text-white"
+              className="px-6 py-2 text-white/85 hover:text-white data-active:bg-violet-600 data-active:text-white"
             >
               <UserX className="mr-2 size-4" />
               Nieprzypisane
@@ -58,11 +58,13 @@ export function AnalystDashboardPage() {
           </TabsList>
 
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-green-600 text-white shadow-lg shadow-green-900/20 hover:bg-green-700">
-                <Plus className="mr-2 size-4" />
-                Zgłoś incydent
-              </Button>
+            <DialogTrigger
+              render={
+                <Button className="bg-green-600 text-white shadow-lg shadow-green-900/20 hover:bg-green-700" />
+              }
+            >
+              <Plus className="mr-2 size-4" />
+              Zgłoś incydent
             </DialogTrigger>
             <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-950 text-zinc-200">
               <DialogTitle className="sr-only">Zgłoś incydent</DialogTitle>

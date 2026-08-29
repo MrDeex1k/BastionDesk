@@ -180,7 +180,7 @@ export function AdminOrganizationManagement() {
   );
 
   const handleRemoveMember = useCallback(() => {
-    if (!state.memberToDelete) return;
+    if (!state.memberToDelete || removeMemberMutation.isPending) return;
 
     removeMemberMutation.mutate(state.memberToDelete.id);
   }, [removeMemberMutation, state.memberToDelete]);
@@ -190,15 +190,23 @@ export function AdminOrganizationManagement() {
     toast.success("Skopiowano ID użytkownika");
   }, []);
 
-  const handleDeleteMember = useCallback((member: OrganizationMember) => {
-    dispatch({ type: "set-member-to-delete", value: member });
-  }, []);
+  const handleDeleteMember = useCallback(
+    (member: OrganizationMember) => {
+      removeMemberMutation.reset();
+      dispatch({ type: "set-member-to-delete", value: member });
+    },
+    [removeMemberMutation],
+  );
 
-  const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
-    if (!open) {
-      dispatch({ type: "set-member-to-delete", value: null });
-    }
-  }, []);
+  const handleDeleteDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && !removeMemberMutation.isPending) {
+        dispatch({ type: "set-member-to-delete", value: null });
+        removeMemberMutation.reset();
+      }
+    },
+    [removeMemberMutation],
+  );
 
   return (
     <div className="space-y-8">
@@ -220,6 +228,8 @@ export function AdminOrganizationManagement() {
       />
       <DeleteMemberDialog
         memberToDelete={state.memberToDelete}
+        errorMessage={removeMemberMutation.error?.message ?? null}
+        isPending={removeMemberMutation.isPending}
         onOpenChange={handleDeleteDialogOpenChange}
         onConfirm={handleRemoveMember}
       />

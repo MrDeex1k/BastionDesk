@@ -15,6 +15,36 @@ interface AddMemberCardProps {
   onAdd: () => void;
 }
 
+const ROLE_ITEMS = [
+  {
+    value: "pracownik",
+    label: (
+      <div className="flex items-center gap-2">
+        <User className="size-4 text-blue-400" />
+        <span>Pracownik</span>
+      </div>
+    ),
+  },
+  {
+    value: "analityk",
+    label: (
+      <div className="flex items-center gap-2">
+        <BarChart className="size-4 text-yellow-400" />
+        <span>Analityk</span>
+      </div>
+    ),
+  },
+  {
+    value: "admin",
+    label: (
+      <div className="flex items-center gap-2">
+        <Shield className="size-4 text-red-400" />
+        <span>Administrator</span>
+      </div>
+    ),
+  },
+] as const;
+
 export const AddMemberCard = memo(function AddMemberCard({
   email,
   role,
@@ -59,29 +89,20 @@ export const AddMemberCard = memo(function AddMemberCard({
               <Label htmlFor="role" className="text-zinc-200">
                 Rola w organizacji
               </Label>
-              <Select value={role} onValueChange={onRoleChange}>
+              <Select items={ROLE_ITEMS} value={role} onValueChange={onRoleChange}>
                 <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white focus:ring-violet-500/20">
                   <SelectValue placeholder="Wybierz rolę" />
                 </SelectTrigger>
                 <SelectContent className="border-zinc-700 bg-zinc-900 text-white">
-                  <SelectItem value="pracownik" className="focus:bg-zinc-800 focus:text-white">
-                    <div className="flex items-center gap-2">
-                      <User className="size-4 text-blue-400" />
-                      <span>Pracownik</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="analityk" className="focus:bg-zinc-800 focus:text-white">
-                    <div className="flex items-center gap-2">
-                      <BarChart className="size-4 text-yellow-400" />
-                      <span>Analityk</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="admin" className="focus:bg-zinc-800 focus:text-white">
-                    <div className="flex items-center gap-2">
-                      <Shield className="size-4 text-red-400" />
-                      <span>Administrator</span>
-                    </div>
-                  </SelectItem>
+                  {ROLE_ITEMS.map((item) => (
+                    <SelectItem
+                      key={item.value}
+                      value={item.value}
+                      className="focus:bg-zinc-800 focus:text-white"
+                    >
+                      {item.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

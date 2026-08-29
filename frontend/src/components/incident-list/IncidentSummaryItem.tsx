@@ -123,7 +123,7 @@ export const IncidentSummaryItem = memo(function IncidentSummaryItem({
     <button
       type="button"
       onClick={() => onSelect(id)}
-      className={`group relative w-full cursor-pointer rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 text-left transition-all duration-200 hover:border-blue-500/50 hover:bg-zinc-900/80 ${className}`}
+      className={`group relative w-full cursor-pointer rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 text-left transition-[background-color,border-color] duration-200 hover:border-blue-500/50 hover:bg-zinc-900/80 ${className}`}
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="flex flex-wrap items-center gap-2">

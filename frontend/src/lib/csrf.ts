@@ -11,7 +11,7 @@ let csrfToken: string | null = null;
 let csrfTokenRequest: Promise<string> | null = null;
 
 export function shouldAttachCsrfToken(method: string): boolean {
-  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+  return !["GET", "HEAD", "OPTIONS", "QUERY"].includes(method.toUpperCase());
 }
 
 export function clearCsrfToken(): void {

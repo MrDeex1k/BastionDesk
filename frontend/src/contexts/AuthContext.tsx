@@ -33,7 +33,7 @@ interface Session {
  */
 type UserRole = "admin" | "analityk" | "pracownik";
 
-interface AuthContextType {
+export interface AuthContextType {
   session: Session | null;
   user: Session["user"] | null;
   isLoading: boolean;
@@ -46,7 +46,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Eksportujemy Context, aby hook w osobnym pliku mógł z niego korzystać
 export { AuthContext };
 
 const NO_ROLE: null = null;
@@ -112,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void activateOrganizationMutation.mutateAsync(firstOrganizationId);
+    activateOrganizationMutation.mutate(firstOrganizationId);
   }, [activateOrganizationMutation, firstOrganizationId, shouldActivateOrganization]);
 
   useEffect(() => {

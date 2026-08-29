@@ -27,7 +27,7 @@ import { Card } from "./ui/card";
 
 interface CreateOrganizationFormProps {
   onBack: () => void;
-  onRegisterSuccess: () => void;
+  onRegisterSuccess: () => Promise<void>;
 }
 
 interface CreateOrganizationFormState {
@@ -256,16 +256,23 @@ export function CreateOrganizationForm({ onBack, onRegisterSuccess }: CreateOrga
       return (await response.json()) as CreateOrganizationResponse;
     },
     onSuccess: async (data) => {
-      if (data.organization?.id) {
-        await organization.setActive({
-          organizationId: data.organization.id,
-        });
-      }
+      try {
+        if (data.organization?.id) {
+          await organization.setActive({
+            organizationId: data.organization.id,
+          });
+        }
 
-      void queryClient.invalidateQueries({ queryKey: ["auth"] });
-      dispatch({ type: "reset" });
-      toast.success("Organizacja utworzona pomyślnie!");
-      onRegisterSuccess();
+        await queryClient.invalidateQueries({ queryKey: ["auth"] });
+        dispatch({ type: "reset" });
+        await onRegisterSuccess();
+        toast.success("Organizacja utworzona pomyślnie!");
+      } catch {
+        toast.warning(
+          "Organizację utworzono, ale nie udało się odświeżyć widoku. Przeładowuję aplikację…",
+        );
+        window.location.assign("/");
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message);

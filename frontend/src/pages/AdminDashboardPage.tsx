@@ -43,14 +43,14 @@ export function AdminDashboardPage() {
             <TabsList className="grid w-full max-w-md grid-cols-2 border border-zinc-800 bg-zinc-950/80">
               <TabsTrigger
                 value="stats"
-                className="text-white/85 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                className="text-white/85 data-active:bg-blue-600 data-active:text-white"
               >
                 <Activity className="mr-2 size-4" />
                 Statystyki i Incydenty
               </TabsTrigger>
               <TabsTrigger
                 value="organization"
-                className="text-white/85 data-[state=active]:bg-emerald-600 data-[state=active]:text-white"
+                className="text-white/85 data-active:bg-emerald-600 data-active:text-white"
               >
                 <Building2 className="mr-2 size-4" />
                 Zarządzanie Organizacją

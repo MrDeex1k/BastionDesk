@@ -5,6 +5,7 @@ import { Button } from "../ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -108,65 +109,71 @@ export const MembersListCard = memo(function MembersListCard({
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            className="size-8 p-0 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                          >
-                            <span className="sr-only">Otwórz menu</span>
-                            <MoreHorizontal className="size-4" />
-                          </Button>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              className="size-8 p-0 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                            />
+                          }
+                        >
+                          <span className="sr-only">Otwórz menu</span>
+                          <MoreHorizontal className="size-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                           align="end"
                           className="border-zinc-800 bg-zinc-900 text-zinc-200"
                         >
-                          <DropdownMenuLabel>Akcje</DropdownMenuLabel>
-                          <DropdownMenuItem
-                            onClick={() => onCopyUserId(member.userId)}
-                            className="cursor-pointer focus:bg-zinc-800 focus:text-white"
-                          >
-                            <Copy className="mr-2 size-4" />
-                            <span>Kopiuj ID użytkownika</span>
-                          </DropdownMenuItem>
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel>Akcje</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => onCopyUserId(member.userId)}
+                              className="cursor-pointer focus:bg-zinc-800 focus:text-white"
+                            >
+                              <Copy className="mr-2 size-4" />
+                              <span>Kopiuj ID użytkownika</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
                           <DropdownMenuSeparator className="bg-zinc-800" />
-                          <DropdownMenuLabel>Zmień rolę</DropdownMenuLabel>
-                          <DropdownMenuItem
-                            onClick={() => onUpdateRole(member.id, "pracownik")}
-                            className="cursor-pointer focus:bg-zinc-800 focus:text-white"
-                            disabled={member.role === "pracownik"}
-                          >
-                            <div className="flex w-full items-center justify-between">
-                              <span>Pracownik</span>
-                              {member.role === "pracownik" && (
-                                <Check className="size-4 text-blue-500" />
-                              )}
-                            </div>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => onUpdateRole(member.id, "analityk")}
-                            className="cursor-pointer focus:bg-zinc-800 focus:text-white"
-                            disabled={member.role === "analityk"}
-                          >
-                            <div className="flex w-full items-center justify-between">
-                              <span>Analityk</span>
-                              {member.role === "analityk" && (
-                                <Check className="size-4 text-blue-500" />
-                              )}
-                            </div>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => onUpdateRole(member.id, "admin")}
-                            className="cursor-pointer focus:bg-zinc-800 focus:text-white"
-                            disabled={member.role === "admin"}
-                          >
-                            <div className="flex w-full items-center justify-between">
-                              <span>Administrator</span>
-                              {member.role === "admin" && (
-                                <Check className="size-4 text-blue-500" />
-                              )}
-                            </div>
-                          </DropdownMenuItem>
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel>Zmień rolę</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => onUpdateRole(member.id, "pracownik")}
+                              className="cursor-pointer focus:bg-zinc-800 focus:text-white"
+                              disabled={member.role === "pracownik"}
+                            >
+                              <div className="flex w-full items-center justify-between">
+                                <span>Pracownik</span>
+                                {member.role === "pracownik" && (
+                                  <Check className="size-4 text-blue-500" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onUpdateRole(member.id, "analityk")}
+                              className="cursor-pointer focus:bg-zinc-800 focus:text-white"
+                              disabled={member.role === "analityk"}
+                            >
+                              <div className="flex w-full items-center justify-between">
+                                <span>Analityk</span>
+                                {member.role === "analityk" && (
+                                  <Check className="size-4 text-blue-500" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onUpdateRole(member.id, "admin")}
+                              className="cursor-pointer focus:bg-zinc-800 focus:text-white"
+                              disabled={member.role === "admin"}
+                            >
+                              <div className="flex w-full items-center justify-between">
+                                <span>Administrator</span>
+                                {member.role === "admin" && (
+                                  <Check className="size-4 text-blue-500" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
                           <DropdownMenuSeparator className="bg-zinc-800" />
                           <DropdownMenuItem
                             onClick={() => onDeleteMember(member)}

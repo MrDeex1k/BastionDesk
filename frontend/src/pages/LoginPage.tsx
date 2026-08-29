@@ -1,22 +1,27 @@
 import { LoginForm } from "../components/LoginForm";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useAuth } from "@/hooks/useAuth";
 
 interface LoginPageProps {
-  onLogin: () => void;
+  notice?: string;
 }
 
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage({ notice }: LoginPageProps) {
   const navigate = useNavigate();
+  const router = useRouter();
+  const auth = useAuth();
 
-  const handleLoginSuccess = () => {
-    onLogin();
+  const handleLoginSuccess = async () => {
+    await auth.refetch();
+    await router.invalidate();
   };
 
   return (
     <LoginForm
-      onBack={() => navigate("/")}
-      onForgotPassword={() => navigate("/forgot-password")}
+      onBack={() => navigate({ to: "/" })}
+      onForgotPassword={() => navigate({ to: "/forgot-password" })}
       onLoginSuccess={handleLoginSuccess}
+      notice={notice}
     />
   );
 }

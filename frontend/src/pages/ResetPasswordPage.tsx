@@ -4,33 +4,28 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card } from "../components/ui/card";
 import { KeyRound, LockKeyhole, Loader2 } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useTransition } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { authClient } from "../lib/auth-client";
 
-export function ResetPasswordPage() {
+export interface ResetPasswordPageProps {
+  token: string;
+}
+
+export function ResetPasswordPage({ token }: ResetPasswordPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get("token");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [isNavigating, startTransition] = useTransition();
 
-  useEffect(() => {
-    if (!token) {
-      toast.error("Brak tokenu resetowania hasła");
-      void navigate("/login");
-    }
-  }, [token, navigate]);
-
   const resetPasswordMutation = useMutation({
     mutationFn: async (newPassword: string) =>
       authClient.resetPassword({
         newPassword,
-        token: token ?? "",
+        token,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
@@ -38,7 +33,7 @@ export function ResetPasswordPage() {
       });
       toast.success("Hasło zostało zmienione pomyślnie");
       startTransition(() => {
-        void navigate("/login");
+        void navigate({ to: "/login" });
       });
     },
     onError: (err: unknown) => {
@@ -54,11 +49,6 @@ export function ResetPasswordPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (!token) {
-      setError("Brak tokenu resetowania hasła");
-      return;
-    }
 
     if (password.length < 10) {
       setError("Hasło musi mieć co najmniej 10 znaków");
