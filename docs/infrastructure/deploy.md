@@ -1,10 +1,10 @@
 # Deployment Guide
 
-Ten dokument opisuje wspierany sposób wdrożenia BastionDesk `1.0.0`.
+Ten dokument opisuje wspierany sposób wdrożenia BastionDesk `1.0.3`.
 
 ## Supported Mode
 
-Wersja `1.0.0` wspiera jeden oficjalny model wdrożenia:
+Wersja `1.0.3` wspiera jeden oficjalny model wdrożenia:
 
 - self-hosted Docker Compose,
 - pełny start całego stacka z repozytorium,
@@ -18,13 +18,13 @@ Nie jest obecnie wspierane:
 
 ## Fresh Install Only
 
-Model `1.0.0` należy traktować jako:
+Model `1.0.3` należy traktować jako:
 
 ```text
 fresh install only
 ```
 
-To oznacza, że przed wdrożeniem należy przygotować nową bazę danych, nowe wolumeny i nowy zestaw sekretów/certyfikatów. Dokumentacja `1.0.0` nie dostarcza procedury migracji in-place ze starszych środowisk.
+To oznacza, że przed wdrożeniem należy przygotować nową bazę danych, nowe wolumeny i nowy zestaw sekretów/certyfikatów. Dokumentacja `1.0.3` nie dostarcza procedury migracji in-place ze starszych środowisk.
 
 ## What Gets Deployed
 
@@ -55,7 +55,7 @@ Minimalnie potrzebujesz:
 
 Punktem wyjścia jest:
 
-- [.env.example](/Users/jakubbatycki/KOD/BastionDesk/.env.example)
+- [`.env.example`](../../.env.example)
 
 Przed uruchomieniem skopiuj go do `.env` i uzupełnij co najmniej:
 
@@ -91,7 +91,7 @@ Dla frontendu i Better Auth lokalny model uruchomienia zakłada jeden publiczny 
 
 Dla lokalnego Compose używany jest generator certyfikatów developerskich:
 
-- [infra/tls/generate-dev-certs.sh](/Users/jakubbatycki/KOD/BastionDesk/infra/tls/generate-dev-certs.sh)
+- [`infra/tls/generate-dev-certs.sh`](../../infra/tls/generate-dev-certs.sh)
 
 Generuje on lokalne CA i certyfikaty dla:
 
@@ -103,7 +103,7 @@ Generuje on lokalne CA i certyfikaty dla:
 
 Instrukcja i układ plików są opisane w:
 
-- [tls.md](/Users/jakubbatycki/KOD/BastionDesk/docs/infrastructure/tls.md)
+- [tls.md](./tls.md)
 
 ### Production
 
@@ -169,7 +169,7 @@ Najważniejsze założenia:
 
 Szczegóły znajdują się w:
 
-- [storage.md](/Users/jakubbatycki/KOD/BastionDesk/docs/infrastructure/storage.md)
+- [storage.md](./storage.md)
 
 ## Backups and Restore
 
@@ -185,19 +185,20 @@ Restore backupu został zweryfikowany praktycznym testem.
 
 Szczegóły znajdują się w:
 
-- [backup.md](/Users/jakubbatycki/KOD/BastionDesk/docs/infrastructure/backup.md)
+- [backup.md](./backup.md)
 
-## Known Limitations for 1.0.0
+## Known Limitations for 1.0.3
 
 - Wspierany jest tylko model `fresh install only`.
 - Brak oficjalnej procedury upgrade z wcześniejszych instalacji.
 - `llm_service` ma limit pamięci `10GB` w Compose i może mieć zauważalny cold start podczas ładowania modelu.
 - Publiczny dostęp jest domyślnie ograniczony do reverse proxy; bezpośrednie debugowanie usług wewnętrznych z hosta wymaga tymczasowego wystawienia portów lub wejścia do sieci Docker.
-- Dokumentacja `1.0.0` opisuje wspierany deployment Compose, a nie pełny matrix środowisk i orkiestratorów.
+- Dokumentacja `1.0.3` opisuje wspierany deployment Compose, a nie pełny matrix środowisk i orkiestratorów.
 
 ## Related Documents
 
-- [proxy.md](/Users/jakubbatycki/KOD/BastionDesk/docs/infrastructure/proxy.md)
-- [tls.md](/Users/jakubbatycki/KOD/BastionDesk/docs/infrastructure/tls.md)
-- [storage.md](/Users/jakubbatycki/KOD/BastionDesk/docs/infrastructure/storage.md)
-- [backup.md](/Users/jakubbatycki/KOD/BastionDesk/docs/infrastructure/backup.md)
+- [Release 1.0.3](../releases/v1.0.3.md)
+- [proxy.md](./proxy.md)
+- [tls.md](./tls.md)
+- [storage.md](./storage.md)
+- [backup.md](./backup.md)

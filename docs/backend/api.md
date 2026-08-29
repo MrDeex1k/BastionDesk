@@ -1734,29 +1734,63 @@ Wszystkie endpointy dla administratorów wymagają autoryzacji z rolą `admin`. 
 
 ### Wszystkie incydenty
 
-#### `GET /api/admin/incidents`
+<a id="query-admin-incidents"></a>
 
-**Opis:** Pobiera wszystkie incydenty w organizacji administratora z paginacją, filtrowaniem i sortowaniem.
+#### `QUERY /api/admin/incidents`
+
+**Opis:** Pobiera incydenty organizacji przy użyciu bezpiecznej i idempotentnej metody HTTP
+`QUERY` zdefiniowanej przez RFC 10008. Złożone filtry, paginacja i sortowanie są przekazywane
+w JSON body zamiast w URL.
 
 **Nagłówki:**
 ```
 Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
+Content-Type: application/json
+Accept: application/json
 ```
 
-**Query Parameters:**
-- `page` (number, optional) - Numer strony (domyślnie: 1)
-- `limit` (number, optional) - Liczba wyników na stronę (domyślnie: 20, max: 100)
-- `status` (string, optional) - Filtrowanie po statusie
-- `userId` (string, optional) - Filtrowanie po ID użytkownika
-- `analystId` (string, optional) - Filtrowanie po ID analityka (`null` dla nieprzypisanych)
-- `sortBy` (string, optional) - Pole sortowania (`createdAt`, `updatedAt`, `status`, `dataZgloszenia`, `userId`, `analystId`) - domyślnie: `createdAt`
-- `sortOrder` (string, optional) - Kierunek sortowania (`asc`, `desc`) - domyślnie: `desc`
+**JSON body:**
+
+- `pagination.page`: numer strony, domyślnie `1`;
+- `pagination.limit`: liczba wyników, domyślnie `20`, maksymalnie `100`;
+- `filters.statuses`: maksymalnie 6 statusów;
+- `filters.search`: wyszukiwanie po ID, nazwie lub emailu użytkownika, maksymalnie 200 znaków;
+- `filters.analystIds`: maksymalnie 50 identyfikatorów analityków;
+- `filters.assignment`: `all`, `assigned` albo `unassigned`;
+- `filters.resolved`: stan rozwiązania;
+- `filters.createdAt`: zakres zawierający `from`, `to` albo oba pola, maksymalnie 366 dni;
+- `filters.categories`: maksymalnie 3 kategorie LLM;
+- `sort`: od 1 do 3 kryteriów z kierunkiem `asc` albo `desc`.
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:4567/api/admin/incidents?page=1&limit=10&status=Zgłoszony&sortBy=createdAt&sortOrder=desc" \
-  -H "Cookie: better-auth.session=session_token_here"
+curl -X QUERY http://localhost:4567/api/admin/incidents \
+  -H "Cookie: better-auth.session=session_token_here" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "pagination": { "page": 1, "limit": 10 },
+    "filters": {
+      "statuses": ["Zgłoszony", "Raport w trakcie"],
+      "assignment": "unassigned",
+      "createdAt": {
+        "from": "2026-07-01T00:00:00Z",
+        "to": "2026-08-01T00:00:00Z"
+      }
+    },
+    "sort": [{ "field": "createdAt", "direction": "desc" }]
+  }'
 ```
+
+Odpowiedź zawiera `Accept-Query: application/json` oraz `Cache-Control: private, no-store`.
+
+#### Przejściowy `GET /api/admin/incidents`
+
+Dotychczasowy kontrakt `GET` pozostaje dostępny do 14 lutego 2027 i jest adapterem do tej samej
+walidacji oraz logiki zapytań. Odpowiedź zawiera nagłówki `Deprecation`, `Sunset`, `Link` i
+`Accept-Query`. Nowe integracje muszą używać `QUERY`.
+
+Obsługiwane parametry przejściowe: `page`, `limit`, `status`, `userQuery`, `analystId`, `sortBy`
+i `sortOrder`.
 
 **Response (Success):**
 ```json
@@ -1900,23 +1934,55 @@ curl http://localhost:4567/api/admin/analytics/stats \
 
 ### Szczegółowe metryki
 
-#### `GET /api/admin/analytics/metrics`
+<a id="query-admin-analytics-metrics"></a>
 
-**Opis:** Pobiera szczegółowe metryki czasowe i statystyki użytkowników dla organizacji administratora.
+#### `QUERY /api/admin/analytics/metrics`
+
+**Opis:** Pobiera szczegółowe metryki czasowe i rankingi dla organizacji administratora. Metoda
+`QUERY` pozwala przekazać złożony zakres, grupowanie, zestaw metryk i filtry w JSON body.
 
 **Nagłówki:**
 ```
 Authorization: Bearer <token> lub Cookie: better-auth.session=<session_token>
+Content-Type: application/json
+Accept: application/json
 ```
 
-**Query Parameters:**
-- `period` (number, optional) - Okres w dniach (domyślnie: 30, max: 365)
+**JSON body:**
+
+- `range`: dokładnie `{ "lastDays": 1..365 }` albo `{ "from": ISO-8601, "to": ISO-8601 }`;
+- `timezone`: poprawna strefa IANA, domyślnie `Europe/Warsaw`;
+- `groupBy`: `day`, `week` albo `month`;
+- `filters.statuses`, `filters.categories`, `filters.analystIds`: opcjonalne tablice filtrów;
+- `metrics`: od 1 do 5 wartości spośród `incidentsCreated`, `incidentsResolved`,
+  `averageResolutionTime`, `topUsers` i `topAnalysts`.
 
 **Przykład curl:**
 ```bash
-curl "http://localhost:4567/api/admin/analytics/metrics?period=30" \
-  -H "Cookie: better-auth.session=session_token_here"
+curl -X QUERY http://localhost:4567/api/admin/analytics/metrics \
+  -H "Cookie: better-auth.session=session_token_here" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "range": { "lastDays": 30 },
+    "timezone": "Europe/Warsaw",
+    "groupBy": "day",
+    "filters": { "categories": ["Czerwony", "Żółty"] },
+    "metrics": [
+      "incidentsCreated",
+      "incidentsResolved",
+      "averageResolutionTime",
+      "topUsers",
+      "topAnalysts"
+    ]
+  }'
 ```
+
+Odpowiedź zawiera `Accept-Query: application/json` oraz `Cache-Control: private, no-store`.
+
+#### Przejściowy `GET /api/admin/analytics/metrics`
+
+Dotychczasowy parametr `period` pozostaje obsługiwany do 14 lutego 2027. `GET` jest adapterem do
+nowej logiki, a jego odpowiedź zawiera nagłówki `Deprecation`, `Sunset`, `Link` i `Accept-Query`.
 
 **Response (Success):**
 ```json
@@ -1925,7 +1991,10 @@ curl "http://localhost:4567/api/admin/analytics/metrics?period=30" \
   "data": {
     "period": {
       "days": 30,
-      "startDate": "2024-11-10T00:00:00.000Z"
+      "startDate": "2024-11-10T00:00:00.000Z",
+      "endDate": "2024-12-10T00:00:00.000Z",
+      "timezone": "Europe/Warsaw",
+      "groupBy": "day"
     },
     "timeSeries": {
       "incidentsCreated": [

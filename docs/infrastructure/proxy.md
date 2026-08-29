@@ -26,7 +26,7 @@ Pozostałe usługi działają wyłącznie wewnątrz sieci Docker Compose i nie s
 
 Konfiguracja znajduje się w:
 
-- [nginx/nginx.conf](/Users/jakubbatycki/KOD/BastionDesk/nginx/nginx.conf)
+- [`nginx/nginx.conf`](../../nginx/nginx.conf)
 
 Aktualne trasy:
 
@@ -67,7 +67,7 @@ http://127.0.0.1:8080/healthz
 
 Definicja serwisu znajduje się w:
 
-- [docker-compose.yml](/Users/jakubbatycki/KOD/BastionDesk/docker-compose.yml)
+- [`docker-compose.yml`](../../docker-compose.yml)
 
 Najważniejsze założenia:
 
@@ -95,7 +95,7 @@ docker compose up
 
 ### Port 4567 jest zajęty
 
-Zmień mapowanie portu w [docker-compose.yml](/Users/jakubbatycki/KOD/BastionDesk/docker-compose.yml) albo zwolnij port lokalnie.
+Zmień mapowanie portu w [`docker-compose.yml`](../../docker-compose.yml) albo zwolnij port lokalnie.
 
 ### Frontend nie otwiera się przez proxy
 
@@ -110,5 +110,5 @@ Sprawdź:
 Sprawdź:
 
 - czy `backend` ma status `healthy`,
-- czy w [nginx/nginx.conf](/Users/jakubbatycki/KOD/BastionDesk/nginx/nginx.conf) trasa `/api/` wskazuje na `backend:3333`,
+- czy w [`nginx/nginx.conf`](../../nginx/nginx.conf) trasa `/api/` wskazuje na `backend:3333`,
 - logi kontenera `nginx`.

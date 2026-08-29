@@ -143,7 +143,7 @@ await sendOrganizationInvitation({
 
 ### Wymagania
 
-- [Bun](https://bun.sh/) >= 1.3.13
+- [Bun](https://bun.sh/) >= 1.3.14
 - PostgreSQL 18+ (lub Docker)
 - Gmail account z **App Password** (dla SMTP)
 
@@ -159,10 +159,8 @@ await sendOrganizationInvitation({
 ### Instalacja
 
 ```bash
-cd backend
-
-# Instalacja zależności
-bun install
+# Z katalogu głównego repozytorium instalacja korzysta z kanonicznego lockfile’a
+bun install --frozen-lockfile
 
 # Skopiuj i skonfiguruj zmienne środowiskowe
 cp .env.example .env

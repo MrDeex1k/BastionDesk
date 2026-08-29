@@ -35,6 +35,10 @@ cd llm_service
 uv sync
 ```
 
+Zależności bezpośrednie są przypięte do dokładnych wersji, a resolver pomija wydania młodsze niż
+24 godziny przez `exclude-newer = "24 hours"`. Aktualizację należy wykonywać przez kontrolowane
+odświeżenie pinów oraz `uv lock --upgrade`, nie przez ręczną edycję `uv.lock`.
+
 ### Uruchomienie
 
 ```bash
@@ -50,7 +54,7 @@ docker build -t llm-service .
 docker run -p 8888:8888 llm-service
 ```
 
-W oficjalnym stacku Docker Compose dla BastionDesk `1.0.0` serwis `llm_service` ma ustawiony limit pamięci `10GB`.
+W oficjalnym stacku Docker Compose dla BastionDesk `1.0.3` serwis `llm_service` ma ustawiony limit pamięci `10GB`.
 
 ## Dostępne endpointy
 

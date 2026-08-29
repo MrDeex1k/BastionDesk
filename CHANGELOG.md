@@ -2,6 +2,21 @@
 
 All notable changes to BastionDesk will be documented in this file.
 
+## [1.0.3](https://github.com/MrDeex1k/BastionDesk/compare/v1.0.2...v1.0.3) (2026-08-29)
+
+### Features
+
+* **backend:** add validated QUERY endpoints for admin data ([4644459](https://github.com/MrDeex1k/BastionDesk/commit/4644459a7a41ee692ab9a5e30b1c1f37e4fc62be))
+
+### Code Refactoring
+
+* **frontend:** modernize routing and harden authenticated flows ([64f3d37](https://github.com/MrDeex1k/BastionDesk/commit/64f3d37b81c37e95eec3cdbd04b3be057bd2c615))
+
+### Maintenance
+
+* **deps:** consolidate workspace lockfiles and refresh runtimes ([3a55f18](https://github.com/MrDeex1k/BastionDesk/commit/3a55f18a5ab8d1224daa4c83ff29abf13a2ea96a))
+* **repo:** configure workspace tooling and Conventional Commit hooks ([1af67e8](https://github.com/MrDeex1k/BastionDesk/commit/1af67e811365b8bf64c58f6d06322b9a47aee294))
+
 ## [1.0.2] - 2026-07-16
 
 Maintenance release focused on developer tooling, reproducible dependency resolution and refreshed container foundations for the supported Docker Compose deployment.
@@ -10,7 +25,7 @@ Maintenance release focused on developer tooling, reproducible dependency resolu
 
 - Migrated frontend linting from ESLint and backend checks from Biome to type-aware OxLint.
 - Added OxFmt as the formatter for the frontend and backend and normalized the existing TypeScript and TSX sources.
-- Updated the frontend and backend toolchain to TypeScript `7.0.2`.
+- Updated the frontend and backend toolchain to TypeScript 7.
 - Updated frontend ECMAScript compilation targets and libraries from `ES2025` to `ESNext`.
 - Updated frontend and backend dependencies and regenerated their Bun lockfiles.
 - Replaced semver ranges in Bun package manifests with exact dependency versions for more reproducible installations.
@@ -22,10 +37,10 @@ Maintenance release focused on developer tooling, reproducible dependency resolu
 
 ### Infrastructure
 
-- Updated public and frontend nginx images from `nginx:1.31.1-alpine` to `nginx:1.31.2-alpine3.23`.
-- Updated PgBouncer from `edoburu/pgbouncer:v1.25.1-p0` to `edoburu/pgbouncer:v1.25.2-p0`.
-- Updated BusyBox helper stages from `busybox:1.37.0-musl` to `busybox:1.38.0-musl`.
-- Updated the `llm_service` builder and runtime images from `ghcr.io/astral-sh/uv:0.11.7-python3.13-trixie-slim` to `ghcr.io/astral-sh/uv:0.11.28-python3.13-trixie-slim`.
+- Updated public and frontend nginx images.
+- Updated PgBouncer.
+- Updated BusyBox helper stages.
+- Updated the `llm_service` builder and runtime images.
 
 ### Known Notes
 
@@ -101,7 +116,7 @@ This version establishes the first supported self-hosted release of the platform
 - Standardized the supported entry point to the application behind reverse proxy at `http://localhost:4567`.
 - Standardized dependency hygiene with `minimumReleaseAge = 216000` for Bun and `exclude-newer = "60 hours"` for `uv`.
 - Standardized backend object storage on native `Bun.S3Client` for the MinIO integration used in the supported deployment.
-- Standardized the frontend runtime around Vite `8.0.12`, route-level code splitting and the current React 19 / TanStack Query v5 architecture.
+- Standardized the frontend runtime around Vite, route-level code splitting and the current React / TanStack Query architecture.
 - Standardized the container runtime with multi-stage builds, non-root services, healthchecks and `restart: unless-stopped`.
 - Frontend codebase cleanup and stabilization for the first public release, including typed API models, shared request helpers, shared validation and route-level code splitting.
 - React Query based organization, auth and incident flows aligned with the current application architecture.

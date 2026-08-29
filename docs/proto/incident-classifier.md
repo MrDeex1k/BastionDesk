@@ -1,25 +1,25 @@
-# Incident Classifier Protocol
+# Protokół klasyfikatora incydentów
 
-This document describes the gRPC contract used between the backend and the LLM service.
+Ten dokument opisuje kontrakt gRPC używany między backendem a usługą LLM.
 
-## Source of Truth
+## Źródło prawdy
 
-The protocol definition lives in:
+Definicja protokołu znajduje się w:
 
-- [proto/incident_classifier.proto](/Users/jakubbatycki/KOD/BastionDesk/proto/incident_classifier.proto)
+- [`proto/incident_classifier.proto`](../../proto/incident_classifier.proto)
 
-It is used by:
+Korzystają z niej:
 
-- [backend/src/lib/llm-client.ts](/Users/jakubbatycki/KOD/BastionDesk/backend/src/lib/llm-client.ts)
-- [llm_service/start.sh](/Users/jakubbatycki/KOD/BastionDesk/llm_service/start.sh)
+- [`backend/src/lib/llm-client.ts`](../../backend/src/lib/llm-client.ts)
+- [`llm_service/start.sh`](../../llm_service/start.sh)
 
-## Package
+## Pakiet
 
 ```proto
 package bastiondesk.llm.v1;
 ```
 
-## Service
+## Usługa
 
 ```proto
 service IncidentClassifier {
@@ -27,11 +27,11 @@ service IncidentClassifier {
 }
 ```
 
-The service exposes one unary RPC:
+Usługa udostępnia jedną metodę RPC typu unary:
 
 - `ClassifyIncident`
 
-## Request Message
+## Komunikat żądania
 
 ```proto
 message ClassifyIncidentRequest {
@@ -40,12 +40,12 @@ message ClassifyIncidentRequest {
 }
 ```
 
-Fields:
+Pola:
 
-- `incident_id`: internal incident identifier
-- `description`: incident text passed to the classifier
+- `incident_id`: wewnętrzny identyfikator incydentu;
+- `description`: treść incydentu przekazywana do klasyfikatora.
 
-## Response Message
+## Komunikat odpowiedzi
 
 ```proto
 message ClassifyIncidentResponse {
@@ -54,13 +54,14 @@ message ClassifyIncidentResponse {
 }
 ```
 
-Fields:
+Pola:
 
-- `category`: predicted incident category
-- `model_name`: model identifier used for the classification
+- `category`: przewidziana kategoria incydentu;
+- `model_name`: identyfikator modelu użytego do klasyfikacji.
 
-## Notes
+## Uwagi
 
-- The protocol currently uses `proto3`.
-- The contract is intentionally narrow: one request, one response, no streaming.
-- If the request or response shape changes, both the backend client and LLM service startup flow must remain aligned with the same `.proto` file.
+- Protokół korzysta obecnie ze składni `proto3`.
+- Kontrakt jest celowo wąski: jedno żądanie, jedna odpowiedź, bez przesyłania strumieniowego.
+- Jeśli struktura żądania lub odpowiedzi ulegnie zmianie, klient backendu i proces uruchamiania
+  usługi LLM muszą nadal korzystać z tego samego pliku `.proto`.

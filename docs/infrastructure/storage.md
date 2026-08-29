@@ -74,7 +74,7 @@ Każdy węzeł ma własny mount certyfikatów:
 
 MinIO działa po HTTPS z lokalnym CA wygenerowanym przez:
 
-- [infra/tls/generate-dev-certs.sh](/Users/jakubbatycki/KOD/BastionDesk/infra/tls/generate-dev-certs.sh)
+- [`infra/tls/generate-dev-certs.sh`](../../infra/tls/generate-dev-certs.sh)
 
 Backend łączy się ze storage przez:
 
