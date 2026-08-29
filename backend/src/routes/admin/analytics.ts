@@ -5,6 +5,16 @@ import {
 	type AuthenticatedRequest,
 	getRequiredOrganizationId,
 } from "../../middleware/auth.middleware.js";
+import { validate } from "../../utils/validation.js";
+import {
+	adminMetricsQueryFromLegacyGet,
+	adminMetricsQuerySchema,
+	type AdminMetricsQuery,
+	rejectUnsupportedQueryMethod,
+	requireQueryJson,
+	setDeprecatedGetHeaders,
+	setQueryResponseHeaders,
+} from "./query-schemas.js";
 
 const router = Router();
 
@@ -129,129 +139,224 @@ async function getIncidentStats(req: Request, res: Response) {
 	}
 }
 
+interface MetricsRange {
+	startDate: Date;
+	endDate: Date;
+	days: number;
+}
+
+function getMetricsRange(range: AdminMetricsQuery["range"]): MetricsRange {
+	if ("lastDays" in range) {
+		const endDate = new Date();
+		const startDate = new Date(endDate);
+		startDate.setUTCDate(startDate.getUTCDate() - range.lastDays);
+		return { startDate, endDate, days: range.lastDays };
+	}
+
+	const startDate = new Date(range.from);
+	const endDate = new Date(range.to);
+	const days = Math.max(
+		1,
+		Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)),
+	);
+	return { startDate, endDate, days };
+}
+
+function buildMetricsWhere(
+	input: AdminMetricsQuery,
+	organizationId: string,
+	dateColumn: 'i."createdAt"' | 'i."dataRozwiazania"',
+	range: MetricsRange,
+) {
+	const { startDate, endDate } = range;
+	const params: unknown[] = [organizationId, startDate.toISOString(), endDate.toISOString()];
+	let clause = `WHERE i."organizationId" = $1 AND ${dateColumn} >= $2 AND ${dateColumn} <= $3`;
+	let paramIndex = 4;
+
+	if (input.filters.statuses?.length) {
+		clause += ` AND i.status = ANY($${paramIndex}::"IncidentStatus"[])`;
+		params.push(input.filters.statuses);
+		paramIndex++;
+	}
+
+	if (input.filters.categories?.length) {
+		clause += ` AND i."llmCategory" = ANY($${paramIndex}::"IncidentCategory"[])`;
+		params.push(input.filters.categories);
+		paramIndex++;
+	}
+
+	if (input.filters.analystIds?.length) {
+		clause += ` AND i."analystId" = ANY($${paramIndex}::text[])`;
+		params.push(input.filters.analystIds);
+	}
+
+	return { clause, params };
+}
+
+function getTimeBucketExpression(
+	column: 'i."createdAt"' | 'i."dataRozwiazania"',
+	groupBy: AdminMetricsQuery["groupBy"],
+	timezoneParameter: number,
+): string {
+	const localizedColumn = `${column} AT TIME ZONE 'UTC' AT TIME ZONE $${timezoneParameter}`;
+
+	if (groupBy === "week") {
+		return `DATE_TRUNC('week', ${localizedColumn})::date`;
+	}
+	if (groupBy === "month") {
+		return `DATE_TRUNC('month', ${localizedColumn})::date`;
+	}
+	return `DATE(${localizedColumn})`;
+}
+
+export async function executeIncidentMetricsQuery(
+	input: AdminMetricsQuery,
+	organizationId: string,
+	queryExecutor: typeof query = query,
+) {
+	const selectedMetrics = new Set(input.metrics);
+	const metricsRange = getMetricsRange(input.range);
+	const createdWhere = buildMetricsWhere(input, organizationId, 'i."createdAt"', metricsRange);
+	const resolvedWhere = buildMetricsWhere(
+		input,
+		organizationId,
+		'i."dataRozwiazania"',
+		metricsRange,
+	);
+	const createdBucket = getTimeBucketExpression(
+		'i."createdAt"',
+		input.groupBy,
+		createdWhere.params.length + 1,
+	);
+	const resolvedBucket = getTimeBucketExpression(
+		'i."dataRozwiazania"',
+		input.groupBy,
+		resolvedWhere.params.length + 1,
+	);
+
+	const [periodStats, resolutionStats, averageResolutionStats, userStats, analystStats] =
+		await Promise.all([
+			selectedMetrics.has("incidentsCreated")
+				? queryExecutor<{ date: string; count: string }>(
+						`
+						SELECT ${createdBucket} as date, COUNT(*)::text as count
+						FROM incidents i
+						${createdWhere.clause}
+						GROUP BY ${createdBucket}
+						ORDER BY date
+					`,
+						[...createdWhere.params, input.timezone],
+					)
+				: Promise.resolve([]),
+			selectedMetrics.has("incidentsResolved")
+				? queryExecutor<{ date: string; count: string }>(
+						`
+						SELECT ${resolvedBucket} as date, COUNT(*)::text as count
+						FROM incidents i
+						${resolvedWhere.clause} AND i."czyRozwiazany" = true
+						GROUP BY ${resolvedBucket}
+						ORDER BY date
+					`,
+						[...resolvedWhere.params, input.timezone],
+					)
+				: Promise.resolve([]),
+			selectedMetrics.has("averageResolutionTime")
+				? queryExecutor<{ date: string; avg_time_hours: string | number }>(
+						`
+						SELECT
+							${resolvedBucket} as date,
+							AVG(EXTRACT(EPOCH FROM (i."dataRozwiazania" - i."dataZgloszenia")) / 3600) as avg_time_hours
+						FROM incidents i
+						${resolvedWhere.clause} AND i."czyRozwiazany" = true
+						GROUP BY ${resolvedBucket}
+						ORDER BY date
+					`,
+						[...resolvedWhere.params, input.timezone],
+					)
+				: Promise.resolve([]),
+			selectedMetrics.has("topUsers")
+				? queryExecutor<{ userId: string; userName: string; count: string }>(
+						`
+						SELECT i."userId", u.name as "userName", COUNT(*) as count
+						FROM incidents i
+						LEFT JOIN "user" u ON i."userId" = u.id
+						${createdWhere.clause}
+						GROUP BY i."userId", u.name
+						ORDER BY count DESC
+						LIMIT 10
+					`,
+						createdWhere.params,
+					)
+				: Promise.resolve([]),
+			selectedMetrics.has("topAnalysts")
+				? queryExecutor<{
+						analystId: string;
+						analystName: string;
+						resolved: string;
+					}>(
+						`
+						SELECT i."analystId", a.name as "analystName", COUNT(*) as resolved
+						FROM incidents i
+						LEFT JOIN "user" a ON i."analystId" = a.id
+						${resolvedWhere.clause}
+							AND i."czyRozwiazany" = true
+							AND i."analystId" IS NOT NULL
+						GROUP BY i."analystId", a.name
+						ORDER BY resolved DESC
+						LIMIT 10
+					`,
+						resolvedWhere.params,
+					)
+				: Promise.resolve([]),
+		]);
+
+	const { startDate, endDate, days } = metricsRange;
+	return {
+		period: {
+			days,
+			startDate: startDate.toISOString(),
+			endDate: endDate.toISOString(),
+			timezone: input.timezone,
+			groupBy: input.groupBy,
+		},
+		timeSeries: {
+			incidentsCreated: periodStats.map(({ date, count }) => ({
+				date,
+				count: Number(count),
+			})),
+			incidentsResolved: resolutionStats.map(({ date, count }) => ({
+				date,
+				count: Number(count),
+			})),
+			avgResolutionTimeHours: averageResolutionStats.map(({ avg_time_hours, ...stat }) => ({
+				...stat,
+				avg_time_hours: Number(avg_time_hours),
+			})),
+		},
+		topUsers: userStats.map(({ count, ...user }) => ({ ...user, count: Number(count) })),
+		topAnalysts: analystStats.map(({ resolved, ...analyst }) => ({
+			...analyst,
+			resolved: Number(resolved),
+		})),
+	};
+}
+
 /**
- * Pobierz szczegółowe metryki incydentów dla organizacji administratora
+ * Pobierz szczegółowe metryki incydentów dla organizacji administratora.
  */
-async function getIncidentMetrics(req: Request, res: Response) {
+async function queryIncidentMetrics(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const organizationId = getRequiredOrganizationId(authReq, res);
 		if (!organizationId) return;
-		const period = (req.query.period as string) || "30"; // Domyślnie 30 dni
-		const days = parseInt(period, 10);
-
-		if (Number.isNaN(days) || days < 1 || days > 365) {
-			return res.status(400).json({
-				success: false,
-				error: {
-					code: "INVALID_PERIOD",
-					message: "Okres musi być liczbą między 1 a 365 dni",
-				},
-			});
-		}
-
-		const cutoffDate = new Date();
-		cutoffDate.setDate(cutoffDate.getDate() - days);
-
-		// Incydenty w okresie czasu
-		const periodStats = await query<{ date: string; count: number }>(
-			`
-			SELECT
-				DATE("createdAt") as date,
-				COUNT(*) as count
-			FROM incidents
-			WHERE "organizationId" = $1 AND "createdAt" >= $2
-			GROUP BY DATE("createdAt")
-			ORDER BY date
-		`,
-			[organizationId, cutoffDate.toISOString()],
-		);
-
-		// Rozwiązania w okresie czasu
-		const resolutionStats = await query<{ date: string; count: number }>(
-			`
-			SELECT
-				DATE("dataRozwiazania") as date,
-				COUNT(*) as count
-			FROM incidents
-			WHERE "organizationId" = $1 AND "dataRozwiazania" >= $2
-			GROUP BY DATE("dataRozwiazania")
-			ORDER BY date
-		`,
-			[organizationId, cutoffDate.toISOString()],
-		);
-
-		// Średni czas rozwiązywania dziennie
-		const dailyAvgTime = await query<{ date: string; avg_time_hours: number }>(
-			`
-			SELECT
-				DATE("dataRozwiazania") as date,
-				AVG(EXTRACT(EPOCH FROM ("dataRozwiazania" - "dataZgloszenia")) / 3600) as avg_time_hours
-			FROM incidents
-			WHERE "organizationId" = $1 AND "dataRozwiazania" >= $2 AND "czyRozwiazany" = true
-			GROUP BY DATE("dataRozwiazania")
-			ORDER BY date
-		`,
-			[organizationId, cutoffDate.toISOString()],
-		);
-
-		// Statystyki po użytkownikach (top reporterzy)
-		const userStats = await query<{
-			userId: string;
-			userName: string;
-			count: number;
-		}>(
-			`
-			SELECT
-				i."userId",
-				u.name as "userName",
-				COUNT(*) as count
-			FROM incidents i
-			LEFT JOIN "user" u ON i."userId" = u.id
-			WHERE i."organizationId" = $1 AND i."createdAt" >= $2
-			GROUP BY i."userId", u.name
-			ORDER BY count DESC
-			LIMIT 10
-		`,
-			[organizationId, cutoffDate.toISOString()],
-		);
-
-		// Statystyki po analitykach (top rozwiązywacze)
-		const analystStats = await query<{
-			analystId: string;
-			analystName: string;
-			resolved: number;
-		}>(
-			`
-			SELECT
-				i."analystId",
-				a.name as "analystName",
-				COUNT(*) as resolved
-			FROM incidents i
-			LEFT JOIN "user" a ON i."analystId" = a.id
-			WHERE i."organizationId" = $1 AND i."czyRozwiazany" = true AND i."dataRozwiazania" >= $2
-			GROUP BY i."analystId", a.name
-			ORDER BY resolved DESC
-			LIMIT 10
-		`,
-			[organizationId, cutoffDate.toISOString()],
+		const data = await executeIncidentMetricsQuery(
+			req.body as AdminMetricsQuery,
+			organizationId,
 		);
 
 		res.json({
 			success: true,
-			data: {
-				period: {
-					days,
-					startDate: cutoffDate.toISOString(),
-				},
-				timeSeries: {
-					incidentsCreated: periodStats,
-					incidentsResolved: resolutionStats,
-					avgResolutionTimeHours: dailyAvgTime,
-				},
-				topUsers: userStats,
-				topAnalysts: analystStats,
-			},
+			data,
 		});
 	} catch (error) {
 		console.error("[ADMIN] Get incident metrics error:", error);
@@ -267,6 +372,23 @@ async function getIncidentMetrics(req: Request, res: Response) {
 
 // Routes
 router.get("/stats", getIncidentStats);
-router.get("/metrics", getIncidentMetrics);
+router.get(
+	"/metrics",
+	setDeprecatedGetHeaders("query-admin-analytics-metrics"),
+	(req, _res, next) => {
+		req.body = adminMetricsQueryFromLegacyGet(req.query);
+		next();
+	},
+	validate(adminMetricsQuerySchema, "body"),
+	queryIncidentMetrics,
+);
+router.query(
+	"/metrics",
+	requireQueryJson,
+	setQueryResponseHeaders,
+	validate(adminMetricsQuerySchema, "body"),
+	queryIncidentMetrics,
+);
+router.all("/metrics", rejectUnsupportedQueryMethod("GET, HEAD, QUERY, OPTIONS"));
 
 export default router;

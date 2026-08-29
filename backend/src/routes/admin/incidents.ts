@@ -7,12 +7,22 @@ import {
 	getRequiredOrganizationId,
 } from "../../middleware/auth.middleware.js";
 import type { Incident } from "../../types/index.js";
+import { validate } from "../../utils/validation.js";
 import {
 	createContentDispositionHeader,
 	findStoredFileMetadata,
 	parseStoredFileMetadata,
 	type StoredFileMetadataPayload,
 } from "../shared/file-metadata.js";
+import {
+	adminIncidentsQueryFromLegacyGet,
+	adminIncidentsQuerySchema,
+	type AdminIncidentsQuery,
+	rejectUnsupportedQueryMethod,
+	requireQueryJson,
+	setDeprecatedGetHeaders,
+	setQueryResponseHeaders,
+} from "./query-schemas.js";
 
 const router = Router();
 
@@ -32,168 +42,171 @@ const ADMIN_INCIDENT_SORT_COLUMNS: Record<string, string> = {
 	analystId: 'i."analystId"',
 };
 
-function getAdminIncidentOrderBy(sortByValue: unknown, sortOrderValue: unknown): string | null {
-	const sortBy = typeof sortByValue === "string" ? sortByValue : "createdAt";
-	const sortOrder = typeof sortOrderValue === "string" ? sortOrderValue.toLowerCase() : "desc";
-	const sortColumn = ADMIN_INCIDENT_SORT_COLUMNS[sortBy];
+function getAdminIncidentOrderBy(sort: AdminIncidentsQuery["sort"]): string {
+	const clauses = sort.map(
+		({ field, direction }) =>
+			`${ADMIN_INCIDENT_SORT_COLUMNS[field] ?? ADMIN_INCIDENT_SORT_COLUMNS.createdAt} ${direction.toUpperCase()}`,
+	);
 
-	if (!sortColumn || !["asc", "desc"].includes(sortOrder)) {
-		return null;
-	}
-
-	return `${sortColumn} ${sortOrder.toUpperCase()}`;
+	return [...clauses, "i.id ASC"].join(", ");
 }
 
-/**
- * Pobierz wszystkie incydenty w organizacji administratora
- */
-async function getAllIncidents(req: Request, res: Response) {
+export async function executeAdminIncidentsQuery(
+	input: AdminIncidentsQuery,
+	organizationId: string,
+	queryExecutor: typeof query = query,
+	queryOneExecutor: typeof queryOne = queryOne,
+) {
+	const { page, limit } = input.pagination;
+	const { filters } = input;
+	const orderBy = getAdminIncidentOrderBy(input.sort);
+	let whereClause = 'WHERE i."organizationId" = $1';
+	const params: unknown[] = [organizationId];
+	let paramIndex = 2;
+
+	if (filters.statuses?.length) {
+		whereClause += ` AND i.status = ANY($${paramIndex}::"IncidentStatus"[])`;
+		params.push(filters.statuses);
+		paramIndex++;
+	}
+
+	if (filters.search) {
+		whereClause += ` AND (
+			i."userId" ILIKE $${paramIndex}
+			OR COALESCE(u.name, '') ILIKE $${paramIndex}
+			OR COALESCE(u.email, '') ILIKE $${paramIndex}
+		)`;
+		params.push(`%${filters.search}%`);
+		paramIndex++;
+	}
+
+	if (filters.assignment === "unassigned") {
+		whereClause += ' AND i."analystId" IS NULL';
+	} else if (filters.assignment === "assigned") {
+		whereClause += ' AND i."analystId" IS NOT NULL';
+	}
+
+	if (filters.analystIds?.length) {
+		whereClause += ` AND i."analystId" = ANY($${paramIndex}::text[])`;
+		params.push(filters.analystIds);
+		paramIndex++;
+	}
+
+	if (filters.resolved !== undefined) {
+		whereClause += ` AND i."czyRozwiazany" = $${paramIndex}`;
+		params.push(filters.resolved);
+		paramIndex++;
+	}
+
+	if (filters.createdAt?.from) {
+		whereClause += ` AND i."createdAt" >= $${paramIndex}`;
+		params.push(filters.createdAt.from);
+		paramIndex++;
+	}
+
+	if (filters.createdAt?.to) {
+		whereClause += ` AND i."createdAt" <= $${paramIndex}`;
+		params.push(filters.createdAt.to);
+		paramIndex++;
+	}
+
+	if (filters.categories?.length) {
+		whereClause += ` AND i."llmCategory" = ANY($${paramIndex}::"IncidentCategory"[])`;
+		params.push(filters.categories);
+		paramIndex++;
+	}
+
+	const offset = (page - 1) * limit;
+	const incidents = await queryExecutor<Incident & { userName?: string; analystName?: string }>(
+		`
+		SELECT
+			i.id,
+			i."dataZgloszenia",
+			i."userId",
+			i."organizationId",
+			i.status,
+			i."userDescription",
+			i."userScreenshotPath",
+			i."userScreenshotMetadata",
+			i."userAttachmentPath",
+			i."userAttachmentMetadata",
+			i."analystId",
+			i."analystNote",
+			i."czyRozwiazany",
+			i."dataRozwiazania",
+			i."analystReportPath",
+			i."analystReportMetadata",
+			i."analystReportData",
+			i."analystStatementPath",
+			i."analystStatementMetadata",
+			i."analystStatementData",
+			i."llmCategory",
+			i."createdAt",
+			i."updatedAt",
+			u.name as "userName",
+			a.name as "analystName"
+		FROM incidents i
+		LEFT JOIN "user" u ON i."userId" = u.id
+		LEFT JOIN "user" a ON i."analystId" = a.id
+		${whereClause}
+		ORDER BY ${orderBy}
+		LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+	`,
+		[...params, limit, offset],
+	);
+
+	for (const incident of incidents) {
+		for (const metadataKey of [
+			"userScreenshotMetadata",
+			"userAttachmentMetadata",
+			"analystReportMetadata",
+			"analystStatementMetadata",
+		] as const) {
+			if (typeof incident[metadataKey] === "string") {
+				try {
+					incident[metadataKey] = JSON.parse(incident[metadataKey]);
+				} catch (error) {
+					console.error(`[ADMIN] Failed to parse ${metadataKey}:`, error);
+				}
+			}
+		}
+	}
+
+	const countResult = await queryOneExecutor<{ count: string }>(
+		`
+		SELECT COUNT(*)::text as count
+		FROM incidents i
+		LEFT JOIN "user" u ON i."userId" = u.id
+		LEFT JOIN "user" a ON i."analystId" = a.id
+		${whereClause}
+	`,
+		params,
+	);
+	const total = Number.parseInt(countResult?.count ?? "0", 10);
+
+	return {
+		incidents,
+		pagination: {
+			page,
+			limit,
+			total,
+			totalPages: Math.ceil(total / limit),
+		},
+	};
+}
+
+async function queryAllIncidents(req: Request, res: Response) {
 	try {
 		const authReq = req as AuthenticatedRequest;
 		const organizationId = getRequiredOrganizationId(authReq, res);
 		if (!organizationId) return;
-		const page = Number(req.query.page) || 1;
-		const limit = Number(req.query.limit) || 20;
-		const status = req.query.status as string | undefined;
-		const userQuery = req.query.userQuery as string | undefined;
-		const analystId = req.query.analystId as string | undefined;
-		const orderBy = getAdminIncidentOrderBy(req.query.sortBy, req.query.sortOrder);
-
-		if (!orderBy) {
-			return res.status(400).json({
-				success: false,
-				error: {
-					code: "INVALID_SORT",
-					message: "Nieprawidłowe parametry sortowania",
-				},
-			});
-		}
-
-		let whereClause = 'WHERE i."organizationId" = $1';
-		const params: unknown[] = [organizationId];
-		let paramIndex = 2;
-
-		if (status) {
-			whereClause += ` AND i.status = $${paramIndex}`;
-			params.push(status);
-			paramIndex++;
-		}
-
-		if (userQuery) {
-			whereClause += ` AND (
-				i."userId" ILIKE $${paramIndex}
-				OR COALESCE(u.name, '') ILIKE $${paramIndex}
-				OR COALESCE(u.email, '') ILIKE $${paramIndex}
-			)`;
-			params.push(`%${userQuery}%`);
-			paramIndex++;
-		}
-
-		if (analystId) {
-			if (analystId === "null") {
-				whereClause += ` AND i."analystId" IS NULL`;
-			} else {
-				whereClause += ` AND i."analystId" = $${paramIndex}`;
-				params.push(analystId);
-				paramIndex++;
-			}
-		}
-
-		const offset = (page - 1) * limit;
-
-		// Pobierz incydenty
-		const incidents = await query<Incident & { userName?: string; analystName?: string }>(
-			`
-			SELECT
-				i.id,
-				i."dataZgloszenia",
-				i."userId",
-				i."organizationId",
-				i.status,
-				i."userDescription",
-				i."userScreenshotPath",
-				i."userScreenshotMetadata",
-				i."userAttachmentPath",
-				i."userAttachmentMetadata",
-				i."analystId",
-				i."analystNote",
-				i."czyRozwiazany",
-				i."dataRozwiazania",
-				i."analystReportPath",
-				i."analystReportMetadata",
-				i."analystReportData",
-				i."analystStatementPath",
-				i."analystStatementMetadata",
-				i."analystStatementData",
-				i."llmCategory",
-				i."createdAt",
-				i."updatedAt",
-				u.name as "userName",
-				a.name as "analystName"
-			FROM incidents i
-			LEFT JOIN "user" u ON i."userId" = u.id
-			LEFT JOIN "user" a ON i."analystId" = a.id
-			${whereClause}
-			ORDER BY ${orderBy}
-			LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-		`,
-			[...params, limit, offset],
-		);
-
-		// Parsuj metadata z JSON stringów do obiektów
-		incidents.forEach((incident) => {
-			if (typeof incident.userScreenshotMetadata === "string") {
-				try {
-					incident.userScreenshotMetadata = JSON.parse(incident.userScreenshotMetadata);
-				} catch (e) {
-					console.error("[ADMIN] Failed to parse userScreenshotMetadata:", e);
-				}
-			}
-			if (typeof incident.userAttachmentMetadata === "string") {
-				try {
-					incident.userAttachmentMetadata = JSON.parse(incident.userAttachmentMetadata);
-				} catch (e) {
-					console.error("[ADMIN] Failed to parse userAttachmentMetadata:", e);
-				}
-			}
-			if (typeof incident.analystReportMetadata === "string") {
-				try {
-					incident.analystReportMetadata = JSON.parse(incident.analystReportMetadata);
-				} catch (e) {
-					console.error("[ADMIN] Failed to parse analystReportMetadata:", e);
-				}
-			}
-			if (typeof incident.analystStatementMetadata === "string") {
-				try {
-					incident.analystStatementMetadata = JSON.parse(
-						incident.analystStatementMetadata,
-					);
-				} catch (e) {
-					console.error("[ADMIN] Failed to parse analystStatementMetadata:", e);
-				}
-			}
-		});
-
-		// Pobierz całkowitą liczbę
-		const countResult = await queryOne<{ count: number }>(
-			`
-			SELECT COUNT(*) as count FROM incidents i ${whereClause}
-		`,
-			params,
-		);
-
-		const total = countResult?.count || 0;
-		const totalPages = Math.ceil(total / Number(limit));
+		const input = req.body as AdminIncidentsQuery;
+		const result = await executeAdminIncidentsQuery(input, organizationId);
 
 		res.json({
 			success: true,
-			data: incidents,
-			pagination: {
-				page: Number(page),
-				limit: Number(limit),
-				total,
-				totalPages,
-			},
+			data: result.incidents,
+			pagination: result.pagination,
 		});
 	} catch (error) {
 		console.error("[ADMIN] Get all incidents error:", error);
@@ -215,7 +228,7 @@ async function getIncidentFilters(req: Request, res: Response) {
 
 		const analysts = await query<AdminIncidentFilterOption>(
 			`
-			SELECT DISTINCT
+				SELECT
 				u.id,
 				u.name,
 				u.email,
@@ -381,7 +394,24 @@ async function getIncidentDetails(req: Request, res: Response) {
 
 // Routes
 router.get("/filters", getIncidentFilters);
-router.get("/", getAllIncidents);
+router.get(
+	"/",
+	setDeprecatedGetHeaders("query-admin-incidents"),
+	(req, _res, next) => {
+		req.body = adminIncidentsQueryFromLegacyGet(req.query);
+		next();
+	},
+	validate(adminIncidentsQuerySchema, "body"),
+	queryAllIncidents,
+);
+router.query(
+	"/",
+	requireQueryJson,
+	setQueryResponseHeaders,
+	validate(adminIncidentsQuerySchema, "body"),
+	queryAllIncidents,
+);
+router.all("/", rejectUnsupportedQueryMethod("GET, HEAD, QUERY, OPTIONS"));
 router.get("/:id", getIncidentDetails);
 
 /**

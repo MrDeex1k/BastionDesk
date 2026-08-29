@@ -29,7 +29,7 @@ export function parseCookies(cookieHeader: string | string[] | undefined): Recor
 }
 
 export function isCsrfSafeMethod(method: string): boolean {
-	return method === "GET" || method === "HEAD" || method === "OPTIONS";
+	return method === "GET" || method === "HEAD" || method === "OPTIONS" || method === "QUERY";
 }
 
 export function getAllowedOrigins(): string[] {

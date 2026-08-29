@@ -68,7 +68,7 @@ app.use(
 app.use(
 	cors({
 		origin: env.CORS_ORIGINS,
-		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "QUERY", "OPTIONS"],
 		credentials: true,
 		allowedHeaders: ["Accept", "Authorization", "Content-Type", "X-CSRF-Token"],
 		maxAge: 600,
@@ -132,7 +132,7 @@ app.get("/api/email/health", async (_req, res) => {
 app.get("/api", (_req, res) => {
 	res.json({
 		message: "BastionDesk API",
-		version: "1.0.0",
+		version: "1.0.3",
 		endpoints: {
 			auth: "/api/auth/*",
 			incidents: "/api/incidents",
