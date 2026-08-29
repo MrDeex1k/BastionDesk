@@ -1,21 +1,18 @@
-FROM oven/bun:1.3.14-alpine AS deps
-
-WORKDIR /app
-
-COPY backend/package.json ./
-COPY backend/bun.lock ./
-COPY backend/bunfig.toml ./
-RUN bun install --frozen-lockfile --production
-
-FROM oven/bun:1.3.14-alpine AS runtime
+FROM oven/bun:1.4.0-alpine
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --chown=bun:bun backend/ ./
+COPY package.json bun.lock bunfig.toml ./
+COPY frontend/package.json ./frontend/package.json
+COPY backend/package.json ./backend/package.json
+RUN bun install --frozen-lockfile --production --filter bastiondesk-backend
+
+COPY --chown=bun:bun backend/ ./backend
 COPY --chown=bun:bun proto ./proto
+
+WORKDIR /app/backend
 
 USER bun
 

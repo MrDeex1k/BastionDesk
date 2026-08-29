@@ -8,5 +8,5 @@
   "jsxSingleQuote": false,
   "trailingComma": "all",
   "sortPackageJson": false,
-  "ignorePatterns": ["dist/**"]
+  "ignorePatterns": ["dist/**", "src/routeTree.gen.ts"]
 }

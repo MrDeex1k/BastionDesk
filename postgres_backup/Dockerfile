@@ -1,6 +1,6 @@
 FROM minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
 
-FROM postgres:18.4-alpine
+FROM postgres:18.6-alpine3.24
 
 COPY --from=mc-src /usr/bin/mc /usr/local/bin/mc
 

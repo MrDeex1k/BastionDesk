@@ -1,18 +1,20 @@
-FROM oven/bun:1.3.14-alpine AS builder
+FROM oven/bun:1.4.0-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json ./
-COPY bun.lock ./
-COPY bunfig.toml ./
-RUN bun install --frozen-lockfile
-COPY . .
+COPY package.json bun.lock bunfig.toml ./
+COPY frontend/package.json ./frontend/package.json
+COPY backend/package.json ./backend/package.json
+RUN bun install --frozen-lockfile --filter bastiondesk-frontend
+COPY frontend ./frontend
+
+WORKDIR /app/frontend
 RUN bun run build
 
-FROM nginx:1.31.2-alpine3.23
+FROM nginx:1.31.4-alpine3.24
 
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/frontend/dist /usr/share/nginx/html
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 RUN sed -i 's#pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
     && mkdir -p /var/cache/nginx /tmp/nginx /var/log/nginx \
