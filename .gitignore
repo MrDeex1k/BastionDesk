@@ -5,6 +5,8 @@ db.sql
 .agents
 .DS_Store
 node_modules
+.turbo
+.husky/_/
 __pycache__/
 .maintainer/
 !.env.example

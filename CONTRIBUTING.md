@@ -48,6 +48,26 @@ Maintainers may postpone or decline contributions that significantly expand scop
 
 ## Development Checks
 
+Z katalogu głównego można uruchomić kontrole obu pakietów przez TurboRepo:
+
+```bash
+bun install
+bun run check
+```
+
+Repozytorium korzysta z Conventional Commits. Commit musi mieć postać `<type>(<scope>): <opis>`
+lub `<type>: <opis>`, np. `feat(frontend): dodaj filtrowanie incydentów`. Hooki Husky uruchamiają
+kontrole przed commitem i odrzucają niepoprawny nagłówek wiadomości.
+
+Sekcję wydania w `CHANGELOG.md` generuj z historii Conventional Commits poleceniem:
+
+```bash
+bun run changelog:generate
+```
+
+Przed generowaniem ustaw wersję wydania w rootowym `package.json`; dla tego wydania jest to
+`1.0.3`.
+
 Before opening a pull request, run the relevant checks for the parts you changed.
 
 Backend:
