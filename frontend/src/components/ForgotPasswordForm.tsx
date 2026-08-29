@@ -26,9 +26,8 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
 
   const forgotPasswordMutation = useMutation({
     mutationFn: async () => {
-      // Wywołanie Better-Auth API do resetu hasła
-      // UWAGA: System emailowy nie jest jeszcze skonfigurowany na backendzie
-      const response = await apiFetch("/api/auth/forget-password", {
+      // Wywołanie aktualnego endpointu Better Auth do resetu hasła.
+      const response = await apiFetch("/api/auth/request-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
