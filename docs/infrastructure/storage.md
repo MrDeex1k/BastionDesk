@@ -22,12 +22,13 @@ Każdy węzeł działa w sieci `bastiondesk-net-internal` i używa wspólnego kl
 
 ## Porty
 
-Tylko `storage-1` publikuje porty na hosta:
+Każdy kontener MinIO nasłuchuje wewnątrz sieci Docker na:
 
-- `9000` -> API MinIO
-- `9001` -> konsola MinIO
+- `9000` — API MinIO,
+- `9001` — konsola MinIO.
 
-Pozostałe węzły są dostępne tylko wewnątrz sieci Docker.
+Aktualny `docker-compose.yml` nie publikuje żadnego z tych portów na hoście.
+Wszystkie cztery węzły są dostępne wyłącznie w sieci `bastiondesk-net-internal`.
 
 ## Uruchamianie
 
@@ -86,10 +87,13 @@ przy użyciu:
 
 - `S3_ENDPOINT`
 - `S3_BUCKET`
-- `S3_REGION`
 - `S3_ACCESS_KEY`
 - `S3_SECRET_KEY`
-- `S3_TLS_CA_PATH`
+- globalnego zaufania CA procesu przez `NODE_EXTRA_CA_CERTS` i `SSL_CERT_FILE`.
+
+`S3_REGION` oraz `S3_TLS_CA_PATH` pozostają częścią wspólnej konfiguracji
+środowiska i są używane przez narzędzia operacyjne, ale natywny klient
+`Bun.S3Client` w backendzie nie przekazuje ich bezpośrednio do konstruktora.
 
 ## Healthcheck
 
@@ -164,9 +168,9 @@ To nie są katalogi w sensie POSIX, tylko prefiksy kluczy obiektów.
 
 Obraz storage jest budowany z:
 
-- `minio/minio`
-- `minio/mc`
-- `busybox`
+- `coollabsio/minio` jako runtime serwera,
+- `minio/mc` jako źródło klienta `mc`,
+- `busybox` jako źródło `wget`.
 
 Zapewnia to:
 

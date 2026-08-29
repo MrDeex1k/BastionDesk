@@ -1,305 +1,378 @@
-# BastionDesk - Baza Danych PostgreSQL 18
+# BastionDesk — baza danych PostgreSQL 18
 
-Dokumentacja bazy danych dla projektu BastionDesk z obsługą biblioteki **Better-Auth**.
+Dokumentacja odpowiada aktualnym skryptom inicjalizacyjnym znajdującym się w
+`database/init-sql/`. Schemat składa się z tabel Better Auth oraz tabel
+aplikacyjnych do obsługi zgłoszeń/incydentów.
 
-## Struktura folderów
+## Źródło prawdy
 
-```
+Kolejność inicjalizacji bazy:
+
+```text
 database/
-├── Dockerfile              # Obraz Docker dla PostgreSQL 18
-├── init-sql/               # Skrypty inicjalizacyjne SQL
-│   ├── 01-init.sql        # Rozszerzenia + rola + baza danych
-│   ├── 02-create-auth.sql # Schemat autoryzacji Better-Auth
-│   └── 03-create-app.sql  # Schemat aplikacji (zgłoszenia/incydenty)
-└── Dokumentacja bazy danych znajduje się teraz w `docs/database/database.md`
+├── Dockerfile
+├── config/
+│   ├── pg_hba.conf
+│   └── postgresql.conf
+└── init-sql/
+    ├── 01-init.sql        # rozszerzenia, rola i baza danych
+    ├── 02-create-auth.sql # schemat Better Auth
+    └── 03-create-app.sql  # schemat zgłoszeń/incydentów
 ```
 
----
+Aktualny projekt nie używa Drizzle ani osobnego systemu migracji. Aplikacja
+korzysta z natywnego Bun SQL oraz `pg`, a Better Auth z własnego połączenia
+`pg.Pool` ([backend/src/lib/database.ts](../../backend/src/lib/database.ts),
+[backend/src/lib/auth.ts](../../backend/src/lib/auth.ts)).
 
-## Funkcjonalności
+## Funkcjonalności obecnego schematu
 
-- ✅ **Podstawowa autoryzacja** (email/password)
-- ✅ **PassKeys (WebAuthn/U2F)** - klucze sprzętowe (YubiKey, Titan, itp.)
-- ✅ **HaveIBeenPwned** - sprawdzanie kompromitacji haseł
-- ✅ **Last Login Method** - śledzenie metody ostatniego logowania
-- ✅ **Organizacje** - multi-tenancy z rolami
-- ✅ **Zespoły (Teams)** - grupowanie użytkowników w organizacji
-- ✅ **System zgłoszeń** - zarządzanie incydentami z workflow analizy
-- ✅ **Audit logging** - automatyczne logowanie zmian statusu zgłoszeń
+- ✅ email/password przez Better Auth
+- ✅ PassKeys (WebAuthn/U2F)
+- ✅ sprawdzanie kompromitacji haseł przez HaveIBeenPwned
+- ✅ organizacje, członkowie i role
+- ✅ zespoły i zaproszenia
+- ✅ zgłoszenia/incydenty z workflow analizy
+- ✅ ścieżki i metadane plików przechowywanych w MinIO/S3
+- ✅ kategoryzacja zgłoszenia przez LLM
+- ✅ audyt zmian statusu zgłoszeń
 
----
-
-## Role użytkowników
-
-System wykorzystuje **3 role**:
-
-|     Rola    |           Opis           |                                  Uprawnienia                                 |
-|-------------|--------------------------|------------------------------------------------------------------------------|
-|   `admin`   | Administrator/Właściciel | Pełne uprawnienia - zarządzanie organizacją, członkami, zespołami, raportami |
-|  `analityk` |      Analityk danych     |                Dostęp do raportów i analityk, podgląd organizacji            |
-| `pracownik` |         Pracownik        |                  Podstawowy dostęp do organizacji (tylko odczyt)             |
-
----
+Nie jest to jeszcze schemat SOAR. Baza nie zawiera tabel alertów, zdarzeń,
+zasobów, IOC, enrichmentu TI, skanów artefaktów, scoringu ryzyka, playbooków,
+approval flow, akcji/rollbacków ani telemetryki. Te elementy są częścią
+roadmapy opisanej w [future-soar-platform.md](../future-soar-platform.md).
 
 ## Typy wyliczeniowe
 
-### `incident_status` - Statusy zgłoszeń
+| Typ | Wartości | Zastosowanie |
+|---|---|---|
+| `user_role` | `pracownik`, `analityk`, `admin` | Zdefiniowany dla ról organizacyjnych; kolumna `member.role` pozostaje typu `text`. |
+| `invitation_status` | `pending`, `accepted`, `rejected`, `canceled` | Zdefiniowany dla zaproszeń; kolumna `invitation.status` pozostaje typu `text`. |
+| `"IncidentStatus"` | `Zgłoszony`, `Raport w trakcie`, `Raport złożony`, `Sprawozdanie w trakcie`, `Sprawozdanie złożone`, `Odrzucone` | Workflow zgłoszenia. |
+| `"IncidentCategory"` | `Czerwony`, `Żółty`, `Zielony` | Kategoria/priorytet nadany przez LLM. |
 
-| Status | Opis |
-|--------|------|
-| `pending` | Nowe zgłoszenie oczekuje na obsługę |
-| `analyzing` | Zgłoszenie w trakcie analizy przez AI lub Analityka |
-| `needs_info` | Analityk potrzebuje więcej informacji od użytkownika |
-| `resolved` | Zgłoszenie zostało rozwiązane |
-| `rejected` | Zgłoszenie zostało odrzucone |
+Uwaga: typy `user_role` i `invitation_status` są obecnie zadeklarowane w SQL,
+ale odpowiadające im kolumny używają `text`, więc baza nie wymusza tych wartości
+na poziomie typu kolumny.
 
----
+## Role użytkowników
 
-## Tabele
+| Rola | Zakres |
+|---|---|
+| `admin` | Zarządzanie organizacją, członkami, zespołami, incydentami, raportami i analityką. |
+| `analityk` | Obsługa incydentów, raporty i analityka w ramach organizacji. |
+| `pracownik` | Tworzenie i odczyt własnych zgłoszeń oraz podstawowy dostęp do organizacji. |
 
-### 1. `user` - Użytkownicy
+Źródłem definicji uprawnień aplikacyjnych jest
+[`backend/src/lib/permissions.ts`](../../backend/src/lib/permissions.ts).
+Uprawnienia mogą być także zapisane jako JSON w tabeli `organization_role`.
 
-| Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `email` | `text` | Email (unikalny) |
-| `name` | `text` | Nazwa wyświetlana |
-| `email_verified` | `boolean` | Czy email zweryfikowany |
-| `image` | `text` | URL avatara |
-| `is_active` | `boolean` | Czy konto aktywne |
-| `password_compromised` | `boolean` | Czy hasło w HIBP |
-| `password_last_checked_at` | `timestamptz` | Ostatnie sprawdzenie HIBP |
-| `last_login_method` | `text` | Ostatnia metoda: `password`, `passkey`, `oauth` |
-| `last_login_at` | `timestamptz` | Czas ostatniego logowania |
+## Tabele Better Auth
 
-### 2. `session` - Sesje
+### `user` — użytkownicy
 
 | Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `user_id` | `text` | FK do user |
-| `token` | `text` | Token sesji (unikalny) |
-| `expires_at` | `timestamptz` | Wygasanie |
-| `active_organization_id` | `text` | Aktywna organizacja |
-| `active_team_id` | `text` | Aktywny zespół |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `name` | `text` | Nazwa użytkownika, opcjonalna. |
+| `email` | `text` | Wymagany, unikalny adres email. |
+| `"emailVerified"` | `boolean` | Czy email został zweryfikowany; domyślnie `false`. |
+| `image` | `text` | Obraz/avatar, opcjonalny. |
+| `"isActive"` | `boolean` | Czy konto jest aktywne; domyślnie `true`. |
+| `"passwordCompromised"` | `boolean` | Wynik sprawdzenia hasła w HIBP. |
+| `"passwordLastCheckedAt"` | `timestamp` | Czas ostatniego sprawdzenia HIBP. |
+| `"lastLoginMethod"` | `text` | Ostatnia metoda, np. `password`, `passkey`, `oauth`. |
+| `"lastLoginAt"` | `timestamp` | Czas ostatniego udanego logowania. |
+| `"createdAt"` | `timestamp` | Czas utworzenia. |
+| `"updatedAt"` | `timestamp` | Czas ostatniej aktualizacji. |
 
-### 3. `account` - Konta
-
-| Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `user_id` | `text` | FK do user |
-| `provider_id` | `text` | Dostawca (credential, google, github) |
-| `password` | `text` | Hash hasła |
-
-### 4. `passkey` - Klucze WebAuthn/U2F
+### `session` — sesje
 
 | Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `user_id` | `text` | FK do user |
-| `name` | `text` | Nazwa klucza (np. "YubiKey 5") |
-| `public_key` | `text` | Klucz publiczny (base64) |
-| `credential_id` | `text` | ID credential WebAuthn |
-| `counter` | `integer` | Counter anty-replay |
-| `device_type` | `text` | `platform` lub `cross-platform` |
-| `transports` | `text` | JSON: `usb`, `nfc`, `ble`, `internal` |
-| `aaguid` | `text` | AAGUID autentyfikatora |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `token` | `text` | Wymagany i unikalny token sesji. |
+| `"expiresAt"` | `timestamp` | Czas wygaśnięcia sesji. |
+| `"ipAddress"` | `text` | Adres IP, opcjonalny. |
+| `"userAgent"` | `text` | User-Agent, opcjonalny. |
+| `"activeOrganizationId"` | `text` | Aktywna organizacja w sesji. |
+| `"activeTeamId"` | `text` | Aktywny zespół w sesji. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
-### 5. `organization` - Organizacje
-
-| Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `name` | `text` | Nazwa organizacji |
-| `slug` | `text` | Slug URL (unikalny) |
-| `logo` | `text` | URL logo |
-| `metadata` | `jsonb` | Dodatkowe metadane |
-
-### 6. `member` - Członkowie organizacji
+### `account` — konta uwierzytelniające
 
 | Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `organization_id` | `text` | FK do organization |
-| `user_id` | `text` | FK do user |
-| `role` | `text` | `admin`, `analityk`, `pracownik` |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `"accountId"` | `text` | Identyfikator konta u dostawcy. |
+| `"providerId"` | `text` | Dostawca, np. `credential` lub provider OAuth. |
+| `password` | `text` | Dane hasła zarządzane przez Better Auth. |
+| `"accessToken"`, `"refreshToken"`, `"idToken"` | `text` | Opcjonalne tokeny integracji z providerem. |
+| `"accessTokenExpiresAt"`, `"refreshTokenExpiresAt"` | `timestamp` | Czas wygaśnięcia tokenów. |
+| `scope` | `text` | Zakresy uprawnień providera. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
-### 7. `team` - Zespoły
+Obecna konfiguracja Better Auth nie włącza jeszcze providerów Google, Apple ani
+Microsoft; obecność kolumn OAuth w tej tabeli zapewnia jedynie zgodny model
+danych.
 
-| Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `organization_id` | `text` | FK do organization |
-| `name` | `text` | Nazwa zespołu |
-
-### 8. `team_member` - Członkowie zespołów
-
-| Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `team_id` | `text` | FK do team |
-| `user_id` | `text` | FK do user |
-
-### 9. `invitation` - Zaproszenia
+### `verification` — tokeny weryfikacyjne
 
 | Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `organization_id` | `text` | FK do organization |
-| `email` | `text` | Email zaproszonego |
-| `role` | `text` | Przypisana rola |
-| `status` | `text` | `pending`, `accepted`, `rejected`, `canceled` |
-| `inviter_id` | `text` | FK do user |
-| `expires_at` | `timestamptz` | Wygasanie |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `identifier` | `text` | Identyfikator celu weryfikacji. |
+| `value` | `text` | Wartość tokenu. |
+| `"expiresAt"` | `timestamp` | Czas wygaśnięcia. |
+| `"userId"` | `text` | Opcjonalny FK do `user`. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
-### 10. `organization_role` - Definicje ról
-
-| Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `organization_id` | `text` | FK do organization |
-| `role` | `text` | Nazwa roli |
-| `permission` | `jsonb` | Uprawnienia |
-
-**Struktura uprawnień:**
-```json
-{
-  "organization": ["read", "update", "delete"],
-  "member": ["create", "read", "update", "delete"],
-  "team": ["create", "read", "update", "delete"],
-  "reports": ["create", "read", "update", "delete"],
-  "analytics": ["create", "read", "update"]
-}
-```
-
-### 11. `password_history` - Historia haseł (HIBP)
+### `passkey` — klucze WebAuthn/U2F
 
 | Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `user_id` | `text` | FK do user |
-| `password_hash` | `text` | Hash hasła |
-| `hibp_compromised` | `boolean` | Czy skompromitowane |
-| `hibp_count` | `integer` | Liczba wystąpień w HIBP |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `name` | `text` | Nazwa klucza, opcjonalna. |
+| `"publicKey"` | `text` | Wymagany klucz publiczny. |
+| `"credentialId"` | `text` | Wymagany, unikalny identyfikator WebAuthn. |
+| `counter` | `integer` | Licznik anty-replay; domyślnie `0`. |
+| `"deviceType"` | `text` | Typ urządzenia, np. `platform` lub `cross-platform`. |
+| `"backedUp"` | `boolean` | Czy credential ma backup; domyślnie `false`. |
+| `transports` | `text` | Transporty WebAuthn, przechowywane jako JSON array. |
+| `aaguid` | `text` | Identyfikator typu autentyfikatora. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
-### 12. `login_history` - Historia logowań
-
-| Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `text` | Klucz główny |
-| `user_id` | `text` | FK do user |
-| `login_method` | `text` | `password`, `passkey`, `oauth` |
-| `ip_address` | `text` | Adres IP |
-| `success` | `boolean` | Czy logowanie udane |
-| `failure_reason` | `text` | Przyczyna niepowodzenia |
-
-### 13. `incidents` - Zgłoszenia/Incydenty
+### `organization` — organizacje
 
 | Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `UUID` | Klucz główny (uuidv7) |
-| `user_id` | `text` | FK do user |
-| `status` | `incident_status` | Status: `pending`, `analyzing`, `needs_info`, `resolved`, `rejected` |
-| `user_description` | `text` | Opis zgłoszenia od użytkownika |
-| `user_screenshot_data` | `jsonb` | Metadane screenshotów w MinIO |
-| `user_attachment_data` | `jsonb` | Metadane załączników w MinIO |
-| `analyst_note` | `text` | Notatki analityka |
-| `analyst_report_data` | `jsonb` | Metadane raportu analityka w MinIO |
-| `analyst_statement_data` | `jsonb` | Dodatkowe oświadczenia analityka |
-| `llm_category` | `text` | Kategoria nadana przez LLM |
-| `created_at` | `timestamp` | Data utworzenia |
-| `updated_at` | `timestamp` | Data ostatniej aktualizacji |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `name` | `text` | Wymagana nazwa organizacji. |
+| `slug` | `text` | Wymagany, unikalny slug. |
+| `logo` | `text` | URL/logo, opcjonalne. |
+| `metadata` | `jsonb` | Dodatkowe metadane. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
-### 14. `incident_audit_log` - Historia zmian zgłoszeń
+### `member` — członkowie organizacji
 
 | Kolumna | Typ | Opis |
-|---------|-----|------|
-| `id` | `BIGINT` | Klucz główny (auto-increment) |
-| `incident_id` | `UUID` | FK do incidents |
-| `changed_by` | `text` | ID użytkownika lub 'SYSTEM'/'LLM' |
-| `old_status` | `incident_status` | Poprzedni status |
-| `new_status` | `incident_status` | Nowy status |
-| `changed_at` | `timestamp` | Data zmiany |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"organizationId"` | `text` | FK do `organization`, `ON DELETE CASCADE`. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `role` | `text` | Rola, domyślnie `pracownik`. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
----
+Unikalność: `("organizationId", "userId")`.
 
-## Triggery
+### `team` — zespoły
 
-### Autoryzacja (02-create-auth.sql)
-1. **`trigger_set_timestamp`** - automatyczna aktualizacja `updated_at`
-2. **`update_user_last_login`** - aktualizacja `last_login_method` i `last_login_at`
-3. **`on_organization_created`** - tworzenie domyślnych ról dla nowej organizacji
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"organizationId"` | `text` | FK do `organization`, `ON DELETE CASCADE`. |
+| `name` | `text` | Wymagana nazwa zespołu. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
-### Aplikacja (03-create-app.sql)
-4. **`set_timestamp_incidents`** - automatyczna aktualizacja `updated_at` dla tabeli `incidents`
-5. **`log_status_change`** - automatyczne logowanie zmian statusu w `incident_audit_log`
+### `team_member` — członkowie zespołów
 
----
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"teamId"` | `text` | FK do `team`, `ON DELETE CASCADE`. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `"createdAt"` | `timestamp` | Czas dodania do zespołu. |
 
-## Konfiguracja Better-Auth
+Unikalność: `("teamId", "userId")`.
 
-```typescript
-import { betterAuth } from "better-auth";
-import { passkey, haveIBeenPwned, organization } from "better-auth/plugins";
-import { Pool } from "pg";
+### `invitation` — zaproszenia
 
-export const auth = betterAuth({
-  database: new Pool({ connectionString: process.env.DATABASE_URL }),
-  
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 12,
-  },
-  
-  plugins: [
-    // PassKeys (WebAuthn/U2F)
-    passkey({
-      rpID: "bastiondesk.com",
-      rpName: "BastionDesk",
-      origin: "https://bastiondesk.com",
-    }),
-    
-    // HaveIBeenPwned
-    haveIBeenPwned({
-      checkOnSignUp: true,
-      checkOnPasswordChange: true,
-      blockCompromisedPasswords: true,
-    }),
-    
-    // Organizacje z 3 rolami
-    organization({
-      roles: {
-        admin: { /* pełne uprawnienia */ },
-        analityk: { /* raporty i analityki */ },
-        pracownik: { /* podstawowy dostęp */ },
-      },
-      teams: { enabled: true },
-    }),
-  ],
-});
-```
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"organizationId"` | `text` | FK do `organization`, `ON DELETE CASCADE`. |
+| `email` | `text` | Email zapraszanej osoby. |
+| `role` | `text` | Rola po akceptacji; domyślnie `member`. |
+| `status` | `text` | Domyślnie `pending`; obsługiwane wartości opisuje `invitation_status`. |
+| `"inviterId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `"teamId"` | `text` | Opcjonalny FK do `team`, `ON DELETE SET NULL`. |
+| `"expiresAt"` | `timestamp` | Czas wygaśnięcia zaproszenia. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
 
----
+### `organization_role` — role i uprawnienia
+
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"organizationId"` | `text` | FK do `organization`, `ON DELETE CASCADE`. |
+| `role` | `text` | Nazwa roli. |
+| `permission` | `jsonb` | Obiekt zasobów i akcji; domyślnie `{}`. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
+
+Unikalność: `("organizationId", role)`.
+
+### `password_history` — historia sprawdzeń haseł
+
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `"passwordHash"` | `text` | Wymagany hash hasła; nie przechowuje hasła jawnego. |
+| `"hibpChecked"` | `boolean` | Czy wykonano sprawdzenie HIBP; domyślnie `false`. |
+| `"hibpCompromised"` | `boolean` | Czy hash znaleziono w HIBP; domyślnie `false`. |
+| `"hibpCount"` | `integer` | Liczba wystąpień; domyślnie `0`. |
+| `"createdAt"` | `timestamp` | Czas utworzenia wpisu. |
+
+### `login_history` — historia logowań
+
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `text` | Klucz główny. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `"loginMethod"` | `text` | Np. `password`, `passkey`, `oauth`, `2fa`, `backup_code`. |
+| `"ipAddress"` | `text` | Adres IP, opcjonalny. |
+| `"userAgent"` | `text` | User-Agent, opcjonalny. |
+| `country`, `city` | `text` | Lokalizacja, opcjonalna. |
+| `success` | `boolean` | Czy logowanie się udało; domyślnie `true`. |
+| `"failureReason"` | `text` | Przyczyna niepowodzenia. |
+| `"createdAt"` | `timestamp` | Czas logowania. |
+
+## Tabele aplikacyjne
+
+### `incidents` — zgłoszenia/incydenty
+
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `uuid` | Klucz główny, domyślnie `uuidv7()`. |
+| `"dataZgloszenia"` | `timestamp` | Data zgłoszenia; domyślnie `now()`. |
+| `"userId"` | `text` | FK do `user`, `ON DELETE CASCADE`. |
+| `"organizationId"` | `text` | FK do `organization`, `ON DELETE CASCADE`. |
+| `status` | `"IncidentStatus"` | Domyślnie `Zgłoszony`. |
+| `"userDescription"` | `text` | Wymagany opis zgłoszenia. |
+| `"userScreenshotPath"` | `text` | Ścieżka do opcjonalnego screenshotu w MinIO/S3. |
+| `"userScreenshotMetadata"` | `jsonb` | Metadane screenshotu; domyślnie `{}`. |
+| `"userAttachmentPath"` | `text` | Ścieżka do opcjonalnego załącznika w MinIO/S3. |
+| `"userAttachmentMetadata"` | `jsonb` | Metadane załącznika; domyślnie `{}`. |
+| `"analystId"` | `text` | Opcjonalny FK do `user`, identyfikuje analityka. |
+| `"analystNote"` | `text` | Notatka analityka. |
+| `"czyRozwiazany"` | `boolean` | Czy incydent rozwiązano; domyślnie `false`. |
+| `"dataRozwiazania"` | `timestamp` | Data rozwiązania. |
+| `"analystReportPath"` | `text` | Ścieżka raportu analityka w MinIO/S3. |
+| `"analystReportMetadata"` | `jsonb` | Metadane raportu; domyślnie `{}`. |
+| `"analystReportData"` | `timestamp` | Data zapisania raportu. |
+| `"analystStatementPath"` | `text` | Ścieżka sprawozdania analityka w MinIO/S3. |
+| `"analystStatementMetadata"` | `jsonb` | Metadane sprawozdania; domyślnie `{}`. |
+| `"analystStatementData"` | `timestamp` | Data zapisania sprawozdania. |
+| `"llmCategory"` | `"IncidentCategory"` | Kategoria nadana przez usługę LLM. |
+| `"createdAt"`, `"updatedAt"` | `timestamp` | Znaczniki czasu. |
+
+Model przechowuje obecnie po jednym screenshotcie i jednym załączniku. Baza
+zapisuje ścieżkę oraz metadane, natomiast zawartość pliku znajduje się w
+MinIO/S3.
+
+### `incident_audit_log` — audyt zmian statusu
+
+| Kolumna | Typ | Opis |
+|---|---|---|
+| `id` | `bigint` | Klucz główny generowany jako identity. |
+| `"incidentId"` | `uuid` | FK do `incidents`, `ON DELETE CASCADE`. |
+| `"changedBy"` | `text` | Użytkownik zmiany albo wartość systemowa. |
+| `"oldStatus"` | `"IncidentStatus"` | Poprzedni status. |
+| `"newStatus"` | `"IncidentStatus"` | Nowy status. |
+| `"changedAt"` | `timestamp` | Czas zmiany; domyślnie `now()`. |
+
+Aktualny audyt rejestruje zmianę statusu. Nie obejmuje jeszcze pełnej historii
+decyzji, akcji automatycznych, approval flow, wyników skanów ani rollbacków.
+
+## Indeksy i relacje
+
+Skrypty tworzą indeksy dla kluczy obcych, statusów, dat, wyszukiwania emaili,
+providerów i najczęstszych filtrów incydentów. Najważniejsze indeksy aplikacyjne
+to:
+
+- `incidents("userId")`, `incidents("organizationId")`, `incidents(status)`,
+  `incidents("createdAt" DESC)`, `incidents("analystId")` i
+  `incidents("czyRozwiazany")`;
+- `incident_audit_log("incidentId")`;
+- unikalne indeksy dla emaila użytkownika, tokenu sesji, credentialu PassKey,
+  slugu organizacji, członkostwa w organizacji/zespole i roli w organizacji.
+
+Relacje użytkowników, organizacji, zespołów i incydentów używają kluczy obcych
+z zachowaniem kaskadowym tam, gdzie rekord podrzędny nie ma sensu po usunięciu
+rekordu nadrzędnego.
+
+## Triggery i funkcje
+
+### Better Auth (`02-create-auth.sql`)
+
+- `trigger_set_timestamp()` aktualizuje `"updatedAt"` przed zmianą w tabelach
+  `user`, `session`, `account`, `verification`, `passkey`, `organization`,
+  `member`, `team`, `invitation` i `organization_role`;
+- `update_user_last_login()` aktualizuje `user."lastLoginMethod"` oraz
+  `user."lastLoginAt"` po udanym wpisie w `login_history`;
+- `create_default_organization_roles()` tworzy domyślne role organizacji;
+- `on_organization_created` uruchamia tworzenie domyślnych ról po dodaniu
+  organizacji.
+
+### Aplikacja (`03-create-app.sql`)
+
+- `set_timestamp_incidents` aktualizuje `incidents."updatedAt"` przed zmianą;
+- `log_status_change` dodaje wpis do `incident_audit_log`, gdy zmienia się
+  `incidents.status`;
+- `set_resolution_date_trigger` ustawia `"dataRozwiazania"`, gdy
+  `"czyRozwiazany"` zmienia się z `false` na `true`.
+
+## Konfiguracja Better Auth
+
+Konfiguracja runtime znajduje się w
+[`backend/src/lib/auth.ts`](../../backend/src/lib/auth.ts). Obecnie obejmuje:
+
+- email/password z minimalną długością hasła 10 znaków, maksymalną 128 znaków
+  i wymaganą weryfikacją emaila;
+- sesje o czasie życia 7 dni, aktualizowane co 24 godziny, z cache cookie na
+  5 minut;
+- PassKey z konfiguracją WebAuthn z wartości środowiskowych;
+- HaveIBeenPwned;
+- organizacje z rolami `admin`, `analityk`, `pracownik`, limitem 5 organizacji
+  na użytkownika i weryfikacją emaila przy zaproszeniach;
+- pomocniczy plugin organizacji.
+
+W obecnym kodzie nie ma jeszcze konfiguracji social loginów Google/Apple/Microsoft
+ani osobnego JWT/JWKS gatewaya.
 
 ## Uruchomienie
 
-```bash
-# Docker Compose
-docker-compose up -d database
+Inicjalizacja produkcyjnego/localnego stacka odbywa się przez Docker Compose:
 
-# Lub bezpośrednio psql
-psql -h localhost -U postgres -d bastiondesk \
-  -f database/init-sql/01-init.sql \
-  -f database/init-sql/02-create-auth.sql \
-  -f database/init-sql/03-create-app.sql
+```bash
+docker compose up -d
 ```
 
----
+Skrypty z `database/init-sql/` są wykonywane przez obraz PostgreSQL przy
+inicjalizacji pustego wolumenu danych. Przy istniejącym wolumenie zmiana pliku
+SQL nie uruchomi się automatycznie ponownie.
+
+Połączenie aplikacji z bazą odbywa się przez PgBouncer i TLS. Szczegóły
+konfiguracji znajdują się w
+[`docs/infrastructure/deploy.md`](../infrastructure/deploy.md) oraz
+[`docs/infrastructure/tls.md`](../infrastructure/tls.md).
 
 ## Bezpieczeństwo
 
-- **Hasła** - hash scrypt/argon2 w tabeli `account`
-- **PassKeys** - klucze publiczne (bezpieczne do przechowywania)
-- **HIBP** - sprawdzanie k-anonimity (bez wysyłania pełnego hasha)
-- **Sesje** - kryptograficznie bezpieczne tokeny
+- hasła i dane uwierzytelniające są obsługiwane przez Better Auth;
+- `password_history` przechowuje hash oraz wynik sprawdzenia HIBP, nie hasło
+  jawne;
+- `passkey` przechowuje klucz publiczny i metadane WebAuthn;
+- tokeny sesji mają termin ważności i są powiązane z użytkownikiem;
+- dane organizacji i incydentów są izolowane przez `organizationId` oraz
+  kontrolę uprawnień w backendzie;
+- pliki są przechowywane poza PostgreSQL, a w bazie pozostają ich ścieżki i
+  metadane;
+- audyt zmian statusu jest realizowany triggerem bazodanowym.
+
+Pełna analiza plików, YARA, Threat Intelligence, korelacja alertów, scoring
+ryzyka, playbooki i automatyczne reakcje nie są jeszcze częścią aktualnego
+schematu.

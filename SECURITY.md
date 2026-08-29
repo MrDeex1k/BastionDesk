@@ -6,8 +6,8 @@ Security updates are planned for the latest released version of BastionDesk.
 
 | Version | Supported |
 | ------- | --------- |
-| 1.0.0   | Yes       |
-| != 1.0.0 | No      |
+| 1.0.3   | Yes       |
+| <= 1.0.2 | No       |
 
 ## Reporting a Vulnerability
 

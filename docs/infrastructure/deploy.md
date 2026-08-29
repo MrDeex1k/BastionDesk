@@ -125,6 +125,14 @@ docker compose build
 docker compose up -d
 ```
 
+Generator nie wczytuje automatycznie pliku `.env`. Jeśli zmienisz
+`POSTGRES_USER` względem wartości domyślnej, przekaż tę samą nazwę podczas
+generowania certyfikatu klienta PgBouncera:
+
+```bash
+POSTGRES_USER=<wartość-z-.env> sh infra/tls/generate-dev-certs.sh
+```
+
 Po starcie stan usług sprawdzisz przez:
 
 ```bash

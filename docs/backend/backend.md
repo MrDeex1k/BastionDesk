@@ -1,309 +1,222 @@
-# BastionDesk - Backend API
+# BastionDesk — backend API
 
-Serwer backendowy oparty na **Express** + **Bun** z autoryzacją **Better-Auth**.
+Backend jest serwerem **Express 5** uruchamianym przez **Bun**. Odpowiada za
+Better Auth, autoryzację organizacyjną, obsługę incydentów, komunikację z LLM,
+MinIO/S3 oraz wysyłkę emaili.
 
 ## Struktura projektu
 
-```
+```text
 backend/
 ├── src/
-│   ├── index.ts              # Entry point - serwer Express
+│   ├── index.ts                         # konfiguracja i start Express
 │   ├── lib/
-│   │   ├── auth.ts           # Konfiguracja Better-Auth
-│   │   ├── database.ts       # Bun SQL - natywny sterownik PostgreSQL
-│   │   ├── email.ts          # Funkcje wysyłki emaili
-│   │   ├── env.ts            # Zarządzanie zmiennymi środowiskowymi
-│   │   └── permissions.ts    # Role i uprawnienia (AC)
-│   ├── middleware/           # Middleware (auth, error handling)
-│   ├── routes/               # Routing API
-│   ├── services/             # Logika biznesowa
-│   ├── templates/            # HTML templates dla emaili
+│   │   ├── auth.ts                      # Better Auth i pluginy
+│   │   ├── csrf.ts                      # tokeny CSRF
+│   │   ├── database.ts                  # Bun SQL oraz pg Pool
+│   │   ├── email.ts                     # email weryfikacyjny i reset hasła
+│   │   ├── env.ts                       # odczyt i walidacja środowiska
+│   │   ├── llm-client.ts                # klient gRPC/mTLS klasyfikatora
+│   │   ├── organization-helpers-plugin.ts
+│   │   ├── passkey-check-plugin.ts
+│   │   ├── permissions.ts               # role i access control
+│   │   └── storage.ts                   # natywny klient Bun S3
+│   ├── middleware/                      # auth, CSRF, rate limit i błędy
+│   ├── routes/
+│   │   ├── auth/                        # rejestracja z organizacją
+│   │   ├── admin/                       # incydenty i analityka admina
+│   │   ├── analyst/                     # workflow analityka
+│   │   ├── shared/                      # współdzielona obsługa plików
+│   │   └── incidents.ts                 # API incydentów pracownika i legacy
+│   ├── templates/
 │   │   ├── email-verification.ts
-│   │   ├── password-reset.ts
-│   │   └── invitation.ts
-│   ├── types/                # Definicje typów TypeScript
-│   │   └── index.ts
-│   └── utils/                # Funkcje pomocnicze
-│       ├── email-sender.ts   # Singleton NodeMailer
-│       └── validation.ts     # Schematy Zod
+│   │   └── password-reset.ts
+│   ├── types/
+│   └── utils/
+│       ├── email-sender.ts              # klient Nodemailer/SMTP
+│       └── validation.ts                # schematy Zod
+├── Dockerfile
 ├── package.json
-├── tsconfig.json
-└── Dokumentacja backendu znajduje się teraz w `docs/backend/backend.md`
+└── tsconfig.json
 ```
+
+W repozytorium nie ma obecnie osobnego katalogu `services/` ani szablonu emaila
+z zaproszeniem do organizacji.
 
 ## Połączenie z bazą danych
 
-### Natywny sterownik Bun SQL
+Moduł `src/lib/database.ts` utrzymuje dwa typy połączeń przez PgBouncer i TLS:
 
-Backend wykorzystuje **natywny sterownik Bun SQL** do połączenia z PostgreSQL. Jest to wysokowydajny sterownik wbudowany w Bun, który używa tagged template literals.
+- natywne `Bun.SQL` dla tagged template literals i transakcji;
+- `pg.Pool` dla parametryzowanych zapytań tekstowych z placeholderami `$1`,
+  `$2`, używanych przez większość routingu incydentów.
+
+Better Auth tworzy dodatkowy `pg.Pool` we własnej konfiguracji. Wszystkie te
+połączenia korzystają z `DATABASE_URL` lub danych PgBouncera oraz z certyfikatów
+określonych przez `DB_TLS_CA_PATH`, `DB_TLS_CERT_PATH` i `DB_TLS_KEY_PATH`.
+
+Przykład Bun SQL:
 
 ```typescript
-import { sql, transaction } from "@/lib/database";
+import { sql, transaction } from "./lib/database";
 
-// Proste zapytanie
-const users = await sql`SELECT * FROM users WHERE active = ${true}`;
+const users = await sql`SELECT * FROM "user" WHERE "isActive" = ${true}`;
 
-// Zapytanie z parametrami
-const user = await sql`SELECT * FROM users WHERE id = ${userId}`;
-
-// Transakcje
 await transaction(async (tx) => {
-  await tx`INSERT INTO users (name) VALUES (${"John"})`;
-  await tx`INSERT INTO logs (action) VALUES (${"user_created"})`;
+  await tx`UPDATE member SET role = ${"analityk"} WHERE id = ${memberId}`;
 });
 ```
 
-### Better-Auth
+Przykład helpera opartego na `pg.Pool`:
 
-Better-Auth używa **pg Pool** (node-postgres) dla własnych operacji autoryzacyjnych. To oddzielne połączenie zapewnia kompatybilność z biblioteką Better-Auth.
+```typescript
+import { queryOne } from "./lib/database";
 
-## System Email (NodeMailer + Gmail SMTP)
+const incident = await queryOne(
+  'SELECT * FROM incidents WHERE id = $1 AND "organizationId" = $2',
+  [incidentId, organizationId],
+);
+```
 
-Backend zawiera kompletny system wysyłki emaili oparty na **NodeMailer** z konfiguracją **Gmail SMTP**. System obsługuje wszystkie kluczowe funkcjonalności Better-Auth oraz zaproszenia do organizacji.
+## Email przez SMTP
 
-### Funkcjonalności email
+Backend używa Nodemailera z ogólną konfiguracją SMTP. Nie jest przywiązany do
+Gmaila; może korzystać z dowolnego kompatybilnego serwera skonfigurowanego przez:
 
-- **Weryfikacja email** - automatyczna wysyłka po rejestracji
-- **Reset hasła** - bezpieczny flow resetowania hasła z tokenami
-- **Zaproszenia do organizacji** - email z linkiem aktywacyjnym
-- **Responsywne templates** - HTML templates zgodne z designem aplikacji
-- **Bezpieczeństwo** - ochrona przed timing attacks, walidacja tokenów
-
-### Konfiguracja SMTP
-
-Wymagane zmienne środowiskowe:
-
-```bash
-# SMTP Configuration
+```dotenv
 SMTP_HOST=...
 SMTP_PORT=...
 SMTP_SECURE=...
 SMTP_USER=...
 SMTP_APP_PASSWORD=...
-
-# Email From
 EMAIL_FROM_NAME=...
 EMAIL_FROM_ADDRESS=...
 ```
 
-### Przykład użycia
+Obecnie zaimplementowane są dwa szablony i callbacki Better Auth:
+
+- weryfikacja adresu email po rejestracji;
+- reset hasła.
+
+Konfiguracja `organization()` nie przekazuje obecnie callbacku
+`sendInvitationEmail`, dlatego dokumentacja nie powinna zakładać wysyłki emaila
+przez standardowy endpoint zaproszenia organizacyjnego.
+
+Sygnatury funkcji serwisu email przyjmują obiekt użytkownika, URL i token:
 
 ```typescript
-import { sendVerificationEmail, sendResetPasswordEmail, sendOrganizationInvitation } from "@/lib/email";
-
-// Weryfikacja email
-await sendVerificationEmail({
-  userName: "Jan Kowalski",
-  userEmail: "jan@example.com",
-  verificationUrl: "https://app.bastiondesk.com/verify?token=..."
-});
-
-// Reset hasła
-await sendResetPasswordEmail({
-  userName: "Jan Kowalski",
-  userEmail: "jan@example.com",
-  resetUrl: "https://app.bastiondesk.com/reset-password?token=..."
-});
-
-// Zaproszenie do organizacji
-await sendOrganizationInvitation({
-  userName: "Jan Kowalski",
-  userEmail: "jan@example.com",
-  organizationName: "Firma ABC",
-  invitationUrl: "https://app.bastiondesk.com/invite?token=..."
-});
+await sendVerificationEmail({ user, url, token });
+await sendResetPasswordEmail({ user, url, token });
 ```
 
-### Architektura email
+`GET /api/email/health` sprawdza połączenie SMTP i zwraca HTTP `200` dla
+działającego połączenia lub `503` w przypadku błędu.
 
-- **`email-sender.ts`** - Singleton wrapper dla NodeMailer z lazy initialization
-- **`email.ts`** - Główny serwis z funkcjami wysyłki dla Better-Auth
-- **`templates/`** - HTML templates z responsywnym design
-- **Integracja Better-Auth** - automatyczna wysyłka emaili przez callbacki
+## Autoryzacja i organizacje
 
-## Funkcjonalności autoryzacji
+Konfiguracja w `src/lib/auth.ts` obejmuje:
 
-- **Email/Password** - podstawowa autoryzacja z weryfikacją email
-- **Password Management** - resetowanie i zmiana haseł z emailami
-- **PassKeys (WebAuthn/U2F)** - klucze sprzętowe (YubiKey, Titan)
-- **HaveIBeenPwned** - sprawdzanie kompromitacji haseł
-- **Organizacje** - multi-tenancy z rolami i zaproszeniami email
-- **Zarządzanie członkami** - zaproszenia, dodawanie, usuwanie i zmiana ról
-- **Zespoły (Teams)** - grupowanie użytkowników
+- email i hasło, z obowiązkową weryfikacją emaila;
+- hasła o długości od 10 do 128 znaków;
+- sesję ważną 7 dni, odświeżaną co 24 godziny, z pięciominutowym cookie cache;
+- PassKeys/WebAuthn;
+- kontrolę skompromitowanych haseł HaveIBeenPwned;
+- organizacje i role `admin`, `analityk`, `pracownik`;
+- limit 5 organizacji na użytkownika;
+- własny endpoint dodawania członka po emailu;
+- własny publiczny endpoint sprawdzający dostępność PassKey dla emaila.
 
-## Role użytkowników
+Role aplikacyjne:
 
-| Rola       | Opis                     | Uprawnienia                                         |
-|------------|--------------------------|-----------------------------------------------------|
-| `admin`    | Administrator/Właściciel | Pełne uprawnienia do organizacji, członków, raportów |
-| `analityk` | Analityk danych          | Dostęp do raportów i analityk                       |
-| `pracownik`| Pracownik                | Podstawowy dostęp (tylko odczyt)                    |
+| Rola | Aktualny zakres |
+|---|---|
+| `admin` | Zarządzanie organizacją i członkami, wszystkie incydenty organizacji, analityka i operacje administracyjne. |
+| `analityk` | Lista incydentów przypisanych i wolnych, przypisanie, status, notatki, rozwiązanie, raporty i sprawozdania. |
+| `pracownik` | Tworzenie incydentów oraz odczyt własnych zgłoszeń i dostępnych dla niego plików. |
+
+Szczegółowy kontrakt HTTP znajduje się w [api.md](./api.md). Endpointy
+generowane przez Better Auth należy wywoływać przez `authClient`, zwłaszcza
+wielostopniowe operacje WebAuthn. Najważniejsze aktualne ścieżki sesji i resetu
+hasła to:
+
+| Endpoint | Metoda | Opis |
+|---|---|---|
+| `/api/auth/get-session` | GET | Aktualna sesja Better Auth. |
+| `/api/auth/request-password-reset` | POST | Wysłanie linku resetującego. |
+| `/api/auth/reset-password` | POST | Ustawienie nowego hasła. |
+| `/api/auth/sign-up-with-organization/email` | POST | Własny flow rejestracji i utworzenia organizacji. |
+| `/api/auth/organization/add-member-by-email` | POST | Własny helper dodający istniejącego użytkownika. |
+| `/api/auth/passkey/check-availability` | POST | Własny helper UX sprawdzający liczbę PassKeys. |
+
+## Warstwy ochronne HTTP
+
+Serwer konfiguruje Helmet, allowlistę CORS, limit body `50mb`, rate limiting i
+walidację Zod. Dla modyfikujących operacji aplikacyjnych pod `/api/incidents`,
+`/api/admin` i `/api/analyst` wymagany jest token z `GET /api/csrf` przesyłany
+w nagłówku `X-CSRF-Token`. Metoda `QUERY` jest traktowana jako bezpieczna w
+modelu CSRF i służy do przekazywania walidowanych zapytań administratora w JSON.
+
+## Healthcheck i metadane API
+
+`GET /health` sprawdza bazę danych i SMTP. Zwraca HTTP `200` tylko wtedy, gdy
+oba połączenia działają; w przeciwnym razie zwraca HTTP `503` i
+`status: "degraded"`.
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-08-29T12:00:00.000Z",
+  "service": "bastiondesk-backend",
+  "checks": {
+    "database": "connected",
+    "email": "connected"
+  }
+}
+```
+
+`GET /api` zwraca nazwę API, wersję `1.0.3` i podstawowe grupy endpointów.
+Endpoint `/health` nie jest przekazywany przez publiczny reverse proxy w
+aktualnym Compose; healthcheck kontenera wywołuje go lokalnie na porcie `3333`.
+
+## Storage i LLM
+
+`src/lib/storage.ts` używa natywnego `Bun.S3Client`. W Compose endpointem jest
+`https://storage-1:9000`, bucket tworzy `storage-1`, a zaufanie do lokalnego CA
+proces otrzymuje przez `NODE_EXTRA_CA_CERTS` i `SSL_CERT_FILE`.
+
+Klucze plików są budowane pod prefiksem incydentu, np.
+`incidents/{id}/attachments/{filename}`. API pobierania sprawdza organizację,
+rolę i relację użytkownika z incydentem przed odczytem obiektu.
+
+Klasyfikacja opisu odbywa się przez klienta gRPC na
+`LLM_GRPC_TARGET=llm_service:8443` z mTLS. Kontrakt znajduje się w
+[`proto/incident_classifier.proto`](../../proto/incident_classifier.proto).
 
 ## Uruchomienie
 
-### Wymagania
-
-- [Bun](https://bun.sh/) >= 1.3.14
-- PostgreSQL 18+ (lub Docker)
-- Gmail account z **App Password** (dla SMTP)
-
-### Zależności
-
-- **Better-Auth** - autoryzacja i zarządzanie użytkownikami
-- **NodeMailer** - wysyłka emaili przez SMTP
-- **Bun SQL** - natywny sterownik PostgreSQL
-- **Bun S3** - klient do MinIO/S3 storage
-- **Zod** - walidacja danych
-- **Express** - framework webowy
-
-### Instalacja
+Wspierany sposób uruchomienia całego backendowego środowiska to Docker Compose z
+katalogu głównego repozytorium:
 
 ```bash
-# Z katalogu głównego repozytorium instalacja korzysta z kanonicznego lockfile’a
-bun install --frozen-lockfile
-
-# Skopiuj i skonfiguruj zmienne środowiskowe
 cp .env.example .env
-# Edytuj .env i uzupełnij wartości
+sh infra/tls/generate-dev-certs.sh
+docker compose up --build backend
 ```
 
-#### Konfiguracja Gmail SMTP
+Jeśli `POSTGRES_USER` ma wartość inną niż domyślna, trzeba przekazać ją również
+do `generate-dev-certs.sh`, ponieważ skrypt nie wczytuje `.env` automatycznie.
 
-1. Włącz **2-Factor Authentication** na koncie Gmail
-2. Wygeneruj **App Password** w ustawieniach Google Account
-3. Skonfiguruj zmienne środowiskowe
+Backend nie działa samodzielnie bez dostępnych usług zależnych i certyfikatów:
+PgBouncer/PostgreSQL, `llm_service`, MinIO oraz SMTP. Compose nie publikuje portu
+`3333` na hoście; publiczny ruch `/api/*` przechodzi przez nginx pod
+`http://localhost:4567`.
 
-### Uruchomienie developerskie
+Do pracy developerskiej, po przygotowaniu `.env`, certyfikatów i usług
+zależnych:
 
 ```bash
-# Z hot-reload
-bun run dev
-
-# Lub bez watch mode
-bun run start
-```
-
-### Sprawdzenie typów
-
-```bash
-bun run typecheck
-```
-
-## API Endpoints
-
-### Health Check
-
-```bash
-GET /health
-```
-
-Odpowiedź:
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-01T12:00:00.000Z",
-  "service": "bastiondesk-backend"
-}
-```
-
-### Better-Auth Endpoints
-
-Wszystkie endpointy autoryzacji są dostępne pod `/api/auth/*`:
-
-| Endpoint                          | Metoda | Opis                        |
-|-----------------------------------|--------|-----------------------------|
-| `/api/auth/sign-up/email`         | POST   | Rejestracja email/password  |
-| `/api/auth/sign-in/email`         | POST   | Logowanie email/password    |
-| `/api/auth/passkey/register`      | POST   | Rejestracja PassKey         |
-| `/api/auth/sign-in/passkey`       | POST   | Logowanie PassKey           |
-| `/api/auth/session`               | GET    | Pobierz aktualną sesję      |
-| `/api/auth/request-password-reset`| POST   | Żądanie resetowania hasła   |
-| `/api/auth/reset-password`        | POST   | Resetowanie hasła          |
-| `/api/auth/change-password`       | POST   | Zmiana hasła użytkownika    |
-| `/api/auth/organization/create`   | POST   | Utwórz organizację          |
-| `/api/auth/organization/list`     | GET    | Lista organizacji           |
-| `/api/auth/organization/invite-member`| POST | Zaproszenie członka do organizacji |
-| `/api/auth/organization/add-member`| POST | Dodanie członka do organizacji |
-| `/api/auth/organization/list-members`| GET | Lista członków organizacji  |
-| `/api/auth/organization/update-member-role`| POST | Aktualizacja roli członka   |
-| `/api/auth/organization/remove-member`| POST | Usunięcie członka z organizacji |
-| `/api/auth/organization/get-active-member`| GET | Pobierz aktywnego członka   |
-| `/api/auth/sign-out`              | POST   | Wylogowanie                 |
-
-**Uwagi do email:**
-- Endpointy `/api/auth/request-password-reset` i `/api/auth/reset-password` automatycznie wysyłają emaile
-- `/api/auth/organization/invite-member` wysyła email z zaproszeniem
-- Wszystkie emaile zawierają bezpieczne tokeny z ograniczonym czasem życia
-
-### Email Health Check
-
-```bash
-GET /api/email/health
-```
-
-Odpowiedź:
-```json
-{
-  "status": "ok",
-  "smtp": {
-    "connected": true,
-    "host": "adres@hosta.pl",
-    "port": "numer_portu"
-  },
-  "timestamp": "2024-01-01T12:00:00.000Z"
-}
-```
-
-### Storage (MinIO / S3) - Bun native S3 client
-
-Backend używa natywnego klienta S3 w Bun do pracy z MinIO.
-
-Przykład użycia:
-
-```typescript
-import {
-  putObject,
-  getObjectBuffer,
-  getObjectJson,
-  deleteObject,
-  presignObject,
-} from "@/lib/storage";
-
-// Zapis pliku
-await putObject(`incidents/${incidentId}/file.bin`, buffer);
-
-// Odczyt jako Buffer
-const data = await getObjectBuffer(`incidents/${incidentId}/file.bin`);
-
-// Odczyt jako JSON
-const meta = await getObjectJson<{ foo: string }>(
-  `incidents/${incidentId}/meta.json`
-);
-
-// Presigned URL (np. do pobierania)
-const url = await presignObject(`incidents/${incidentId}/file.bin`, {
-  expiresIn: 3600, // 1h
-  acl: "private",
-});
-
-// Usunięcie
-await deleteObject(`incidents/${incidentId}/file.bin`);
-```
-
-Uwagi:
-- `S3_ENDPOINT` wskazuje na `https://storage-1:9000` (usługa MinIO w Docker Compose).
-- Bucket `S3_BUCKET` jest tworzony automatycznie przy starcie `storage-1`, a bootstrap włącza też versioning bucketa.
-- Backend używa `Bun.S3Client`, a zaufanie do własnego CA dla HTTPS pochodzi z `NODE_EXTRA_CA_CERTS` / `SSL_CERT_FILE` ustawianych w Compose.
-- Prefiksy/ścieżki są częścią klucza; możesz budować je dowolnie, np. `incidents/{id}/attachments/{filename}`.
-- `S3_REGION` może pozostać ustawione dla kompatybilności konfiguracji, ale Bun native S3 client nie wymaga go do pracy z MinIO.
-
-## Docker
-
-```bash
-# Z docker-compose (z głównego katalogu projektu)
-docker-compose up -d backend
-
-# Lub osobno
-docker build -t bastiondesk-backend .
-docker run -p 3333:3333 --env-file .env bastiondesk-backend
+bun install --frozen-lockfile
+bun run --cwd backend dev
+bun run --cwd backend typecheck
+bun run --cwd backend test
 ```

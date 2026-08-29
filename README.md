@@ -32,9 +32,17 @@ Zasady przyjmowania wkładu zewnętrznego opisuje `CONTRIBUTING.md`.
 ## Proces uruchomienia
 
 1. Wchodzimy w katalog BastionDesk.
-2. Uruchamiamy komendę "docker compose build" .
-3. Uruchamiamy komendę "docker compose up" lub "docker compose up -d", jeśli chcemy uruchomić w tle.
-4. Z aplikacji korzystamy przez `http://localhost:4567` - to jedyny publiczny entrypoint stacka.
+2. Kopiujemy `.env.example` do `.env` i zastępujemy przykładowe sekrety oraz dane dostępowe.
+3. Generujemy lokalne certyfikaty poleceniem `sh infra/tls/generate-dev-certs.sh`.
+   Jeśli `POSTGRES_USER` w `.env` różni się od wartości domyślnej, przekazujemy
+   tę samą wartość do generatora, np.
+   `POSTGRES_USER=<wartość-z-.env> sh infra/tls/generate-dev-certs.sh`.
+4. Uruchamiamy `docker compose build`.
+5. Uruchamiamy `docker compose up` lub `docker compose up -d`, jeśli stack ma działać w tle.
+6. Z aplikacji korzystamy przez `http://localhost:4567` — to jedyny publiczny entrypoint stacka.
+
+Szczegółowe wymagania i ograniczenia opisuje
+[instrukcja wdrożenia](docs/infrastructure/deploy.md).
 
 ## Bezpieczne zarządzanie zależnościami
 

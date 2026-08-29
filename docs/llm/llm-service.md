@@ -1,72 +1,109 @@
 # Serwis LLM
 
-Ten folder zawiera serwis LLM dla aplikacji BastionDesk oparty na FastAPI i modelu Google Gemma 3 1B.
+Serwis klasyfikuje opisy incydentów przy użyciu modelu
+`google/gemma-3-1b-it`. Klasyfikacja jest udostępniana backendowi przez gRPC
+z wzajemnym TLS, a FastAPI udostępnia osobny endpoint diagnostyczny.
 
 ## Struktura
 
-```
+```text
 llm_service/
-├── main.py - główny plik aplikacji FastAPI
-├── pyproject.toml - zależności projektu
-├── Dockerfile - konfiguracja Docker
-├── start.sh - skrypt uruchomieniowy
-├── dokumentacja znajduje się w `docs/llm/llm-service.md`
-└── __pycache__/ - cache Pythona
+├── main.py        # model, serwer gRPC i healthcheck FastAPI
+├── pyproject.toml # metadane i zależności bezpośrednie
+├── uv.lock        # pełny lockfile środowiska Python
+├── Dockerfile     # obraz builder/runtime
+└── start.sh       # generowanie stubów protobuf i start Uvicorn
 ```
 
-## Konfiguracja
+Wygenerowany przy starcie pakiet `generated/` nie jest przechowywany w repozytorium.
+Jego źródłem jest [`proto/incident_classifier.proto`](../../proto/incident_classifier.proto).
 
-### Zależności
+## Interfejsy
 
-Projekt używa `uv` do zarządzania zależnościami. Zainstaluj `uv`:
+### Klasyfikacja gRPC
+
+- adres wewnętrzny w Compose: `llm_service:8443`,
+- usługa: `bastiondesk.llm.v1.IncidentClassifier`,
+- metoda: `ClassifyIncident`,
+- transport: gRPC z mTLS i wymaganym certyfikatem klienta.
+
+Żądanie zawiera `incident_id` i `description`. Odpowiedź zawiera jedną z kategorii
+`Czerwony`, `Żółty`, `Zielony` oraz nazwę modelu. Pełny kontrakt opisuje
+[dokumentacja protokołu](../proto/incident-classifier.md).
+
+### Healthcheck HTTP
+
+FastAPI nasłuchuje wewnątrz kontenera na porcie `8888` i udostępnia:
+
+```text
+GET /health
+```
+
+Gdy model jest gotowy, endpoint zwraca HTTP `200` oraz m.in. `status: "ok"` i
+`loaded: true`. Jeśli ładowanie modelu nie powiodło się, zwraca HTTP `503`,
+`status: "degraded"`, `loaded: false` i opis błędu.
+
+Porty `8443` i `8888` nie są publikowane na hoście przez aktualny
+`docker-compose.yml`. Healthcheck można wywołać z wnętrza stacka, np.:
 
 ```bash
-# Na macOS i Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Na Windows
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+docker compose exec llm_service \
+  python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8888/health').read().decode())"
 ```
 
-Następnie zainstaluj zależności:
+## Zależności
+
+Projekt używa `uv`. Zależności bezpośrednie są przypięte do dokładnych wersji w
+`pyproject.toml`, a `uv.lock` utrwala pełne rozwiązanie. Resolver pomija wydania
+młodsze niż 24 godziny przez `exclude-newer = "24 hours"`.
+
+Instalacja lokalna:
 
 ```bash
 cd llm_service
-uv sync
+uv sync --locked
 ```
 
-Zależności bezpośrednie są przypięte do dokładnych wersji, a resolver pomija wydania młodsze niż
-24 godziny przez `exclude-newer = "24 hours"`. Aktualizację należy wykonywać przez kontrolowane
-odświeżenie pinów oraz `uv lock --upgrade`, nie przez ręczną edycję `uv.lock`.
+Aktualizacje wykonuje się przez kontrolowaną zmianę pinów i odświeżenie
+lockfile'a, nie przez ręczną edycję `uv.lock`.
 
-### Uruchomienie
+## Uruchomienie
+
+Wspierana konfiguracja repozytorium działa w Docker Compose, ponieważ serwer
+gRPC wymaga plików CA oraz certyfikatu serwera pod ścieżkami `/certs/...`:
 
 ```bash
-uv run main.py
+cp .env.example .env
+sh infra/tls/generate-dev-certs.sh
+docker compose up --build llm_service
 ```
 
-Serwer uruchomi się na porcie **8888**.
+Obraz jest budowany z kontekstu katalogu głównego, ponieważ potrzebuje zarówno
+`llm_service/`, jak i wspólnego katalogu `proto/`. Skrypt `start.sh` generuje
+stuby protobuf, po czym uruchamia Uvicorn na porcie `8888`; serwer gRPC na
+porcie `8443` jest uruchamiany w cyklu życia aplikacji FastAPI.
 
-Alternatywnie, użyj Docker:
-
-```bash
-docker build -t llm-service .
-docker run -p 8888:8888 llm-service
-```
-
-W oficjalnym stacku Docker Compose dla BastionDesk `1.0.3` serwis `llm_service` ma ustawiony limit pamięci `10GB`.
-
-## Dostępne endpointy
-
-Wszystkie endpointy są dostępne pod adresem `http://localhost:8888`.
+W aktualnym Compose serwis ma limit pamięci `10GB` i wolumen cache Hugging Face.
+Pierwszy start wymaga pobrania modelu; opcjonalne `HTTP_PROXY`, `HTTPS_PROXY` i
+`NO_PROXY` pozwalają skierować ten ruch przez proxy. `HF_TOKEN` jest potrzebny
+tylko wtedy, gdy wybrany model wymaga uwierzytelnienia.
 
 ## Rozwiązywanie problemów
 
-### Błąd ładowania modelu
-Upewnij się, że masz dostęp do internetu podczas pierwszego uruchomienia (model zostanie pobrany). Sprawdź logi aplikacji.
+### Model nie jest gotowy
 
-### Port zajęty
-Jeśli port 8888 jest zajęty, zmień port w `main.py` lub użyj innego portu w Dockerze.
+Sprawdź `docker compose logs llm_service`, dostęp do Hugging Face, ustawienia
+proxy oraz miejsce w cache. Kontener pozostaje `unhealthy`, dopóki `/health`
+nie zacznie zwracać HTTP `200`.
 
-### Problemy z zależnościami
-Upewnij się, że `uv` jest zainstalowany i uruchom `uv sync` w folderze `llm_service`.
+### gRPC jest niedostępne
+
+Sprawdź obecność plików w `infra/tls/dev/ca` i
+`infra/tls/dev/llm_service`, wartość `LLM_GRPC_TARGET=llm_service:8443` oraz
+zgodność certyfikatów backendu z lokalnym CA.
+
+### Zmienił się plik `.proto`
+
+Uruchom usługę ponownie. `start.sh` generuje stuby przy każdym starcie, więc
+backend i serwis LLM powinny nadal korzystać z tego samego
+`proto/incident_classifier.proto`.
