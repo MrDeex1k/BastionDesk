@@ -10,6 +10,7 @@ case "${BASELINE_RUN_ID}" in
 esac
 
 BASELINE_TMP_DIR="$(mktemp -d)"
+BASELINE_PROJECT_DIR="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 BASELINE_DUMP_FILE="${BASELINE_TMP_DIR}/baseline.dump"
 BASELINE_SOURCE_COUNTS="${BASELINE_TMP_DIR}/source-counts.txt"
 BASELINE_RESTORE_COUNTS="${BASELINE_TMP_DIR}/restore-counts.txt"
@@ -20,8 +21,11 @@ BASELINE_INCIDENT_A="$(bun -e 'process.stdout.write(crypto.randomUUID())')"
 BASELINE_INCIDENT_B="$(bun -e 'process.stdout.write(crypto.randomUUID())')"
 BASELINE_RESTORE_PASSWORD="$(bun -e 'process.stdout.write(crypto.randomUUID() + crypto.randomUUID())')"
 BASELINE_RESTORE_CONTAINER="bastiondesk-phase0-restore-${BASELINE_RUN_ID}"
+BASELINE_RESTORE_BACKEND="bastiondesk-phase0-restore-api-${BASELINE_RUN_ID}"
+BASELINE_RESTORE_USER=""
 BASELINE_FIXTURE_INSERTED=false
 BASELINE_RESTORE_STARTED=false
+BASELINE_RESTORE_BACKEND_STARTED=false
 
 fail() {
 	printf '%s\n' "[baseline-restore] FAIL: $1" >&2
@@ -36,7 +40,7 @@ source_psql() {
 
 restore_psql() {
 	docker exec "${BASELINE_RESTORE_CONTAINER}" \
-		psql -X --set ON_ERROR_STOP=1 --username restore --dbname restore --tuples-only --no-align --command "$1"
+		psql -X --set ON_ERROR_STOP=1 --port 54328 --username "${BASELINE_RESTORE_USER}" --dbname restore --tuples-only --no-align --command "$1"
 }
 
 cleanup_source_fixture() {
@@ -54,6 +58,9 @@ SQL
 
 cleanup() {
 	set +e
+	if [ "${BASELINE_RESTORE_BACKEND_STARTED}" = true ]; then
+		docker rm --force "${BASELINE_RESTORE_BACKEND}" >/dev/null 2>&1
+	fi
 	if [ "${BASELINE_RESTORE_STARTED}" = true ]; then
 		docker rm --force "${BASELINE_RESTORE_CONTAINER}" >/dev/null 2>&1
 	fi
@@ -65,12 +72,33 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 "$(dirname "$0")/smoke-compose.sh" >/dev/null
+BASELINE_DATABASE_IMAGE="$(docker inspect bastiondesk-postgres --format '{{.Config.Image}}')"
+BASELINE_BACKEND_IMAGE="$(docker inspect bastiondesk-backend-1 --format '{{.Config.Image}}')"
+BASELINE_INTERNAL_NETWORK="$(docker inspect bastiondesk-postgres --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}')"
+BASELINE_RESTORE_USER="$(docker exec bastiondesk-postgres sh -c 'printf %s "$POSTGRES_USER"')"
+[ -n "${BASELINE_DATABASE_IMAGE}" ] || fail "could not resolve source database image"
+[ -n "${BASELINE_BACKEND_IMAGE}" ] || fail "could not resolve backend image"
+[ -n "${BASELINE_INTERNAL_NETWORK}" ] || fail "could not resolve internal Docker network"
+[ -n "${BASELINE_RESTORE_USER}" ] || fail "could not resolve database TLS role"
 
 docker compose exec -T database sh -c \
 	'exec psql -X --set ON_ERROR_STOP=1 --port "$POSTGRES_PORT" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=run_id="$1" --set=incident_a="$2" --set=incident_b="$3"' \
 	_ "${BASELINE_RUN_ID}" "${BASELINE_INCIDENT_A}" "${BASELINE_INCIDENT_B}" \
 	< "$(dirname "$0")/fixtures/phase0-restore.sql"
 BASELINE_FIXTURE_INSERTED=true
+
+BASELINE_SESSION_TOKEN="baseline-${BASELINE_RUN_ID}-session-token"
+BASELINE_SESSION_COOKIE="$(docker exec --env SESSION_TOKEN="${BASELINE_SESSION_TOKEN}" bastiondesk-backend-1 bun -e '
+const signature = require("node:crypto").createHmac("sha256", process.env.BETTER_AUTH_SECRET).update(process.env.SESSION_TOKEN).digest("base64");
+process.stdout.write(encodeURIComponent(`${process.env.SESSION_TOKEN}.${signature}`));
+')"
+source_session="$(curl -sS --header "Cookie: better-auth.session_token=${BASELINE_SESSION_COOKIE}" http://127.0.0.1:4567/api/auth/get-session)"
+printf '%s' "${source_session}" | RUN_ID="${BASELINE_RUN_ID}" bun -e '
+let input = "";
+for await (const chunk of process.stdin) input += chunk;
+const body = JSON.parse(input);
+if (body.user?.email !== `${process.env.RUN_ID}-employee-a@example.test`) process.exit(1);
+' || fail "source API did not accept the fixture session"
 
 source_psql "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename" > "${BASELINE_TABLES}"
 [ -s "${BASELINE_TABLES}" ] || fail "source database has no public tables"
@@ -117,27 +145,39 @@ esac
 	'MC_CERTS_DIR=/tmp/mc-certs SSL_CERT_FILE="$S3_TLS_CA_PATH" exec mc cat "$1"' \
 	_ "${BASELINE_BACKUP_OBJECT}" > "${BASELINE_DUMP_FILE}"
 [ -s "${BASELINE_DUMP_FILE}" ] || fail "downloaded dump is empty"
+mkdir -p "${BASELINE_TMP_DIR}/empty-init"
 docker run --detach --rm \
 	--name "${BASELINE_RESTORE_CONTAINER}" \
-	--network none \
+	--network "${BASELINE_INTERNAL_NETWORK}" \
 	--tmpfs /var/lib/postgresql:rw,nosuid,nodev,size=512m \
+	--volume "${BASELINE_TMP_DIR}/empty-init:/docker-entrypoint-initdb.d:ro" \
+	--volume "${BASELINE_PROJECT_DIR}/database/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro" \
+	--volume "${BASELINE_PROJECT_DIR}/scripts/fixtures/phase0-restore-pg_hba.conf:/etc/postgresql/pg_hba.conf:ro" \
+	--volume "${BASELINE_PROJECT_DIR}/infra/tls/dev/ca:/certs/ca:ro" \
+	--volume "${BASELINE_PROJECT_DIR}/infra/tls/dev/database:/certs/database:ro" \
 	--env POSTGRES_PASSWORD="${BASELINE_RESTORE_PASSWORD}" \
-	--env POSTGRES_USER=restore \
+	--env POSTGRES_USER="${BASELINE_RESTORE_USER}" \
 	--env POSTGRES_DB=restore \
-	postgres:18.6-alpine3.24 >/dev/null
+	--env POSTGRES_PORT=54328 \
+	"${BASELINE_DATABASE_IMAGE}" \
+	postgres \
+	-c config_file=/etc/postgresql/postgresql.conf \
+	-c hba_file=/etc/postgresql/pg_hba.conf \
+	-c port=54328 >/dev/null
 BASELINE_RESTORE_STARTED=true
 
 ready=false
 for _attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-	if docker exec "${BASELINE_RESTORE_CONTAINER}" pg_isready --username restore --dbname restore >/dev/null 2>&1; then
+	if docker exec "${BASELINE_RESTORE_CONTAINER}" pg_isready --port 54328 --username "${BASELINE_RESTORE_USER}" --dbname restore >/dev/null 2>&1; then
 		ready=true
 		break
 	fi
 	sleep 1
 done
 [ "${ready}" = true ] || fail "temporary restore database did not become ready"
+restore_psql "ALTER ROLE \"${BASELINE_RESTORE_USER}\" WITH PASSWORD '${BASELINE_RESTORE_PASSWORD}'"
 docker exec -i "${BASELINE_RESTORE_CONTAINER}" \
-	pg_restore --exit-on-error --no-owner --no-privileges --username restore --dbname restore \
+	pg_restore --exit-on-error --no-owner --no-privileges --port 54328 --username "${BASELINE_RESTORE_USER}" --dbname restore \
 	< "${BASELINE_DUMP_FILE}"
 while IFS= read -r table; do
 	count="$(restore_psql "SELECT count(*) FROM \"${table}\"")"
@@ -150,6 +190,70 @@ tenant_a_rows="$(restore_psql "SELECT count(*) FROM incidents WHERE \"organizati
 tenant_b_leaks="$(restore_psql "SELECT count(*) FROM incidents WHERE \"organizationId\" = 'baseline-${BASELINE_RUN_ID}-org-a' AND \"userDescription\" LIKE '%TENANT_B_SECRET%'")"
 [ "${tenant_a_rows}" = 1 ] || fail "restored tenant A query returned an unexpected row count"
 [ "${tenant_b_leaks}" = 0 ] || fail "restored tenant A query contains the tenant B marker"
+
+BASELINE_RESTORE_IP="$(docker inspect "${BASELINE_RESTORE_CONTAINER}" --format "{{with index .NetworkSettings.Networks \"${BASELINE_INTERNAL_NETWORK}\"}}{{.IPAddress}}{{end}}")"
+[ -n "${BASELINE_RESTORE_IP}" ] || fail "could not resolve restored database address"
+docker run --detach --rm \
+	--name "${BASELINE_RESTORE_BACKEND}" \
+	--network "${BASELINE_INTERNAL_NETWORK}" \
+	--add-host "database:${BASELINE_RESTORE_IP}" \
+	--publish 127.0.0.1::3333 \
+	--env-file "${BASELINE_PROJECT_DIR}/.env" \
+	--env PORT=3333 \
+	--env POSTGRES_USER="${BASELINE_RESTORE_USER}" \
+	--env POSTGRES_PASSWORD="${BASELINE_RESTORE_PASSWORD}" \
+	--env POSTGRES_DB=restore \
+	--env POSTGRES_HOST=database \
+	--env PGBOUNCER_HOST=database \
+	--env PGBOUNCER_PORT=54328 \
+	--env DATABASE_URL="postgresql://${BASELINE_RESTORE_USER}:${BASELINE_RESTORE_PASSWORD}@database:54328/restore" \
+	--env AUTH_PASSWORD_BREACH_CHECK_ENABLED=false \
+	--volume "${BASELINE_PROJECT_DIR}/infra/tls/dev/ca:/certs/ca:ro" \
+	--volume "${BASELINE_PROJECT_DIR}/infra/tls/dev/backend:/certs/backend:ro" \
+	"${BASELINE_BACKEND_IMAGE}" >/dev/null
+BASELINE_RESTORE_BACKEND_STARTED=true
+docker exec --env EXPECTED_PASSWORD="${BASELINE_RESTORE_PASSWORD}" "${BASELINE_RESTORE_BACKEND}" sh -c \
+	'[ "$POSTGRES_PASSWORD" = "$EXPECTED_PASSWORD" ]' || fail "restored backend received an unexpected database password"
+
+BASELINE_API_PORT="$(docker port "${BASELINE_RESTORE_BACKEND}" 3333/tcp | sed -n 's/.*://p' | head -n 1)"
+[ -n "${BASELINE_API_PORT}" ] || fail "could not resolve restored backend port"
+api_ready=false
+for _attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+	if curl -sS "http://127.0.0.1:${BASELINE_API_PORT}/api" >/dev/null 2>&1; then
+		api_ready=true
+		break
+	fi
+	sleep 1
+done
+[ "${api_ready}" = true ] || fail "restored backend did not become ready"
+
+curl -sS \
+	--header "Cookie: better-auth.session_token=${BASELINE_SESSION_COOKIE}" \
+	"http://127.0.0.1:${BASELINE_API_PORT}/api/incidents/my" \
+	> "${BASELINE_TMP_DIR}/restored-api-list.json"
+if ! API_RESPONSE_PATH="${BASELINE_TMP_DIR}/restored-api-list.json" \
+	INCIDENT_A="${BASELINE_INCIDENT_A}" INCIDENT_B="${BASELINE_INCIDENT_B}" bun -e '
+const body = await Bun.file(process.env.API_RESPONSE_PATH).json();
+if (!body.success || body.pagination?.total !== 1 || body.data?.[0]?.id !== process.env.INCIDENT_A) {
+  console.error(JSON.stringify(body));
+  process.exit(1);
+}
+if (JSON.stringify(body).includes(process.env.INCIDENT_B) || JSON.stringify(body).includes("TENANT_B_SECRET")) {
+  console.error(JSON.stringify(body));
+  process.exit(1);
+}
+'; then
+	docker logs --tail 100 "${BASELINE_RESTORE_BACKEND}" >&2
+	printf '%s\n' "restore-ip=${BASELINE_RESTORE_IP}" >&2
+	docker exec "${BASELINE_RESTORE_BACKEND}" getent hosts database >&2
+	restore_psql "SELECT id || '|' || token || '|' || \"userId\" || '|' || \"activeOrganizationId\" FROM session WHERE token = '${BASELINE_SESSION_TOKEN}'" >&2
+	fail "restored API did not preserve the tenant A session scope"
+fi
+
+cross_status="$(curl -sS --output "${BASELINE_TMP_DIR}/restored-api-cross.json" --write-out '%{http_code}' \
+	--header "Cookie: better-auth.session_token=${BASELINE_SESSION_COOKIE}" \
+	"http://127.0.0.1:${BASELINE_API_PORT}/api/incidents/${BASELINE_INCIDENT_B}")"
+[ "${cross_status}" = 404 ] || fail "restored API exposed a tenant B incident"
 docker compose exec -T postgres-backup sh -c '
 	set -eu
 	test_dir="/tmp/phase0-restore-$1"
@@ -164,4 +268,4 @@ docker compose exec -T postgres-backup sh -c '
 		exit 1
 	fi
 ' _ "${BASELINE_RUN_ID}" || fail "failed backup incorrectly recorded a healthy success"
-printf '%s\n' "[baseline-restore] PASS: backup ${BASELINE_BACKUP_OBJECT} restored with matching table counts, tenant relationships and failure health semantics"
+printf '%s\n' "[baseline-restore] PASS: backup ${BASELINE_BACKUP_OBJECT} restored with matching counts, authenticated API tenant scope and failure health semantics"

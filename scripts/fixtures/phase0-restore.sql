@@ -21,6 +21,15 @@ VALUES
 	('baseline-' || :'run_id' || '-member-employee-a', 'baseline-' || :'run_id' || '-org-a', 'baseline-' || :'run_id' || '-employee-a', 'pracownik'),
 	('baseline-' || :'run_id' || '-member-employee-b', 'baseline-' || :'run_id' || '-org-b', 'baseline-' || :'run_id' || '-employee-b', 'pracownik');
 
+INSERT INTO session (id, "userId", token, "expiresAt", "activeOrganizationId")
+VALUES (
+	'baseline-' || :'run_id' || '-session-employee-a',
+	'baseline-' || :'run_id' || '-employee-a',
+	'baseline-' || :'run_id' || '-session-token',
+	now() + interval '1 day',
+	'baseline-' || :'run_id' || '-org-a'
+);
+
 INSERT INTO incidents (
 	id,
 	"userId",

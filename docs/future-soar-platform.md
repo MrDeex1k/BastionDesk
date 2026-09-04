@@ -496,11 +496,11 @@ implementację można porównać z `1.0.3`.
 - Krok 5/5 — pomiary i ocena zamknięcia baseline'u: wykonany. Powtarzalny
   pomiar startu, opóźnień, zasobów i obrazów oraz końcowy wynik bramki znajdują
   się w [`docs/baseline/1.0.3-measurements.md`](./baseline/1.0.3-measurements.md).
-  Baseline jest zamrożony jako punkt techniczny, ale decyzja dla fazy 1 to
-  `NO-GO`: macierz wymaga wyniku dla wszystkich 41 scenariuszy `P0`, a obecna
-  automatyzacja nie wykonuje jeszcze pełnych przepływów `A3`. Następnym
-  działaniem fazy 0 jest ich automatyzacja i raport per ID scenariusza albo
-  jawna zmiana kryterium w osobnej decyzji projektowej.
+  Finalna bramka obejmuje wszystkie 41 scenariuszy `P0`, w tym pełny przepływ
+  API dwóch organizacji, storage, audyt, analitykę, degradację LLM oraz osobny
+  backend nad odtworzoną bazą. Wynik to `GO`: `41 PASS`, `0 PARTIAL`,
+  `0 NOT_COVERED`, `0 FAIL`. Faza 0 jest zakończona; następnym etapem jest
+  faza 1 — migracje i kontrakty domenowe.
 
 ## Faza 1 — migracje i kontrakty domenowe
 

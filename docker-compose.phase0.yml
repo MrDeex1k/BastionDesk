@@ -1,0 +1,33 @@
+services:
+  smtp-test:
+    image: ghcr.io/axllent/mailpit:v1.30.6
+    restart: "no"
+    environment:
+      MP_DATABASE: /tmp/mailpit.db
+      MP_MAX_MESSAGES: 20
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+      MP_SMTP_DISABLE_RDNS: "true"
+    ports:
+      - "127.0.0.1::8025"
+    networks:
+      - bastiondesk-net-internal
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  backend:
+    environment:
+      AUTH_PASSWORD_BREACH_CHECK_ENABLED: "false"
+      SMTP_HOST: smtp-test
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_USER: phase0
+      SMTP_APP_PASSWORD: phase0
+      EMAIL_FROM_NAME: BastionDesk Phase 0
+      EMAIL_FROM_ADDRESS: phase0@bastiondesk.invalid
+    depends_on:
+      smtp-test:
+        condition: service_healthy
