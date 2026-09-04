@@ -65,6 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_session_expiresAt ON session ("expiresAt");
 CREATE TABLE IF NOT EXISTS account (
 	id text PRIMARY KEY,
 	"userId" text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+	issuer text NOT NULL,
 	"accountId" text NOT NULL,
 	"providerId" text NOT NULL,
 	"accessToken" text,
@@ -77,7 +78,7 @@ CREATE TABLE IF NOT EXISTS account (
 	-- Timestamps
 	"createdAt" timestamp NOT NULL DEFAULT now(),
 	"updatedAt" timestamp NOT NULL DEFAULT now(),
-	UNIQUE ("providerId", "accountId")
+	UNIQUE (issuer, "accountId")
 );
 
 CREATE INDEX IF NOT EXISTS idx_account_userId ON account ("userId");

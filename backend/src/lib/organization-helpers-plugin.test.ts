@@ -102,10 +102,16 @@ describe("organization add-member authorization", () => {
 		});
 		const endpoint = organizationHelpersPlugin().endpoints.addMemberByEmail;
 
-		const result = (await endpoint(context as never)) as unknown as JsonBody;
-
-		expect(result).toEqual({
-			error: {
+		let rejection: unknown;
+		try {
+			await endpoint(context as never);
+		} catch (error) {
+			rejection = error;
+		}
+		expect(rejection).toMatchObject({
+			status: "FORBIDDEN",
+			statusCode: 403,
+			body: {
 				code: "FORBIDDEN",
 				message: "Tylko administrator może dodawać członków organizacji",
 			},
@@ -122,10 +128,16 @@ describe("organization add-member authorization", () => {
 		});
 		const endpoint = organizationHelpersPlugin().endpoints.addMemberByEmail;
 
-		const result = (await endpoint(context as never)) as unknown as JsonBody;
-
-		expect(result).toEqual({
-			error: {
+		let rejection: unknown;
+		try {
+			await endpoint(context as never);
+		} catch (error) {
+			rejection = error;
+		}
+		expect(rejection).toMatchObject({
+			status: "FORBIDDEN",
+			statusCode: 403,
+			body: {
 				code: "ORGANIZATION_ACCESS_DENIED",
 				message: "Nie można dodawać członków do innej organizacji",
 			},

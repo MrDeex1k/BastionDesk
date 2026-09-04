@@ -90,6 +90,22 @@ export const incidentQuerySchema = paginationSchema.extend({
 
 type ValidateTarget = "body" | "query" | "params";
 
+function setValidatedRequestData(req: Request, target: ValidateTarget, result: unknown): void {
+	if (target === "query") {
+		// Express 5 exposes req.query through a getter, so mutating the temporary
+		// object returned by it does not persist parsed defaults or coercions.
+		Object.defineProperty(req, target, {
+			value: result,
+			writable: true,
+			enumerable: true,
+			configurable: true,
+		});
+		return;
+	}
+
+	req[target] = result;
+}
+
 /**
  * Middleware factory do walidacji danych wejściowych
  *
@@ -107,7 +123,7 @@ export function validate<T extends z.ZodTypeAny>(schema: T, target: ValidateTarg
 			const result = schema.parse(data);
 
 			// Zastąp oryginalne dane zwalidowanymi (z transformacjami i defaults)
-			Object.assign(req[target], result);
+			setValidatedRequestData(req, target, result);
 
 			next();
 		} catch (error) {
@@ -158,7 +174,7 @@ export function validateMultiple(schemas: {
 			try {
 				const data = req[target as ValidateTarget];
 				const result = schema.parse(data);
-				req[target as ValidateTarget] = result;
+				setValidatedRequestData(req, target as ValidateTarget, result);
 			} catch (error) {
 				if (error instanceof z.ZodError) {
 					errors.push(
