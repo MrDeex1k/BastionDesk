@@ -49,7 +49,7 @@ services:
       - https_proxy=${HTTPS_PROXY:-}
       - no_proxy=${NO_PROXY:-localhost,127.0.0.1,llm_service,backend,pgbouncer,database,storage-1,storage-2,storage-3,storage-4}
     volumes:
-      - huggingface-cache:/home/app/.cache/huggingface
+      - huggingface-model-cache:/home/app/.cache/huggingface
       - ./infra/tls/dev/ca:/certs/ca:ro
       - ./infra/tls/dev/llm_service:/certs/llm_service:ro
     networks:
@@ -317,7 +317,7 @@ services:
 volumes:
   postgres-data:
     driver: local
-  huggingface-cache:
+  huggingface-model-cache:
     driver: local
   postgres-backup-state:
     driver: local

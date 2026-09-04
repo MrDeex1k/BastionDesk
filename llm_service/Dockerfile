@@ -27,16 +27,16 @@ ENV UV_HTTP_TIMEOUT=300 \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     UV_CACHE_DIR=/tmp/uv-cache \
     PATH=/app/.venv/bin:$PATH \
-    HF_HOME=/tmp/huggingface \
-    TRANSFORMERS_CACHE=/tmp/huggingface
+    HF_HOME=/home/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/home/app/.cache/huggingface
 
 RUN groupadd --system app \
     && useradd --system --gid app --create-home --home-dir /home/app app \
-    && mkdir -p /tmp/uv-cache /tmp/huggingface \
-    && chown -R app:app /tmp/uv-cache /tmp/huggingface
+    && mkdir -p /tmp/uv-cache /home/app/.cache/huggingface \
+    && chown app:app /app \
+    && chown -R app:app /tmp/uv-cache /home/app/.cache/huggingface
 
 COPY --from=builder --chown=app:app /app /app
-RUN chown -R app:app /app
 
 USER app
 
