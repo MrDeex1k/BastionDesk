@@ -489,8 +489,11 @@ implementację można porównać z `1.0.3`.
   test Compose oraz wynik pierwszego przebiegu opisuje
   [`docs/baseline/1.0.3-automation.md`](./baseline/1.0.3-automation.md). Zamknięto
   trzy luki `G0` wykryte w kroku 2 oraz dwie rozbieżności startu stacku.
-- Kroki 4–5 — test backup/restore na czystym środowisku oraz pomiary i
-  zamknięcie baseline'u: otwarte.
+- Krok 4/5 — backup i restore na czystym środowisku: ukończony. Powtarzalny
+  test porównuje wszystkie tabele, relacje tenantów i zachowanie healthchecku;
+  procedura i pierwszy wynik znajdują się w
+  [`docs/baseline/1.0.3-restore.md`](./baseline/1.0.3-restore.md).
+- Krok 5/5 — pomiary i zamknięcie baseline'u: otwarty.
 
 ## Faza 1 — migracje i kontrakty domenowe
 
