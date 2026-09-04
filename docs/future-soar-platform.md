@@ -484,8 +484,13 @@ implementację można porównać z `1.0.3`.
 - Krok 2/5 — stałe scenariusze regresji: ukończony. Dane fixture, asercje
   tenant scope, priorytety i pakiety checkpointów znajdują się w
   [`docs/baseline/1.0.3-regression-scenarios.md`](./baseline/1.0.3-regression-scenarios.md).
-- Kroki 3–5 — automatyzacja, weryfikacja operacyjna oraz pomiary i zamknięcie
-  baseline'u: otwarte.
+- Krok 3/5 — automatyzacja kontraktów i izolacji organizacji: ukończony.
+  Pakiety `baseline-contract`, `baseline-tenant` i `baseline-workflow`, smoke
+  test Compose oraz wynik pierwszego przebiegu opisuje
+  [`docs/baseline/1.0.3-automation.md`](./baseline/1.0.3-automation.md). Zamknięto
+  trzy luki `G0` wykryte w kroku 2 oraz dwie rozbieżności startu stacku.
+- Kroki 4–5 — test backup/restore na czystym środowisku oraz pomiary i
+  zamknięcie baseline'u: otwarte.
 
 ## Faza 1 — migracje i kontrakty domenowe
 

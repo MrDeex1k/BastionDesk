@@ -20,6 +20,12 @@
     "lint": "turbo run lint",
     "prepare": "husky",
     "test": "turbo run test",
+    "test:baseline": "bun run --cwd backend test:baseline",
+    "test:baseline:contract": "bun run --cwd backend test:baseline:contract",
+    "test:baseline:integration": "./scripts/test-phase0-integration.sh",
+    "test:baseline:smoke": "./scripts/smoke-compose.sh",
+    "test:baseline:tenant": "bun run --cwd backend test:baseline:tenant",
+    "test:baseline:workflow": "bun run --cwd backend test:baseline:workflow",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
