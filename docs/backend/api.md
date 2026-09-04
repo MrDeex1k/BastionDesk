@@ -2,6 +2,12 @@
 
 Dokumentacja API dla aplikacji BastionDesk. Zawiera szczegółowe informacje o endpointach, strukturach JSON odpowiedzi oraz kodach błędów.
 
+> Dokument opisuje kontrakt aktualnego backendu `1.0.3`, w którym API i auth
+> działają jeszcze w jednym serwisie Express. Docelowo `/api/auth/*` będzie
+> obsługiwane przez Elysia 2 + Better Auth, a domenowe `/api/*` przez NestJS
+> Core. Granicą zaufania będzie JWT/JWKS; zobacz [docelową architekturę](./backend.md)
+> i [ADR-0001](../adr/0001-backend-boundaries-and-auth.md).
+
 > Uwaga: w aktualnym środowisku Docker Compose publicznym entrypointem aplikacji jest `http://localhost:4567`. Przykłady dla endpointów `/api/*` korzystają z reverse proxy `nginx`. Endpoint `GET /health` pozostaje endpointem backendu i nie jest osobno publikowany na hoście w domyślnej konfiguracji.
 
 ## Przegląd API

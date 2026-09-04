@@ -4,6 +4,14 @@ Backend jest serwerem **Express 5** uruchamianym przez **Bun**. Odpowiada za
 Better Auth, autoryzację organizacyjną, obsługę incydentów, komunikację z LLM,
 MinIO/S3 oraz wysyłkę emaili.
 
+> Ten dokument opisuje aktualny stan BastionDesk `1.0.3`. Docelowo
+> odpowiedzialności zostaną rozdzielone: **Elysia 2 + Better Auth** przejmie
+> osobny serwis tożsamości, a **NestJS Core** przejmie domenę SOAR. JWT/JWKS
+> będzie kontraktem zaufania pomiędzy tymi serwisami, a EffectTS zostanie użyty
+> w nowych use case’ach core i workerach. Szczegóły opisują
+> [roadmapa](../future-soar-platform.md) oraz
+> [ADR-0001](../adr/0001-backend-boundaries-and-auth.md).
+
 ## Struktura projektu
 
 ```text

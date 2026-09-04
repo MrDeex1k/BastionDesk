@@ -11,9 +11,10 @@ Ten dokument opisuje kierunek rozwoju po wydaniu BastionDesk `1.0.3`. Łączy:
 - wymagania dotyczące badań, bezpieczeństwa i integracji.
 
 Nie jest to instrukcja instalacji bibliotek ani niezmienny wybór wszystkich
-technologii. Nazwy narzędzi oznaczają obecne kandydatury. Przed implementacją
-każdej integracji trzeba potwierdzić aktualnie wspierany sposób komunikacji,
-wersje, ograniczenia i model bezpieczeństwa.
+technologii. Dokument rozróżnia jednak docelowy kierunek granic backendu od
+szczegółów implementacyjnych, które nadal wymagają ADR, discovery i spike'u.
+Przed implementacją każdej integracji trzeba potwierdzić aktualnie wspierany
+sposób komunikacji, wersje, ograniczenia i model bezpieczeństwa.
 
 Dokument jest roadmapą produktu, planem pracy magisterskiej i punktem
 odniesienia dla przyszłych decyzji architektonicznych.
@@ -89,6 +90,82 @@ Alternatywnie:
 - audyt nie obejmuje pełnego łańcucha decyzji i działań;
 - przed nową wersją trzeba zamknąć znane niespójności frontend–backend i
   zabezpieczyć bieżące przepływy testami regresyjnymi.
+
+## Ustalony kierunek architektury backendu
+
+Docelowo backend jest rozdzielony na dwa serwisy o odrębnych
+odpowiedzialnościach:
+
+```text
+React + NGINX
+      │
+      ├── /api/auth/* ──> Elysia 2 + Better Auth
+      │                    sesje, hasła, PassKeys, organizacje, role,
+      │                    emisja JWT i publikacja JWKS
+      │
+      └── /api/* ────────> NestJS Core
+                           domena SOAR, API, polityki, audyt,
+                           playbooki i publikowanie zdarzeń
+
+EffectTS pozostaje wewnętrzną warstwą orkiestracji NestJS Core i workerów:
+use case'y, adaptery, retry, timeouty, cancellation i kontrolowana
+współbieżność. EffectTS nie jest osobnym serwisem ani zamiennikiem NestJS.
+```
+
+### Serwis tożsamości — Elysia 2 + Better Auth
+
+Elysia 2 jest docelową warstwą HTTP dla osobnego serwisu auth. Better Auth
+pozostaje właścicielem:
+
+- logowania, haseł, weryfikacji emaila i resetu hasła;
+- sesji, PassKeys/WebAuthn i opcjonalnego OIDC;
+- organizacji, członkostw i ról;
+- endpointów auth oraz kluczy używanych do podpisywania tokenów.
+
+Serwis auth jest jedynym właścicielem klucza prywatnego. Publikuje publiczny
+JWKS, a NestJS nie importuje instancji Better Auth ani nie korzysta bezpośrednio
+z tabel auth.
+
+### Core domenowy — NestJS
+
+NestJS jest docelowym frameworkiem głównego core. Migracja z obecnego Expressa
+odbywa się modułami, z zachowaniem kompatybilności API i danych. Core odpowiada
+za domenę SOAR, a nie za obsługę haseł, sesji ani PassKeys.
+
+NestJS lokalnie weryfikuje JWT wystawione przez auth service na podstawie
+cache’owanego JWKS. JWT i JWKS są jednym kontraktem zaufania, a nie wzajemnie
+alternatywnymi mechanizmami:
+
+- JWT jest krótkoterminowym access tokenem;
+- JWKS dostarcza klucze publiczne do weryfikacji podpisu;
+- obowiązuje jeden issuer auth service i jeden kanoniczny endpoint JWKS;
+- token zawiera co najmniej claims `iss`, `aud`, `sub`, `iat`, `exp`, `jti` oraz
+  nagłówek JOSE `kid`;
+- NestJS akceptuje wyłącznie właściwe `issuer` i `audience`, np.
+  `bastiondesk-core`;
+- klucze są asymetryczne, a rotacja używa `kid` i okresu przejściowego dla
+  poprzedniego klucza;
+- klucz prywatny nigdy nie opuszcza serwisu auth.
+
+Sesja przeglądarkowa pozostaje oparta na HttpOnly cookies. JWT przeznaczone dla
+core nie są przechowywane w `localStorage`. Przy użyciu cookies nadal obowiązują
+CSRF, CORS i walidacja originu. Dokładny mechanizm wymiany lub dołączenia
+krótkoterminowego JWT wymaga osobnego spike'u integracyjnego.
+
+Claims organizacji i uprawnień muszą być minimalne. `org_id` lub scope mogą
+przenosić aktywny kontekst, ale core zawsze egzekwuje tenant scope, a operacje
+wysokiego ryzyka dodatkowo sprawdzają aktualność membershipu i polityk.
+
+### EffectTS w core i workerach
+
+EffectTS jest standardem dla nowego kodu orkiestrującego w NestJS Core oraz
+workerach, nie wymaganiem dla całego repozytorium. Nowe use case’y korzystają z
+modelu `Effect<A, E, R>` oraz portów dostarczanych przez warstwy dla PostgreSQL,
+storage, RabbitMQ, Wazuh, Threat Intelligence i lokalnego LLM.
+
+EffectTS nie zastępuje na starcie Expressa, Elysia, Better Auth, Bun SQL,
+PostgreSQL ani Zod. Kod legacy pozostaje oparty na obecnych kontraktach do czasu
+osiągnięcia parity.
 
 ## Zasady prowadzenia rozwoju
 
@@ -201,22 +278,27 @@ bezpośrednio z RabbitMQ, Redis, Wazuh, Ansible ani providerami TI.
 
 ### Gateway tożsamości
 
-Osobny gateway oparty na Better Auth i lekkim frameworku TypeScript pozostaje
-kandydatem, nie przesądzoną migracją. Odpowiadałby za:
+Osobny serwis auth oparty na Elysia 2 i Better Auth jest docelowym kierunkiem.
+Elysia obsługuje warstwę HTTP, a Better Auth pozostaje właścicielem procesów
+tożsamości. Serwis odpowiada za:
 
 - logowanie, sesje i PassKeys;
 - organizacje i role;
 - opcjonalne OIDC/social login;
 - CSRF, origin validation i rate limiting;
+- emisję krótkoterminowych JWT dla core i publikację JWKS;
 - przekazanie zweryfikowanej tożsamości do core.
 
-JWT/JWKS należy dodać tylko wtedy, gdy jest potrzebny dla usług lub klientów
-innych niż przeglądarka. Dla przeglądarki preferowane są HttpOnly cookies.
+JWT/JWKS jest podstawowym kontraktem auth service–core. Dla przeglądarki
+preferowane są HttpOnly cookies; JWT nie może być przechowywany w
+`localStorage`. Szczegóły token exchange, CSRF, rotacji kluczy i unieważniania
+tokenów opisuje ADR oraz karta integracji auth.
 
 ### Core domenowy
 
-NestJS jest kandydatem dla modularnego core, ale wymaga ADR i migracji modułami.
-Core odpowiada za:
+NestJS jest docelowym frameworkiem modularnego core. Wymaga ADR, spike'u
+integracyjnego i migracji modułami, ale nie jest już alternatywą dla Elysia — oba
+frameworki mają różne granice odpowiedzialności. Core odpowiada za:
 
 - incydenty, alerty i zdarzenia bezpieczeństwa;
 - organizacje, assety, IOC i artefakty;
@@ -228,7 +310,9 @@ Core odpowiada za:
 ### Workery
 
 Granice logiczne powstają przed granicami procesów. Początkowo kilka workerów
-może działać w jednym deployable. Docelowe odpowiedzialności:
+może działać w jednym deployable NestJS. Nowe workflow workerów powinny używać
+EffectTS, ale ich stan i retry transportowy pozostają odpowiedzialnością
+warstwy jobów/RabbitMQ. Docelowe odpowiedzialności:
 
 - ekstrakcja IOC;
 - enrichment TI;
@@ -246,6 +330,39 @@ może działać w jednym deployable. Docelowe odpowiedzialności:
 - S3-compatible storage: artefakty, dowody, raporty i PCAP;
 - OpenTelemetry: wspólny kontekst obserwowalności.
 
+### Kontrakt komunikacji auth service–core
+
+Auth service i core są osobnymi deployable, ale korzystają z jednego modelu
+zaufania:
+
+```text
+klient / frontend
+  -> NGINX / publiczny entrypoint
+     -> Elysia 2 + Better Auth (/api/auth/*)
+        -> sesja HttpOnly oraz krótkoterminowy access JWT
+
+klient / frontend
+  -> NGINX / publiczny entrypoint
+     -> NestJS Core (/api/*)
+        -> weryfikacja JWT przez cache’owany JWKS auth service
+```
+
+- JWT jest tokenem dostępu, a JWKS jest publicznym katalogiem kluczy do jego
+  weryfikacji;
+- obowiązuje jeden issuer auth service i jeden kanoniczny endpoint JWKS;
+- używane są klucze asymetryczne — NestJS nie otrzymuje klucza prywatnego;
+- access token ma krótkie TTL i audience ograniczone do odbiorcy, np.
+  `bastiondesk-core`;
+- refresh token i operacje sesyjne pozostają wyłącznie po stronie auth service;
+- usługi wewnętrzne nie używają tokenów użytkownika jako własnych poświadczeń;
+  w razie potrzeby korzystają z osobnego audience, mTLS i/lub service tokenu;
+- dokładny mechanizm przekazania JWT z warstwy przeglądarkowej do core musi
+  zostać potwierdzony testem integracyjnym, bez użycia `localStorage`.
+
+Core może posiadać lokalną projekcję organizacji i uprawnień, ale nie staje się
+właścicielem danych Better Auth. Wrażliwe akcje muszą dodatkowo weryfikować
+aktualność membershipu, polityk, approval i blast radius.
+
 ## Status decyzji technologicznych
 
 | Status | Elementy | Zasada |
@@ -253,7 +370,8 @@ może działać w jednym deployable. Docelowe odpowiedzialności:
 | Zachować jako baseline | React, TypeScript, Tailwind CSS v4, Base UI, Bun, Oxc, TurboRepo, PostgreSQL, PgBouncer, NGINX, Docker Compose, S3 API, Protobuf/gRPC i mTLS | Nie migrować bez mierzalnego problemu lub wymagania domenowego. |
 | Wprowadzać w fazach rdzenia | wersjonowane migracje, modularny core, RabbitMQ, Redis, OpenTelemetry, Prometheus i Grafana | Najpierw kontrakt, spike i test awarii; potem użycie produkcyjne. |
 | Wprowadzać domenowo | Wazuh, YARA, Threat Intelligence, SIGMA, playbooki i Ansible/Active Response | Każdy komponent przechodzi integration discovery i dostaje adapter odseparowany od domeny. |
-| Kandydaci wymagający ADR | NestJS, Drizzle, osobny gateway ElysiaTS, JWT/JWKS, Docker Model Runner, llama.cpp i wybrany model lokalny | Nazwa technologii w roadmapie nie oznacza automatycznej zgody na migrację. |
+| Docelowy kierunek backendu | NestJS Core, osobny serwis Elysia 2 + Better Auth, JWT/JWKS oraz EffectTS w core i workerach | Granice są przyjęte kierunkowo; szczegóły kontraktu, wersji i migracji wymagają ADR oraz spike'ów. |
+| Kandydaci wymagający ADR | Drizzle, szczegóły kontraktu JWT/JWKS, Docker Model Runner, llama.cpp i wybrany model lokalny | Kandydatura dotyczy szczegółów implementacyjnych, a nie zmiany ustalonego podziału core/auth. |
 | Opcjonalne po stabilizacji | OIDC Google/Apple/Microsoft, STIX/TAXII, Defender i kolejni providerzy TI | Dodawać pojedynczo, gdy istnieje konkretny scenariusz produktowy. |
 | Odłożone | RustFS, Astro/portal docs, Docker Stack, K3s/MicroK8s, Pulumi, Sentry/Axiom i dodatkowy WAF | Nie mogą blokować rdzenia SOAR ani pracy magisterskiej. |
 
@@ -261,6 +379,28 @@ Obecny SMTP i Nodemailer pozostają wystarczające dla bieżącego produktu.
 Notification worker powinien przejąć wysyłkę dopiero po powstaniu niezawodnej
 kolejki. Osobne API mailowe ma sens tylko wtedy, gdy pojawią się webhooki lub
 niezależne wymagania skalowania.
+
+## Strategia migracji backendu
+
+Migracja nie jest jednoczesnym przepisaniem całego serwisu. Przebiega przez
+tymczasowe współistnienie starego Express backendu, auth service i NestJS Core:
+
+1. Zamknąć baseline `1.0.3` i zabezpieczyć krytyczne przepływy testami.
+2. Zdefiniować kontrakty domenowe, event envelope, tenant scope oraz kontrakt
+   JWT/JWKS.
+3. Uruchomić Elysia 2 + Better Auth jako osobny auth service i skierować do
+   niego wyłącznie ścieżki auth.
+4. Dodać weryfikację JWT/JWKS do ścieżki przejściowej oraz NestJS Core.
+5. Uruchomić NestJS obok Expressa i przenosić moduły przez adaptery, zaczynając
+   od incydentów i audytu.
+6. Przełączać ruch przez NGINX po osiągnięciu parity funkcjonalnego,
+   bezpieczeństwa i obserwowalności.
+7. Usunąć Better Auth z Expressa, a następnie wygasić legacy route'y i sam
+   Express, gdy wszystkie moduły będą obsługiwane przez NestJS.
+
+EffectTS może być używany od pierwszego nowego modułu NestJS, ale nie powinien
+blokować migracji HTTP. Auth service pozostaje prostym serwisem Elysia + Better
+Auth; EffectTS nie jest wymagany do implementacji jego podstawowego przepływu.
 
 ## Docelowy przepływ domenowy
 
@@ -345,13 +485,16 @@ Przygotować rozwój bez utraty danych i bez big-bang rewrite.
 ### Kroki
 
 1. Zdefiniować bounded contexts i właścicieli modeli.
-2. Utworzyć ADR dla core, gatewaya, workerów i komunikacji wewnętrznej.
+2. Utworzyć ADR dla NestJS Core, serwisu Elysia 2 + Better Auth, workerów,
+   EffectTS i komunikacji wewnętrznej.
 3. Wprowadzić wersjonowane migracje i upgrade z obecnego schematu.
 4. Przygotować wspólne kontrakty typów, błędów, paginacji i event envelope.
 5. Zdefiniować tenant scope, correlation ID, causation ID i idempotency key.
 6. Zaprojektować rozszerzony audyt i provenance danych.
-7. Wybrać ORM/query layer po spike'u; Drizzle pozostaje kandydatem.
-8. Określić kompatybilność starego i nowego API.
+7. Zdefiniować kontrakt JWT/JWKS: issuer, audience, claims, algorytm, `kid`,
+   cache JWKS i rotację kluczy.
+8. Wybrać ORM/query layer po spike'u; Drizzle pozostaje kandydatem.
+9. Określić kompatybilność starego i nowego API.
 
 ### Kryterium ukończenia
 
@@ -373,11 +516,15 @@ Oddzielić logikę domenową od HTTP i przygotować core na alerty.
 ### Kroki
 
 1. Zbudować moduły organizacji, incydentów, plików i audytu.
-2. Przenieść statusy, ownership i RBAC do testowalnej domeny.
-3. Zachować kompatybilność frontendu przez adapter lub wersjonowane API.
-4. Rozszerzyć audyt o zmiany danych i decyzje systemowe.
-5. Wprowadzić model komendy i zdarzenia niezależny od brokera.
-6. Usuwać legacy dopiero po osiągnięciu parity.
+2. Uruchomić NestJS Core obok istniejącego Expressa i przenieść pierwszy moduł
+   przez adapter lub wersjonowane API.
+3. Przenieść statusy, ownership i RBAC do testowalnej domeny.
+4. Wykorzystać EffectTS w use case'ach i portach nowego core; nie mieszać
+   runtime'u Effect z kontrolerami HTTP bardziej niż to konieczne.
+5. Zachować kompatybilność frontendu przez adapter lub wersjonowane API.
+6. Rozszerzyć audyt o zmiany danych i decyzje systemowe.
+7. Wprowadzić model komendy i zdarzenia niezależny od brokera.
+8. Usuwać legacy dopiero po osiągnięciu parity.
 
 ### Kryterium ukończenia
 
@@ -416,23 +563,30 @@ a job jest widoczny w trace i metrykach.
 
 ### Cel
 
-Oddzielić auth tylko wtedy, gdy tworzy czytelną granicę zaufania.
+Wydzielić auth do osobnego serwisu Elysia 2 + Better Auth i ustanowić
+JWT/JWKS jako kontrakt zaufania dla NestJS Core.
 
 ### Kroki
 
-1. Zweryfikować aktualne Better Auth, WebAuthn i providerów OIDC.
-2. Przygotować ADR: auth w core kontra osobny gateway.
-3. Jeśli gateway zostanie zaakceptowany, przenieść sesje, organizacje i role
-   bez utraty kompatybilności użytkowników.
-4. Zdefiniować zaufanie gateway–core i minimalne claims.
-5. Zachować HttpOnly cookies; JWT/JWKS dodać tylko z uzasadnieniem.
-6. Ujednolicić CSRF, CORS, origin validation, rate limiting i audyt.
-7. Social login dodać po discovery providera i reguł membership.
+1. Zweryfikować aktualne Better Auth, Elysia 2, WebAuthn i providerów OIDC.
+2. Uruchomić auth service równolegle z obecnym Express backendem.
+3. Przenieść sesje, organizacje, role i PassKeys bez utraty kompatybilności
+   użytkowników.
+4. Skonfigurować jeden issuer i kanoniczny JWKS z kluczami asymetrycznymi.
+5. Zdefiniować minimalne claims, audience core, krótkie TTL, `kid`, cache JWKS,
+   rotację oraz okres przejściowy dla poprzednich kluczy.
+6. Dodać verifier JWT do NestJS Core; core nie importuje Better Auth i nie
+   posiada klucza prywatnego.
+7. Zachować HttpOnly cookies, CSRF, CORS, origin validation, rate limiting i
+   audyt.
+8. Dopiero po przełączeniu ruchu usunąć auth z Expressa.
+9. Social login dodać po discovery providera i reguł membership.
 
 ### Kryterium ukończenia
 
-Konta, organizacje, role i PassKeys działają po migracji, a core akceptuje
-wyłącznie zweryfikowaną tożsamość.
+Konta, organizacje, role i PassKeys działają po migracji, NestJS Core akceptuje
+wyłącznie zweryfikowaną tożsamość z JWT/JWKS, a Express nie obsługuje już
+odpowiedzialności auth.
 
 ## Faza 5 — model bezpieczeństwa i ingest Wazuh
 
@@ -628,10 +782,10 @@ Każdy checkpoint musi być prezentowalny i testowalny bez ukończenia następne
 | Faza | Minimalne artefakty dokumentacyjne |
 | --- | --- |
 | 0 | baseline funkcjonalny, znane ograniczenia, macierz regresji i pomiary początkowe |
-| 1 | ADR-y, model domenowy, polityka migracji, wersjonowanie API i event envelope |
+| 1 | ADR-y granic NestJS/auth/EffectTS, model domenowy, polityka migracji, kontrakt JWT/JWKS, wersjonowanie API i event envelope |
 | 2 | mapa modułów, reguły domenowe, plan kompatybilności i wygaszania legacy |
 | 3 | topologia messagingu, standard handlera, retry/DLQ i runbook replay |
-| 4 | model zaufania i sesji, threat model auth, rotacja kluczy i karty OIDC |
+| 4 | model zaufania Elysia 2–NestJS, kontrakt JWT/JWKS, threat model auth, rotacja kluczy i karty OIDC |
 | 5 | karta Wazuh, schema mapping, retencja i runbook utraty połączenia |
 | 6 | model IOC/artefaktu, karty TI, polityka sekretów i wersjonowanie YARA |
 | 7 | specyfikacja korelacji, scoring, kalibracja i opis datasetu |
