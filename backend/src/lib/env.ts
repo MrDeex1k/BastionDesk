@@ -28,7 +28,17 @@ function getEnvNumber(key: string, defaultValue: number): number {
 function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 	const value = process.env[key];
 	if (value === undefined) return defaultValue;
-	return value.toLowerCase() === "true" || value === "1";
+
+	switch (value.trim().toLowerCase()) {
+		case "true":
+		case "1":
+			return true;
+		case "false":
+		case "0":
+			return false;
+		default:
+			throw new Error(`Environment variable ${key} must be true, false, 1 or 0`);
+	}
 }
 
 function parseOriginList(value: string, key: string): string[] {
@@ -112,6 +122,7 @@ const rawEnv = {
 	BETTER_AUTH_URL: getEnvVar("BETTER_AUTH_URL"),
 	BETTER_AUTH_TRUSTED_ORIGINS: getEnvVar("BETTER_AUTH_TRUSTED_ORIGINS"),
 	CSRF_SECRET: getEnvVar("CSRF_SECRET"),
+	AUTH_PASSWORD_BREACH_CHECK_ENABLED: getEnvBoolean("AUTH_PASSWORD_BREACH_CHECK_ENABLED", true),
 
 	// WebAuthn / PassKeys
 	WEBAUTHN_RP_ID: getEnvVar("WEBAUTHN_RP_ID"),

@@ -4,7 +4,7 @@ import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
 import { env } from "./env";
 
-const PROTO_PATH = path.resolve(import.meta.dir, "../../proto/incident_classifier.proto");
+const PROTO_PATH = path.resolve(import.meta.dir, "../../../proto/incident_classifier.proto");
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 	keepCase: false,
@@ -58,7 +58,7 @@ export class LlmServiceError extends Error {
 	}
 }
 
-let client: {
+export interface IncidentClassifierClient {
 	ClassifyIncident: (
 		request: { incidentId: string; description: string },
 		metadata: grpc.Metadata,
@@ -68,7 +68,9 @@ let client: {
 			response: { category?: string; modelName?: string },
 		) => void,
 	) => void;
-} | null = null;
+}
+
+let client: IncidentClassifierClient | null = null;
 
 function getClient() {
 	if (!client) {
@@ -136,7 +138,11 @@ function createLlmGrpcError(error: grpc.ServiceError): LlmServiceError {
 	}
 }
 
-export async function classifyIncident(incidentId: string, description: string): Promise<string> {
+export async function classifyIncident(
+	incidentId: string,
+	description: string,
+	clientOverride?: IncidentClassifierClient,
+): Promise<string> {
 	if (!incidentId.trim()) {
 		throw new LlmServiceError(
 			"LLM_INVALID_REQUEST",
@@ -155,7 +161,7 @@ export async function classifyIncident(incidentId: string, description: string):
 		);
 	}
 
-	const rpcClient = getClient();
+	const rpcClient = clientOverride ?? getClient();
 
 	return await new Promise((resolve, reject) => {
 		rpcClient.ClassifyIncident(

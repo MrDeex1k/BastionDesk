@@ -386,16 +386,18 @@ Migracja nie jest jednoczesnym przepisaniem całego serwisu. Przebiega przez
 tymczasowe współistnienie starego Express backendu, auth service i NestJS Core:
 
 1. Zamknąć baseline `1.0.3` i zabezpieczyć krytyczne przepływy testami.
-2. Zdefiniować kontrakty domenowe, event envelope, tenant scope oraz kontrakt
+2. Na działającym `1.0.3` wdrożyć testy komponentowe React Testing Library i
+   przeglądarkowe E2E Playwright jako kontrakt zachowania dla migracji.
+3. Zdefiniować kontrakty domenowe, event envelope, tenant scope oraz kontrakt
    JWT/JWKS.
-3. Uruchomić Elysia 2 + Better Auth jako osobny auth service i skierować do
+4. Uruchomić Elysia 2 + Better Auth jako osobny auth service i skierować do
    niego wyłącznie ścieżki auth.
-4. Dodać weryfikację JWT/JWKS do ścieżki przejściowej oraz NestJS Core.
-5. Uruchomić NestJS obok Expressa i przenosić moduły przez adaptery, zaczynając
+5. Dodać weryfikację JWT/JWKS do ścieżki przejściowej oraz NestJS Core.
+6. Uruchomić NestJS obok Expressa i przenosić moduły przez adaptery, zaczynając
    od incydentów i audytu.
-6. Przełączać ruch przez NGINX po osiągnięciu parity funkcjonalnego,
+7. Przełączać ruch przez NGINX po osiągnięciu parity funkcjonalnego,
    bezpieczeństwa i obserwowalności.
-7. Usunąć Better Auth z Expressa, a następnie wygasić legacy route'y i sam
+8. Usunąć Better Auth z Expressa, a następnie wygasić legacy route'y i sam
    Express, gdy wszystkie moduły będą obsługiwane przez NestJS.
 
 EffectTS może być używany od pierwszego nowego modułu NestJS, ale nie powinien
@@ -476,7 +478,90 @@ implementację można porównać z `1.0.3`.
 - macierz przepływów i testów;
 - baseline wydajności i zasobów.
 
-## Faza 1 — migracje i kontrakty domenowe
+### Status realizacji
+
+- Krok 1/5 — inwentaryzacja stanu `1.0.3`: ukończony. Zakres usług,
+  krytycznych przepływów, API, tabel, plików, sekretów i gRPC znajduje się w
+  [`docs/baseline/1.0.3-inventory.md`](./baseline/1.0.3-inventory.md).
+- Krok 2/5 — stałe scenariusze regresji: ukończony. Dane fixture, asercje
+  tenant scope, priorytety i pakiety checkpointów znajdują się w
+  [`docs/baseline/1.0.3-regression-scenarios.md`](./baseline/1.0.3-regression-scenarios.md).
+- Krok 3/5 — automatyzacja kontraktów i izolacji organizacji: ukończony.
+  Pakiety `baseline-contract`, `baseline-tenant` i `baseline-workflow`, smoke
+  test Compose oraz wynik pierwszego przebiegu opisuje
+  [`docs/baseline/1.0.3-automation.md`](./baseline/1.0.3-automation.md). Zamknięto
+  trzy luki `G0` wykryte w kroku 2 oraz dwie rozbieżności startu stacku.
+- Krok 4/5 — backup i restore na czystym środowisku: ukończony. Powtarzalny
+  test porównuje wszystkie tabele, relacje tenantów i zachowanie healthchecku;
+  procedura i pierwszy wynik znajdują się w
+  [`docs/baseline/1.0.3-restore.md`](./baseline/1.0.3-restore.md).
+- Krok 5/5 — pomiary i ocena zamknięcia baseline'u: wykonany. Powtarzalny
+  pomiar startu, opóźnień, zasobów i obrazów oraz końcowy wynik bramki znajdują
+  się w [`docs/baseline/1.0.3-measurements.md`](./baseline/1.0.3-measurements.md).
+  Finalna bramka obejmuje wszystkie 41 scenariuszy `P0`, w tym pełny przepływ
+  API dwóch organizacji, storage, audyt, analitykę, degradację LLM oraz osobny
+  backend nad odtworzoną bazą. Wynik to `GO`: `41 PASS`, `0 PARTIAL`,
+  `0 NOT_COVERED`, `0 FAIL`. Faza 0 jest zakończona; następnym etapem jest
+  faza 1 — testy UI i E2E jako kontrakt migracji.
+
+## Faza 1 — testy UI i E2E jako kontrakt migracji
+
+### Cel
+
+Zabezpieczyć zachowanie bieżącego BastionDesk `1.0.3` z perspektywy użytkownika
+przed rozpoczęciem migracji oraz utworzyć zestaw testów utrzymywany aż do
+pełnego przejścia na BastionDesk `2.0`.
+
+### Kroki
+
+1. Skonfigurować testy komponentowe React przy użyciu `bun:test`, React Testing
+   Library, `user-event`, matcherów `jest-dom` i lekkiego środowiska DOM.
+2. Przygotować wspólny renderer z providerami aplikacji oraz deterministyczne
+   mocki granic sieciowych, czasu i stanu uwierzytelnienia.
+3. Pokryć komponentowo krytyczne formularze, walidację, stany błędów,
+   uprawnienia oraz przełączanie organizacji bez testowania szczegółów
+   implementacyjnych komponentów.
+4. Skonfigurować Playwright dla Chromium, Firefox i WebKit; Chromium pozostaje
+   szybką bramką zmian, a pełna macierz przeglądarek działa na checkpointach.
+5. Dodać deterministyczne przygotowanie danych i sesji przez API z osobnym
+   tenantem dla każdego scenariusza oraz sprzątaniem stanu testowego.
+6. Zautomatyzować w prawdziwej przeglądarce krytyczne przepływy `1.0.3`: auth,
+   organizację i role, zgłoszenie oraz obsługę incydentu, pliki i raport.
+7. Używać selektorów opartych na rolach, etykietach i treści widocznej dla
+   użytkownika; `data-testid` stosować wyłącznie jako udokumentowany wyjątek.
+8. Włączyć testy komponentowe i E2E do Turbo oraz CI, zapisując raport HTML,
+   trace i zrzuty ekranu dla nieudanych przebiegów.
+9. Traktować scenariusze jako kontrakt parity: podczas migracji uruchamiać ten
+   sam zestaw przeciw ścieżce legacy i nowej, rozszerzając go o nowe funkcje
+   bez przepisywania stabilnych oczekiwań użytkownika.
+
+### Rola narzędzi
+
+| Narzędzie | Odpowiedzialność |
+| --- | --- |
+| `bun:test` | Runner testów, lifecycle, mocki oraz podstawowe API `expect`; nie jest zastępowany przez Jest. |
+| `happy-dom` | Lekka implementacja DOM dla testów komponentowych uruchamianych poza przeglądarką. |
+| React Testing Library | Renderowanie komponentów i zapytania odzwierciedlające sposób korzystania z UI. |
+| `user-event` | Symulacja pełnych interakcji użytkownika, takich jak wpisywanie, klikanie i nawigacja klawiaturą. |
+| `jest-dom` | Wyłącznie dodatkowe matchery DOM dla `expect` z `bun:test`, np. `toBeVisible()`; pakiet nie wprowadza runnera Jest. |
+| Playwright | Testy E2E kompletnej aplikacji w prawdziwych przeglądarkach. |
+
+### Kryterium ukończenia
+
+Testy komponentowe przechodzą lokalnie i w CI, krytyczne przepływy `1.0.3`
+przechodzą w Chromium przy każdej zmianie, a pierwszy pełny przebieg Chromium,
+Firefox i WebKit przechodzi przed rozpoczęciem fazy 2. Zestaw jest niezależny
+od implementacji backendu i stanowi obowiązkową bramkę parity aż do wydania
+BastionDesk `2.0`.
+
+### Dokumentacja
+
+- macierz komponentów, przepływów i pokrycia;
+- konwencje selektorów, danych, sesji i izolacji tenantów;
+- instrukcja uruchomienia lokalnego, w Compose i CI;
+- polityka artefaktów diagnostycznych oraz obsługi testów niestabilnych.
+
+## Faza 2 — migracje i kontrakty domenowe
 
 ### Cel
 
@@ -507,7 +592,7 @@ kontraktów bez kopiowania modeli legacy.
 - polityka migracji;
 - wersjonowanie API, eventów i błędów.
 
-## Faza 2 — modularny core incydentów
+## Faza 3 — modularny core incydentów
 
 ### Cel
 
@@ -531,7 +616,7 @@ Oddzielić logikę domenową od HTTP i przygotować core na alerty.
 Obecny workflow działa przez modularny core, zachowuje dane i uprawnienia, a
 testy porównawcze starej i nowej ścieżki przechodzą.
 
-## Faza 3 — kolejki, niezawodność i obserwowalność
+## Faza 4 — kolejki, niezawodność i obserwowalność
 
 ### Cel
 
@@ -559,7 +644,7 @@ a job jest widoczny w trace i metrykach.
 - standard handlera i polityka retry/DLQ;
 - runbook replay oraz zablokowanej kolejki.
 
-## Faza 4 — tożsamość i gateway
+## Faza 5 — tożsamość i gateway
 
 ### Cel
 
@@ -588,7 +673,7 @@ Konta, organizacje, role i PassKeys działają po migracji, NestJS Core akceptuj
 wyłącznie zweryfikowaną tożsamość z JWT/JWKS, a Express nie obsługuje już
 odpowiedzialności auth.
 
-## Faza 5 — model bezpieczeństwa i ingest Wazuh
+## Faza 6 — model bezpieczeństwa i ingest Wazuh
 
 ### Cel
 
@@ -617,7 +702,7 @@ jest widoczny wraz z surowym oraz znormalizowanym źródłem.
 - schema mapping i retencja;
 - runbook utraty połączenia i replay.
 
-## Faza 6 — IOC, Threat Intelligence i artefakty
+## Faza 7 — IOC, Threat Intelligence i artefakty
 
 ### Cel
 
@@ -645,7 +730,7 @@ Hybrid Analysis i opcjonalnie VirusTotal.
 IOC lub artefakt ma wynik z provenance, cache nie miesza tenantów, awaria
 providera nie blokuje incydentu, a analityk widzi aktualność danych.
 
-## Faza 7 — korelacja i scoring ryzyka
+## Faza 8 — korelacja i scoring ryzyka
 
 ### Cel
 
@@ -668,7 +753,7 @@ providera nie blokuje incydentu, a analityk widzi aktualność danych.
 Każde powiązanie i score można wyjaśnić oraz odtworzyć dla konkretnej wersji
 reguł. LLM nie jest wymagany.
 
-## Faza 8 — playbooki i human-in-the-loop
+## Faza 9 — playbooki i human-in-the-loop
 
 ### Cel
 
@@ -691,7 +776,7 @@ Przekształcić analizę w wersjonowaną rekomendację działania.
 System wybiera i przedstawia playbook, ale bez approval nie wykonuje akcji
 zewnętrznej. Analityk widzi uzasadnienie, zakres i rollback.
 
-## Faza 9 — kontrolowana active response
+## Faza 10 — kontrolowana active response
 
 ### Cel
 
@@ -714,7 +799,7 @@ Bezpiecznie wykonać ograniczony zestaw odwracalnych akcji.
 Akcja i rollback przechodzą kontrolowane testy, są audytowane i nie
 przekraczają tenant scope ani blast radius.
 
-## Faza 10 — mediator LLM
+## Faza 11 — mediator LLM
 
 ### Cel
 
@@ -741,7 +826,7 @@ zamrożonym wymaganiem.
 Każdy use case ma mierzalną jakość, walidowany output i fallback. Niedostępny
 model nie blokuje podstawowego systemu.
 
-## Faza 11 — walidacja badawcza i wydanie
+## Faza 12 — walidacja badawcza i wydanie
 
 ### Cel
 
@@ -758,22 +843,25 @@ Udowodnić wartość systemu i przygotować powtarzalny deployment.
 7. Ustabilizować Docker Compose jako wariant podstawowy.
 8. Przygotować docs użytkownika, operatora i dewelopera.
 9. Oddzielić zakres magisterski od elementów późniejszego produktu.
-10. Wydać wersję z macierzą wspieranych komponentów.
+10. Uruchomić pełny zestaw React Testing Library i Playwright przeciw
+    docelowemu BastionDesk `2.0` oraz potwierdzić parity przepływów `1.0.3`.
+11. Wydać wersję z macierzą wspieranych komponentów.
 
 ### Kryterium ukończenia
 
 Wersja ma powtarzalne wdrożenie i upgrade, wyniki eksperymentów, runbooki oraz
-udokumentowane ograniczenia.
+udokumentowane ograniczenia. Pełny zestaw testów komponentowych i E2E przechodzi
+przeciw docelowemu BastionDesk `2.0` bez regresji przepływów `1.0.3`.
 
 ## Checkpointy produktowe
 
 | Checkpoint | Fazy | Rezultat |
 | --- | --- | --- |
-| A — stabilny fundament | 0–3 | Migrowalny core, kontrakty, kolejki i obserwowalność. |
-| B — platforma detekcji | 4–6 | Tożsamość, Wazuh, assety, IOC, TI i artefakty. |
-| C — wsparcie triage | 7–8 | Korelacja, scoring i playbooki suggestion/approval. |
-| D — SOAR-lite | 9–10 | Kontrolowana reakcja i pomocniczy lokalny LLM. |
-| E — wydanie badawcze | 11 | Pomiary, deployment, upgrade i dokumentacja. |
+| A — stabilny fundament | 0–4 | Baseline, testy migracyjne, core, kontrakty, kolejki i obserwowalność. |
+| B — platforma detekcji | 5–7 | Tożsamość, Wazuh, assety, IOC, TI i artefakty. |
+| C — wsparcie triage | 8–9 | Korelacja, scoring i playbooki suggestion/approval. |
+| D — SOAR-lite | 10–11 | Kontrolowana reakcja i pomocniczy lokalny LLM. |
+| E — wydanie badawcze | 12 | Pomiary, deployment, upgrade i dokumentacja. |
 
 Każdy checkpoint musi być prezentowalny i testowalny bez ukończenia następnego.
 
@@ -782,17 +870,18 @@ Każdy checkpoint musi być prezentowalny i testowalny bez ukończenia następne
 | Faza | Minimalne artefakty dokumentacyjne |
 | --- | --- |
 | 0 | baseline funkcjonalny, znane ograniczenia, macierz regresji i pomiary początkowe |
-| 1 | ADR-y granic NestJS/auth/EffectTS, model domenowy, polityka migracji, kontrakt JWT/JWKS, wersjonowanie API i event envelope |
-| 2 | mapa modułów, reguły domenowe, plan kompatybilności i wygaszania legacy |
-| 3 | topologia messagingu, standard handlera, retry/DLQ i runbook replay |
-| 4 | model zaufania Elysia 2–NestJS, kontrakt JWT/JWKS, threat model auth, rotacja kluczy i karty OIDC |
-| 5 | karta Wazuh, schema mapping, retencja i runbook utraty połączenia |
-| 6 | model IOC/artefaktu, karty TI, polityka sekretów i wersjonowanie YARA |
-| 7 | specyfikacja korelacji, scoring, kalibracja i opis datasetu |
-| 8 | schema playbooka, model policy/approval i katalog bezpiecznych kroków |
-| 9 | karty akcji, uprawnienia, rollback, kill switch i raport testów awarii |
-| 10 | kontrakt mediatora, karty modeli/runtime'ów, benchmarki i polityka danych AI |
-| 11 | raport badawczy, instalacja/upgrade, runbooki, release notes i macierz kompatybilności |
+| 1 | macierz testów komponentowych i E2E, konwencje danych oraz instrukcja uruchamiania w CI |
+| 2 | ADR-y granic NestJS/auth/EffectTS, model domenowy, polityka migracji, kontrakt JWT/JWKS, wersjonowanie API i event envelope |
+| 3 | mapa modułów, reguły domenowe, plan kompatybilności i wygaszania legacy |
+| 4 | topologia messagingu, standard handlera, retry/DLQ i runbook replay |
+| 5 | model zaufania Elysia 2–NestJS, kontrakt JWT/JWKS, threat model auth, rotacja kluczy i karty OIDC |
+| 6 | karta Wazuh, schema mapping, retencja i runbook utraty połączenia |
+| 7 | model IOC/artefaktu, karty TI, polityka sekretów i wersjonowanie YARA |
+| 8 | specyfikacja korelacji, scoring, kalibracja i opis datasetu |
+| 9 | schema playbooka, model policy/approval i katalog bezpiecznych kroków |
+| 10 | karty akcji, uprawnienia, rollback, kill switch i raport testów awarii |
+| 11 | kontrakt mediatora, karty modeli/runtime'ów, benchmarki i polityka danych AI |
+| 12 | raport badawczy, instalacja/upgrade, runbooki, release notes, wyniki E2E i macierz kompatybilności |
 
 ## Elementy odłożone poza rdzeń
 
@@ -819,11 +908,13 @@ W nowej wersji nie wystarczą wyłącznie testy jednostkowe.
 ### W każdej fazie
 
 - testy jednostkowe reguł i walidatorów;
+- testy komponentowe zmienianego UI;
 - testy modułowe domeny;
 - testy kontraktowe API, eventów i integracji;
 - testy izolacji organizacji;
 - testy idempotencji, retry i trybu zdegradowanego;
-- testy migracji danych.
+- testy migracji danych;
+- odpowiednie scenariusze Playwright dla zmienianych przepływów krytycznych.
 
 ### Na checkpointach
 
@@ -834,9 +925,10 @@ W nowej wersji nie wystarczą wyłącznie testy jednostkowe.
 - backup/restore i upgrade;
 - active response wyłącznie w izolowanym labie.
 
-Vitest uruchamiany przez Bun i React Testing Library pozostają kandydatami dla
-TypeScript/React. Narzędzie jest mniej ważne niż powtarzalne testowanie realnych
-granic systemu.
+`bun:test` z React Testing Library jest standardem testów komponentowych, a
+Playwright standardem testów przeglądarkowych E2E. Testy utworzone dla `1.0.3`
+pozostają aktywnym kontraktem zachowania podczas migracji i muszą przejść na
+docelowym BastionDesk `2.0`.
 
 ## Plan badań
 

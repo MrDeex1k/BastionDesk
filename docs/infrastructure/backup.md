@@ -178,4 +178,19 @@ pg_restore \
   bastiondesk-2026-05-14T03-00-00Z.dump
 ```
 
-Restore został już zweryfikowany praktycznym testem w aktualnym stacku Compose.
+Powtarzalny test fazy 0 uruchamia się poleceniem:
+
+```bash
+bun run test:baseline:restore
+```
+
+Test tworzy oznaczone fixture dwóch organizacji, wymusza backup, pobiera dump z
+MinIO i odtwarza go do tymczasowego PostgreSQL 18 na `tmpfs`, bez dostępu do
+sieci. Następnie porównuje liczności wszystkich tabel publicznych, relacje
+tenantów, incydenty, ścieżki plików i audyt. Kontener oraz fixture źródłowe są
+usuwane także po błędzie. Test wykonuje również kontrolowaną próbę uploadu do
+nieistniejącego bucketa i potwierdza, że znacznik sukcesu nie jest aktualizowany,
+a przeterminowany stan nie przechodzi healthchecku.
+
+Pierwszy wersjonowany wynik dla baseline'u `1.0.3` znajduje się w
+[`../baseline/1.0.3-restore.md`](../baseline/1.0.3-restore.md).

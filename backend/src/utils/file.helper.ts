@@ -31,6 +31,19 @@ const ALLOWED_MIME_TYPES = {
 	],
 };
 
+const FILE_EXTENSIONS: Record<"report" | "statement", Record<string, string>> = {
+	report: {
+		"application/pdf": "pdf",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+		"application/msword": "doc",
+	},
+	statement: {
+		"application/pdf": "pdf",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+		"application/msword": "doc",
+	},
+};
+
 export type FileType = keyof typeof MAX_FILE_SIZE;
 
 export interface ParsedFile {
@@ -47,6 +60,119 @@ export interface ParsedFile {
 export interface ParsedFormData {
 	fields: Record<string, string>;
 	files: Record<string, ParsedFile>;
+}
+
+export interface Base64FileUpload {
+	filename: string;
+	data: string;
+	mimeType: string;
+}
+
+export interface ParsedBase64FileUpload {
+	buffer: Buffer;
+	metadata: {
+		filename: string;
+		mimeType: string;
+		size: number;
+	};
+}
+
+function hasExpectedSignature(buffer: Buffer, mimeType: string): boolean {
+	if (mimeType === "application/pdf") {
+		return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+	}
+
+	if (mimeType === "application/msword") {
+		return buffer.subarray(0, 8).equals(Buffer.from("d0cf11e0a1b11ae1", "hex"));
+	}
+
+	if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+		const signature = buffer.subarray(0, 4).toString("hex");
+		return ["504b0304", "504b0506", "504b0708"].includes(signature);
+	}
+
+	return false;
+}
+
+function decodeStrictBase64(data: string): Buffer {
+	if (
+		data.length === 0 ||
+		data.length % 4 !== 0 ||
+		!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)
+	) {
+		throw new AppError(400, "INVALID_FILE_DATA", "Dane pliku nie są poprawnym base64");
+	}
+
+	const buffer = Buffer.from(data, "base64");
+	if (buffer.toString("base64") !== data) {
+		throw new AppError(400, "INVALID_FILE_DATA", "Dane pliku nie są poprawnym base64");
+	}
+
+	return buffer;
+}
+
+export function parseBase64FileUpload(
+	value: unknown,
+	fileType: "report" | "statement",
+): ParsedBase64FileUpload {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new AppError(400, "MISSING_FILE_DATA", "Brak danych pliku");
+	}
+
+	const { filename, data, mimeType } = value as Partial<Base64FileUpload>;
+	if (typeof filename !== "string" || typeof data !== "string" || typeof mimeType !== "string") {
+		throw new AppError(400, "INVALID_FILE_DATA", "Nieprawidłowa struktura danych pliku");
+	}
+
+	const containsControlCharacter = Array.from(filename).some((character) => {
+		const codePoint = character.codePointAt(0) ?? 0;
+		return codePoint <= 31 || codePoint === 127;
+	});
+
+	if (
+		filename.length === 0 ||
+		filename.length > 255 ||
+		filename !== filename.trim() ||
+		filename === "." ||
+		filename === ".." ||
+		filename.includes("/") ||
+		filename.includes("\\") ||
+		containsControlCharacter
+	) {
+		throw new AppError(400, "INVALID_FILENAME", "Nieprawidłowa nazwa pliku");
+	}
+
+	const expectedExtension = FILE_EXTENSIONS[fileType][mimeType];
+	if (!expectedExtension) {
+		throw new AppError(400, "INVALID_FILE_TYPE", "Nieprawidłowy typ pliku");
+	}
+
+	if (getFileExtension(filename) !== expectedExtension) {
+		throw new AppError(400, "INVALID_FILE_TYPE", "Rozszerzenie pliku nie pasuje do typu MIME");
+	}
+
+	const maxEncodedLength = 4 * Math.ceil(MAX_FILE_SIZE[fileType] / 3);
+	if (data.length > maxEncodedLength) {
+		throw new AppError(400, "FILE_TOO_LARGE", "Plik przekracza limit 50MB");
+	}
+
+	const buffer = decodeStrictBase64(data);
+	if (buffer.length > MAX_FILE_SIZE[fileType]) {
+		throw new AppError(400, "FILE_TOO_LARGE", "Plik przekracza limit 50MB");
+	}
+
+	if (!hasExpectedSignature(buffer, mimeType)) {
+		throw new AppError(400, "INVALID_FILE_CONTENT", "Zawartość pliku nie pasuje do typu MIME");
+	}
+
+	return {
+		buffer,
+		metadata: {
+			filename,
+			mimeType,
+			size: buffer.length,
+		},
+	};
 }
 
 /**

@@ -3,11 +3,13 @@ import { Router } from "express";
 import { query, queryOne } from "../../lib/database.js";
 import { env } from "../../lib/env.js";
 import { getObjectBuffer, putObject } from "../../lib/storage.js";
+import { AppError } from "../../middleware/error.middleware.js";
 import {
 	type AuthenticatedRequest,
 	getRequiredOrganizationId,
 } from "../../middleware/auth.middleware.js";
 import type { Incident } from "../../types/index.js";
+import { generateStorageKey, parseBase64FileUpload } from "../../utils/file.helper.js";
 import {
 	createContentDispositionHeader,
 	findStoredFileMetadata,
@@ -1204,7 +1206,7 @@ router.get("/:id", requireOrganizationAccess, getIncidentDetails);
  * Upload pojedynczego pliku (raport lub sprawozdanie)
  */
 async function uploadSingleFile(
-	file: { filename: string; data: string; mimeType: string },
+	file: unknown,
 	incidentId: string,
 	type: "reports" | "statements",
 ): Promise<{
@@ -1217,15 +1219,15 @@ async function uploadSingleFile(
 	};
 }> {
 	try {
-		// Dekoduj base64 na Buffer
-		const buffer = Buffer.from(file.data, "base64");
+		const fileType = type === "reports" ? "report" : "statement";
+		const { buffer, metadata } = parseBase64FileUpload(file, fileType);
 
-		// Buduj ścieżkę w storage
-		const storagePath = `incidents/${incidentId}/${type}/${file.filename}`;
+		// Klucz jest generowany po stronie serwera; nazwa klienta pozostaje tylko w metadanych.
+		const storagePath = generateStorageKey(incidentId, fileType, metadata.filename);
 
 		// Upload do storage
 		await putObject(storagePath, buffer, {
-			contentType: file.mimeType,
+			contentType: metadata.mimeType,
 			acl: "private",
 		});
 
@@ -1233,14 +1235,13 @@ async function uploadSingleFile(
 			path: storagePath,
 			metadata: {
 				bucket: env.S3_BUCKET,
-				filename: file.filename,
-				mimeType: file.mimeType,
-				size: buffer.length,
+				...metadata,
 			},
 		};
 	} catch (error) {
-		console.error(`[UPLOAD] Failed to upload ${type} file ${file.filename}:`, error);
-		throw new Error(`Nie udało się przesłać pliku ${file.filename}`);
+		if (error instanceof AppError) throw error;
+		console.error(`[UPLOAD] Failed to upload ${type} file`);
+		throw new Error("Nie udało się przesłać pliku");
 	}
 }
 
@@ -1322,6 +1323,12 @@ async function uploadReport(req: Request, res: Response) {
 		try {
 			uploadedReport = await uploadSingleFile(reportData, id, "reports");
 		} catch (error) {
+			if (error instanceof AppError) {
+				return res.status(error.statusCode).json({
+					success: false,
+					error: { code: error.code, message: error.message },
+				});
+			}
 			return res.status(500).json({
 				success: false,
 				error: {
@@ -1453,6 +1460,12 @@ async function uploadStatement(req: Request, res: Response) {
 		try {
 			uploadedStatement = await uploadSingleFile(statementData, id, "statements");
 		} catch (error) {
+			if (error instanceof AppError) {
+				return res.status(error.statusCode).json({
+					success: false,
+					error: { code: error.code, message: error.message },
+				});
+			}
 			return res.status(500).json({
 				success: false,
 				error: {

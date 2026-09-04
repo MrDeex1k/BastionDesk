@@ -4,6 +4,10 @@ Serwis klasyfikuje opisy incydentów przy użyciu modelu
 `google/gemma-3-1b-it`. Klasyfikacja jest udostępniana backendowi przez gRPC
 z wzajemnym TLS, a FastAPI udostępnia osobny endpoint diagnostyczny.
 
+Checkpoint modelu zawiera wagi `BF16` i nie ma konfiguracji kwantyzacji.
+Obecny runtime zachowuje tę precyzję; ewentualna migracja do skwantyzowanego
+GGUF jest osobną zmianą modelu i runtime'u.
+
 ## Struktura
 
 ```text
@@ -55,7 +59,10 @@ docker compose exec llm_service \
 
 Projekt używa `uv`. Zależności bezpośrednie są przypięte do dokładnych wersji w
 `pyproject.toml`, a `uv.lock` utrwala pełne rozwiązanie. Resolver pomija wydania
-młodsze niż 24 godziny przez `exclude-newer = "24 hours"`.
+młodsze niż 24 godziny przez `exclude-newer = "24 hours"`. Torch pochodzi z
+oficjalnego indeksu PyTorch CPU, ponieważ obecny serwis Compose nie deklaruje
+dostępu do GPU; dzięki temu obraz nie zawiera niewykorzystywanych bibliotek
+CUDA.
 
 Instalacja lokalna:
 
@@ -83,10 +90,17 @@ Obraz jest budowany z kontekstu katalogu głównego, ponieważ potrzebuje zarów
 stuby protobuf, po czym uruchamia Uvicorn na porcie `8888`; serwer gRPC na
 porcie `8443` jest uruchamiany w cyklu życia aplikacji FastAPI.
 
-W aktualnym Compose serwis ma limit pamięci `10GB` i wolumen cache Hugging Face.
-Pierwszy start wymaga pobrania modelu; opcjonalne `HTTP_PROXY`, `HTTPS_PROXY` i
-`NO_PROXY` pozwalają skierować ten ruch przez proxy. `HF_TOKEN` jest potrzebny
-tylko wtedy, gdy wybrany model wymaga uwierzytelnienia.
+W aktualnym Compose serwis ma limit pamięci `10GB` i trwały wolumen
+`huggingface-model-cache` pod ścieżką wskazaną przez `HF_HOME`. Pierwszy start
+wymaga pobrania modelu, ale kolejne kontenery korzystają z tego samego cache;
+opcjonalne `HTTP_PROXY`, `HTTPS_PROXY` i `NO_PROXY` pozwalają skierować ruch
+przez proxy. `HF_TOKEN` jest potrzebny tylko wtedy, gdy wybrany model wymaga
+uwierzytelnienia.
+
+Obraz runtime używa wariantu `torch+cpu`, ponieważ Compose nie przydziela tej
+usłudze GPU. Wagi modelu nie są częścią obrazu: około 1,9 GiB danych znajduje
+się w osobnym, trwałym wolumenie. Rekreacja kontenera może nadal sprawdzić
+metadane modelu w Hugging Face, lecz nie pobiera ponownie pliku wag.
 
 ## Rozwiązywanie problemów
 

@@ -34,6 +34,15 @@ const pool = new Pool({
 });
 
 // Better-Auth Instance
+const passwordBreachPlugins = env.AUTH_PASSWORD_BREACH_CHECK_ENABLED
+	? [
+			haveIBeenPwned({
+				customPasswordCompromisedMessage:
+					"To hasło zostało wykryte w wyciekach danych. Proszę wybrać inne hasło.",
+			}),
+		]
+	: [];
+
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
 	secret: env.BETTER_AUTH_SECRET,
@@ -92,12 +101,9 @@ export const auth = betterAuth({
 		// PassKey Check Plugin - sprawdzanie dostępności kluczy
 		passkeyCheckPlugin(),
 
-		// HaveIBeenPwned - sprawdzanie kompromitacji haseł
-		// Używamy tylko customPasswordCompromisedMessage (zgodnie z API)
-		haveIBeenPwned({
-			customPasswordCompromisedMessage:
-				"To hasło zostało wykryte w wyciekach danych. Proszę wybrać inne hasło.",
-		}),
+		// HaveIBeenPwned jest wyłączany wyłącznie w izolowanym fixture baseline'u,
+		// aby test nie zależał od zewnętrznej usługi. Domyślnie pozostaje włączony.
+		...passwordBreachPlugins,
 
 		// Organization - multi-tenancy z rolami
 		// Role zgodne ze schematem bazy danych:

@@ -6,8 +6,7 @@
  */
 
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
-import { uuidv7 } from "uuidv7";
+import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { z } from "zod";
 
 type UserRow = {
@@ -26,6 +25,16 @@ type MemberRow = {
 	role: string;
 	createdAt: Date;
 	updatedAt?: Date | null;
+};
+
+type SessionContext = {
+	user?: { id?: string };
+	userId?: string;
+	activeOrganizationId?: string | null;
+	session?: {
+		userId?: string;
+		activeOrganizationId?: string | null;
+	};
 };
 
 export const organizationHelpersPlugin = () => {
@@ -51,6 +60,42 @@ export const organizationHelpersPlugin = () => {
 				},
 				async (ctx) => {
 					const { email, role, organizationId } = ctx.body;
+					const session = ctx.context.session as unknown as SessionContext;
+					const actorUserId =
+						session.user?.id ?? session.userId ?? session.session?.userId;
+					const activeOrganizationId =
+						session.activeOrganizationId ??
+						session.session?.activeOrganizationId ??
+						null;
+
+					if (!actorUserId || !activeOrganizationId) {
+						throw APIError.from("FORBIDDEN", {
+							code: "NO_ORGANIZATION",
+							message: "Brak aktywnej organizacji",
+						});
+					}
+
+					if (organizationId && organizationId !== activeOrganizationId) {
+						throw APIError.from("FORBIDDEN", {
+							code: "ORGANIZATION_ACCESS_DENIED",
+							message: "Nie można dodawać członków do innej organizacji",
+						});
+					}
+
+					const actorMembership = (await ctx.context.adapter.findOne({
+						model: "member",
+						where: [
+							{ field: "userId", value: actorUserId },
+							{ field: "organizationId", value: activeOrganizationId },
+						],
+					})) as MemberRow | null;
+
+					if (actorMembership?.role !== "admin") {
+						throw APIError.from("FORBIDDEN", {
+							code: "FORBIDDEN",
+							message: "Tylko administrator może dodawać członków organizacji",
+						});
+					}
 
 					// Znajdź użytkownika po emailu
 					const user = (await ctx.context.adapter.findOne({
@@ -59,40 +104,14 @@ export const organizationHelpersPlugin = () => {
 					})) as UserRow | null;
 
 					if (!user) {
-						return ctx.json(
-							{
-								error: {
-									code: "USER_NOT_FOUND",
-									message:
-										"Użytkownik o podanym adresie email nie istnieje w systemie",
-								},
-							},
-							{ status: 404 },
-						);
+						throw APIError.from("NOT_FOUND", {
+							code: "USER_NOT_FOUND",
+							message: "Użytkownik o podanym adresie email nie istnieje w systemie",
+						});
 					}
 
 					// Sprawdź czy użytkownik już jest członkiem organizacji
-					const session = ctx.context.session as unknown as {
-						activeOrganizationId?: string | null;
-						session?: { activeOrganizationId?: string | null };
-					};
-					const targetOrgId =
-						organizationId ??
-						session?.activeOrganizationId ??
-						session?.session?.activeOrganizationId ??
-						null;
-
-					if (!targetOrgId) {
-						return ctx.json(
-							{
-								error: {
-									code: "NO_ORGANIZATION",
-									message: "Brak aktywnej organizacji",
-								},
-							},
-							{ status: 400 },
-						);
-					}
+					const targetOrgId = activeOrganizationId;
 
 					const existingMember = await ctx.context.adapter.findOne({
 						model: "member",
@@ -103,22 +122,16 @@ export const organizationHelpersPlugin = () => {
 					});
 
 					if (existingMember) {
-						return ctx.json(
-							{
-								error: {
-									code: "ALREADY_MEMBER",
-									message: "Użytkownik jest już członkiem tej organizacji",
-								},
-							},
-							{ status: 409 },
-						);
+						throw APIError.from("CONFLICT", {
+							code: "ALREADY_MEMBER",
+							message: "Użytkownik jest już członkiem tej organizacji",
+						});
 					}
 
 					// Dodaj użytkownika do organizacji
 					const member = (await ctx.context.adapter.create({
 						model: "member",
 						data: {
-							id: uuidv7(),
 							userId: user.id,
 							organizationId: targetOrgId,
 							role,
