@@ -481,8 +481,11 @@ implementację można porównać z `1.0.3`.
 - Krok 1/5 — inwentaryzacja stanu `1.0.3`: ukończony. Zakres usług,
   krytycznych przepływów, API, tabel, plików, sekretów i gRPC znajduje się w
   [`docs/baseline/1.0.3-inventory.md`](./baseline/1.0.3-inventory.md).
-- Kroki 2–5 — scenariusze regresji, automatyzacja, weryfikacja operacyjna oraz
-  pomiary i zamknięcie baseline'u: otwarte.
+- Krok 2/5 — stałe scenariusze regresji: ukończony. Dane fixture, asercje
+  tenant scope, priorytety i pakiety checkpointów znajdują się w
+  [`docs/baseline/1.0.3-regression-scenarios.md`](./baseline/1.0.3-regression-scenarios.md).
+- Kroki 3–5 — automatyzacja, weryfikacja operacyjna oraz pomiary i zamknięcie
+  baseline'u: otwarte.
 
 ## Faza 1 — migracje i kontrakty domenowe
 
