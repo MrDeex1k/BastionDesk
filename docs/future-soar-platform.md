@@ -476,6 +476,14 @@ implementację można porównać z `1.0.3`.
 - macierz przepływów i testów;
 - baseline wydajności i zasobów.
 
+### Status realizacji
+
+- Krok 1/5 — inwentaryzacja stanu `1.0.3`: ukończony. Zakres usług,
+  krytycznych przepływów, API, tabel, plików, sekretów i gRPC znajduje się w
+  [`docs/baseline/1.0.3-inventory.md`](./baseline/1.0.3-inventory.md).
+- Kroki 2–5 — scenariusze regresji, automatyzacja, weryfikacja operacyjna oraz
+  pomiary i zamknięcie baseline'u: otwarte.
+
 ## Faza 1 — migracje i kontrakty domenowe
 
 ### Cel
