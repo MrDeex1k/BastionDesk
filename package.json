@@ -23,6 +23,7 @@
     "test:baseline": "bun run --cwd backend test:baseline",
     "test:baseline:contract": "bun run --cwd backend test:baseline:contract",
     "test:baseline:integration": "./scripts/test-phase0-integration.sh",
+    "test:baseline:measure": "bun scripts/measure-phase0-baseline.ts",
     "test:baseline:restore": "./scripts/test-phase0-restore.sh",
     "test:baseline:smoke": "./scripts/smoke-compose.sh",
     "test:baseline:tenant": "bun run --cwd backend test:baseline:tenant",

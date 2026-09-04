@@ -493,7 +493,14 @@ implementację można porównać z `1.0.3`.
   test porównuje wszystkie tabele, relacje tenantów i zachowanie healthchecku;
   procedura i pierwszy wynik znajdują się w
   [`docs/baseline/1.0.3-restore.md`](./baseline/1.0.3-restore.md).
-- Krok 5/5 — pomiary i zamknięcie baseline'u: otwarty.
+- Krok 5/5 — pomiary i ocena zamknięcia baseline'u: wykonany. Powtarzalny
+  pomiar startu, opóźnień, zasobów i obrazów oraz końcowy wynik bramki znajdują
+  się w [`docs/baseline/1.0.3-measurements.md`](./baseline/1.0.3-measurements.md).
+  Baseline jest zamrożony jako punkt techniczny, ale decyzja dla fazy 1 to
+  `NO-GO`: macierz wymaga wyniku dla wszystkich 41 scenariuszy `P0`, a obecna
+  automatyzacja nie wykonuje jeszcze pełnych przepływów `A3`. Następnym
+  działaniem fazy 0 jest ich automatyzacja i raport per ID scenariusza albo
+  jawna zmiana kryterium w osobnej decyzji projektowej.
 
 ## Faza 1 — migracje i kontrakty domenowe
 
