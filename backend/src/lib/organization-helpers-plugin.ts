@@ -28,6 +28,16 @@ type MemberRow = {
 	updatedAt?: Date | null;
 };
 
+type SessionContext = {
+	user?: { id?: string };
+	userId?: string;
+	activeOrganizationId?: string | null;
+	session?: {
+		userId?: string;
+		activeOrganizationId?: string | null;
+	};
+};
+
 export const organizationHelpersPlugin = () => {
 	return {
 		id: "organization-helpers",
@@ -51,6 +61,58 @@ export const organizationHelpersPlugin = () => {
 				},
 				async (ctx) => {
 					const { email, role, organizationId } = ctx.body;
+					const session = ctx.context.session as unknown as SessionContext;
+					const actorUserId =
+						session.user?.id ?? session.userId ?? session.session?.userId;
+					const activeOrganizationId =
+						session.activeOrganizationId ??
+						session.session?.activeOrganizationId ??
+						null;
+
+					if (!actorUserId || !activeOrganizationId) {
+						return ctx.json(
+							{
+								error: {
+									code: "NO_ORGANIZATION",
+									message: "Brak aktywnej organizacji",
+								},
+							},
+							{ status: 403 },
+						);
+					}
+
+					if (organizationId && organizationId !== activeOrganizationId) {
+						return ctx.json(
+							{
+								error: {
+									code: "ORGANIZATION_ACCESS_DENIED",
+									message: "Nie można dodawać członków do innej organizacji",
+								},
+							},
+							{ status: 403 },
+						);
+					}
+
+					const actorMembership = (await ctx.context.adapter.findOne({
+						model: "member",
+						where: [
+							{ field: "userId", value: actorUserId },
+							{ field: "organizationId", value: activeOrganizationId },
+						],
+					})) as MemberRow | null;
+
+					if (actorMembership?.role !== "admin") {
+						return ctx.json(
+							{
+								error: {
+									code: "FORBIDDEN",
+									message:
+										"Tylko administrator może dodawać członków organizacji",
+								},
+							},
+							{ status: 403 },
+						);
+					}
 
 					// Znajdź użytkownika po emailu
 					const user = (await ctx.context.adapter.findOne({
@@ -72,27 +134,7 @@ export const organizationHelpersPlugin = () => {
 					}
 
 					// Sprawdź czy użytkownik już jest członkiem organizacji
-					const session = ctx.context.session as unknown as {
-						activeOrganizationId?: string | null;
-						session?: { activeOrganizationId?: string | null };
-					};
-					const targetOrgId =
-						organizationId ??
-						session?.activeOrganizationId ??
-						session?.session?.activeOrganizationId ??
-						null;
-
-					if (!targetOrgId) {
-						return ctx.json(
-							{
-								error: {
-									code: "NO_ORGANIZATION",
-									message: "Brak aktywnej organizacji",
-								},
-							},
-							{ status: 400 },
-						);
-					}
+					const targetOrgId = activeOrganizationId;
 
 					const existingMember = await ctx.context.adapter.findOne({
 						model: "member",
