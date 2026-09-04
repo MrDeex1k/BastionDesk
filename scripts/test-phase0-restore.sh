@@ -207,9 +207,13 @@ docker run --detach --rm \
 	--env PGBOUNCER_HOST=database \
 	--env PGBOUNCER_PORT=54328 \
 	--env DATABASE_URL="postgresql://${BASELINE_RESTORE_USER}:${BASELINE_RESTORE_PASSWORD}@database:54328/restore" \
+	--env DB_TLS_CA_PATH=/certs/ca/ca.crt \
+	--env DB_TLS_CERT_PATH=/certs/db-client/client.crt \
+	--env DB_TLS_KEY_PATH=/certs/db-client/client.key \
 	--env AUTH_PASSWORD_BREACH_CHECK_ENABLED=false \
 	--volume "${BASELINE_PROJECT_DIR}/infra/tls/dev/ca:/certs/ca:ro" \
 	--volume "${BASELINE_PROJECT_DIR}/infra/tls/dev/backend:/certs/backend:ro" \
+	--volume "${BASELINE_PROJECT_DIR}/infra/tls/dev/pgbouncer:/certs/db-client:ro" \
 	"${BASELINE_BACKEND_IMAGE}" >/dev/null
 BASELINE_RESTORE_BACKEND_STARTED=true
 docker exec --env EXPECTED_PASSWORD="${BASELINE_RESTORE_PASSWORD}" "${BASELINE_RESTORE_BACKEND}" sh -c \

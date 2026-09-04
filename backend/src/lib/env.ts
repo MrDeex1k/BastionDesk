@@ -28,7 +28,17 @@ function getEnvNumber(key: string, defaultValue: number): number {
 function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 	const value = process.env[key];
 	if (value === undefined) return defaultValue;
-	return value.toLowerCase() === "true" || value === "1";
+
+	switch (value.trim().toLowerCase()) {
+		case "true":
+		case "1":
+			return true;
+		case "false":
+		case "0":
+			return false;
+		default:
+			throw new Error(`Environment variable ${key} must be true, false, 1 or 0`);
+	}
 }
 
 function parseOriginList(value: string, key: string): string[] {

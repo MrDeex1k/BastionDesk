@@ -104,7 +104,6 @@ class CookieJar {
       .join("; ");
   }
 }
-
 function passwordFor(email: string): string {
   return passwords.get(email) ?? password;
 }
@@ -1722,22 +1721,25 @@ async function runApiWorkflow(
   );
 
   await compose(["stop", "llm_service"], true);
-  const degradedIncident = await createIncident(
-    employeeA1,
-    `PHASE0 degraded LLM incident ${runId}: service unavailable must not lose this record.`,
-  );
-  await Bun.sleep(1500);
-  const degradedDetails = responseData(
-    await apiGet(employeeA1, `/api/incidents/${degradedIncident}`),
-  );
-  expectValue(
-    degradedDetails.id === degradedIncident &&
-      degradedDetails.llmCategory === null &&
-      degradedDetails.userDescription ===
-        `PHASE0 degraded LLM incident ${runId}: service unavailable must not lose this record.`,
-    "unavailable LLM lost the incident or persisted an invalid category",
-  );
-  await compose(["up", "-d", "--wait", "--wait-timeout", "180", "llm_service"]);
+  try {
+    const degradedIncident = await createIncident(
+      employeeA1,
+      `PHASE0 degraded LLM incident ${runId}: service unavailable must not lose this record.`,
+    );
+    await Bun.sleep(1500);
+    const degradedDetails = responseData(
+      await apiGet(employeeA1, `/api/incidents/${degradedIncident}`),
+    );
+    expectValue(
+      degradedDetails.id === degradedIncident &&
+        degradedDetails.llmCategory === null &&
+        degradedDetails.userDescription ===
+          `PHASE0 degraded LLM incident ${runId}: service unavailable must not lose this record.`,
+      "unavailable LLM lost the incident or persisted an invalid category",
+    );
+  } finally {
+    await compose(["up", "-d", "--wait", "--wait-timeout", "180", "llm_service"]);
+  }
 }
 
 let switchedBackend = false;
@@ -1753,6 +1755,9 @@ try {
     "180",
     "smtp-test",
     "backend",
+    "nginx",
+    "storage-2",
+    "storage-4",
   ]);
   await compose(["restart", "nginx"], true);
   await waitForPublicApi();

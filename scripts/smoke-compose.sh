@@ -15,7 +15,12 @@ for service in ${EXPECTED_SERVICES}; do
 	}
 done
 
-docker compose ps --format json | bun -e '
+compose_ps_json="$(docker compose ps --format json)"
+[ -n "${compose_ps_json}" ] || {
+	printf '%s\n' "[baseline-smoke] FAIL: docker compose ps returned no containers" >&2
+	exit 1
+}
+printf '%s\n' "${compose_ps_json}" | bun -e '
 const input = (await Bun.stdin.text()).trim();
 const rows = input.startsWith("[")
   ? JSON.parse(input)

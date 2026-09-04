@@ -3,6 +3,9 @@
 const root = new URL("..", import.meta.url).pathname;
 const timeoutSeconds = process.env.BASELINE_MEASURE_TIMEOUT_SECONDS ?? "180";
 const requestCount = Number(process.env.BASELINE_MEASURE_REQUESTS ?? "30");
+if (!Number.isInteger(requestCount) || requestCount < 1) {
+  throw new Error("BASELINE_MEASURE_REQUESTS must be a positive integer");
+}
 
 type CommandResult = { stdout: string; stderr: string };
 
@@ -90,6 +93,9 @@ const containerIds = (await run(["docker", "compose", "ps", "-q"], true)).stdout
   .trim()
   .split("\n")
   .filter(Boolean);
+if (containerIds.length === 0) {
+  throw new Error("docker compose ps returned no containers");
+}
 const statsOutput = await run(
   ["docker", "stats", "--no-stream", "--format", "{{json .}}", ...containerIds],
   true,
