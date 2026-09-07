@@ -68,3 +68,14 @@ test("ORG-UI-01 switching organization reloads its membership and role", async (
   expect(await screen.findByText("org-b:pracownik")).toBeVisible();
   expect(screen.queryByText("org-a:admin")).toBeNull();
 });
+
+test("ORG-UI-03 a new guest does not inherit the previous client's organization", async () => {
+  respond("GET", "/api/auth/get-session", () => Response.json(null));
+  renderApp(
+    <AuthProvider>
+      <MembershipProbe />
+    </AuthProvider>,
+  );
+  expect(await screen.findByText("null:null")).toBeVisible();
+  expect(screen.queryByText("org-b:pracownik")).toBeNull();
+});

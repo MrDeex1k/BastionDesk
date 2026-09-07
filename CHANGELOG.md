@@ -11,6 +11,9 @@ All notable changes to BastionDesk will be documented in this file.
 
 ### Fixed
 
+- Isolate Better Auth session stores and timers between component tests and verify shuffled test orders in CI.
+- Publish only an allowlisted HTML/JSON E2E summary; keep raw traces, screenshots and logs out of public Actions artifacts.
+
 - Fresh PostgreSQL initialization now uses the database created by the official image entrypoint.
 - Fresh MinIO bootstrap waits for authenticated access before creating the versioned bucket.
 - Organization creators receive the application's `admin` role.

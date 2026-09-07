@@ -508,7 +508,7 @@ implementację można porównać z `1.0.3`.
 
 Implementacja i macierz scenariuszy: [kontrakt UI i E2E](./testing/phase-1-ui-e2e.md).
 Dodano testy komponentowe, Playwright dla trzech silników, izolowane fixture
-Compose oraz workflow CI. Lokalnie przechodzi 18 testów komponentowych i
+Compose oraz workflow CI. Lokalnie przechodzi 19 testów komponentowych i
 24 E2E (8 scenariuszy × 3 przeglądarki). Formalne zamknięcie fazy wymaga także pierwszego
 zielonego przebiegu nowego workflow na GitHub.
 

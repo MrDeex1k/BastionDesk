@@ -4,8 +4,14 @@ import * as matchers from "@testing-library/jest-dom/matchers";
 import type { TestingLibraryMatchers } from "@testing-library/jest-dom/matchers";
 import { clearCsrfToken } from "../../src/lib/csrf";
 import { resetNetwork, unexpectedRequests } from "./network";
+import { cleanStores } from "nanostores";
+import { cancelPendingTimers } from "./timers";
 
 resetNetwork();
+// Better Auth captures fetch during initialization, so import after interception.
+const { authClient } = await import("../../src/lib/auth-client");
+const session = authClient.$store.atoms.session;
+const initialSession = session.value;
 expect.extend(matchers);
 declare module "bun:test" {
   interface Matchers<T> extends Omit<TestingLibraryMatchers<void, T>, "toBeEmpty" | "toHaveRole"> {}
@@ -17,6 +23,12 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  // Unsubscribe immediately instead of Nanostores' delayed unmount. Keep the
+  // session signal's internal revision listener, but invalidate its freshness.
+  cleanStores(session);
+  session.set(initialSession);
+  authClient.$store.notify("$sessionSignal");
+  cancelPendingTimers();
   clearCsrfToken();
   setSystemTime();
   expect(unexpectedRequests()).toEqual([]);

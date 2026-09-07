@@ -16,9 +16,11 @@
     "preview": "bunx --bun vite preview",
     "doctor": "react-doctor . --verbose --scope changed",
     "test": "bun test",
-    "test:components": "bun test",
+    "test:components": "bun test ./tests/component",
+    "test:order": "bun test --randomize --seed 42 && bun test --randomize --seed 1337",
     "test:e2e": "playwright test --project=chromium",
-    "test:e2e:all": "playwright test"
+    "test:e2e:all": "playwright test",
+    "test:e2e:report": "bun scripts/public-e2e-report.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
@@ -51,6 +53,7 @@
     "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "6.1.1",
     "happy-dom": "20.14.0",
+    "nanostores": "1.5.3",
     "oxfmt": "0.66.0",
     "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",

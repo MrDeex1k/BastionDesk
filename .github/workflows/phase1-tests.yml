@@ -33,6 +33,8 @@ jobs:
         run: cp .env.example .env
       - run: bun run check
       - run: bun run test
+      - name: Verify frontend test isolation in different orders
+        run: bun run --cwd frontend test:order
       - run: bun run build
 
   browser-contract:
@@ -59,14 +61,16 @@ jobs:
           else
             bun run test:e2e
           fi
-      - name: Preserve browser diagnostics
+      - name: Prepare public browser summary
+        if: always()
+        run: bun run --cwd frontend test:e2e:report
+      - name: Preserve sanitized browser summary
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: phase1-browser-contract
+          name: phase1-browser-contract-public
           retention-days: 7
           if-no-files-found: warn
           path: |
-            frontend/playwright-report/
-            frontend/test-results/
-            artifacts/phase1/*/compose.log
+            artifacts/phase1-public/results.json
+            artifacts/phase1-public/index.html

@@ -11,6 +11,7 @@ Z katalogu głównego, po `bun run deps:install`:
 ```sh
 bun run test:components   # bun:test + React Testing Library
 bun run test             # testy obu workspace’ów przez Turbo
+bun run --cwd frontend test:order # dwie odtwarzalne losowe kolejności
 bun run check
 cd frontend
 bun x --no-install playwright install chromium firefox webkit
@@ -39,7 +40,8 @@ Nie kieruj fixture do instalacji z rzeczywistymi kontami.
 
 ## Testy komponentowe
 
-`frontend/bunfig.toml` ogranicza Bun do `tests/component`; Playwright posiada
+`frontend/bunfig.toml` ogranicza Bun do `tests` (komponenty i infrastruktura);
+`test:components` wybiera tylko `tests/component`. Playwright posiada
 osobny katalog `e2e`. Runnerem jest `bun:test`; `jest-dom` dostarcza tylko
 matchery, nie runner Jest.
 
@@ -47,7 +49,10 @@ Preload rejestruje happy-dom przed importami React i Better Auth. Wspólny
 renderer dostarcza QueryClient, kontekst auth i TanStack Router z historią
 w pamięci. Każdy test otrzymuje nowy cache Query, wyłączone ponowienia,
 stałą datę oraz sieć bez rzeczywistych połączeń. `user-event` wykonuje
-interakcje. Po teście renderer, cache i CSRF są sprzątane. Test zmiany
+interakcje. Po teście renderer, cache i CSRF są sprzątane. `cleanStores`
+natychmiast odpina subskrypcje sesji Better Auth, przywracany jest stan gościa,
+a zaległe timeouty i interwały są anulowane. Nie czekamy na opóźniony unmount
+Nanostores; kontrola nieoczekiwanych zapytań pozostaje włączona. Test zmiany
 organizacji używa rzeczywistego AuthProvider i klienta Better Auth,
 z kontrolowanymi odpowiedziami HTTP.
 
@@ -58,7 +63,12 @@ z kontrolowanymi odpowiedziami HTTP.
 | INC-UI-01–03 | Walidacja opisu, multipart z załącznikiem, potwierdzenie sukcesu, zachowanie danych po odrzuceniu. |
 | INC-UI-04–07 | Niedostępny incydent, pusta lista, błąd pobrania i granice paginacji. |
 | RBAC-UI-* | Akcje i edycja notatki tylko dla przypisanego analityka; widoki pracownika, admina i innego analityka. |
-| ORG-UI-01–02 | Zmiana organizacji przeładowuje rolę; wybór roli i dodawanie członka. |
+| ORG-UI-01–03 | Zmiana organizacji przeładowuje rolę; wybór roli i dodawanie członka; nowy gość nie dziedziczy poprzedniej organizacji. |
+
+Osobne testy infrastruktury sprawdzają, że publiczny raport nie kopiuje
+sekretów z tytułów, błędów, załączników ani konfiguracji i nie akceptuje
+arbitralnego HTML. CI uruchamia też testy frontendu z seedami `42` i `1337`;
+po zmianie kolejności wszystkie scenariusze nadal muszą przechodzić.
 
 ## Testy przeglądarkowe
 
@@ -125,34 +135,54 @@ Asercje czekają na widoczny rezultat, nie na arbitralny czas.
 Raport HTML jest w `frontend/playwright-report`, wynik JSON i ślady w
 `frontend/test-results`. Nieudany test zachowuje trace i screenshot.
 Log nieudanego stosu jest w `artifacts/phase1/<RUN_ID>/compose.log`.
-Wszystkie te ścieżki są ignorowane przez Git. Artefakty mogą zawierać cookies,
-linki i dane jednorazowych kont testowych; traktuj je jako prywatne.
-CI przechowuje je przez 7 dni. Pliki konfiguracji z sekretami i certyfikaty
-nie są przesyłane jako artefakty.
+Wszystkie te ścieżki są ignorowane przez Git. Surowe dane mogą zawierać cookies,
+linki i dane jednorazowych kont testowych; służą wyłącznie lokalnej diagnostyce.
+Workflow nie publikuje surowych raportów, trace, zrzutów, logów ani certyfikatów.
+
+`bun run --cwd frontend test:e2e:report` tworzy od nowa katalog
+`artifacts/phase1-public` z `results.json` i `index.html`. Do raportu przenoszone
+są wyłącznie znane identyfikatory scenariuszy, silniki przeglądarek, statusy i
+liczbowe czasy. Tytuły, stack trace, stdout/stderr, konfiguracja, ścieżki i
+załączniki są pomijane. Nieznane wartości dostają etykietę `unknown`; brak
+wyników daje `unavailable`, a błędny JSON zatrzymuje generowanie. Nie jest to
+redakcja regexem nad surowymi plikami. Przy dodawaniu scenariusza trzeba
+uzupełnić dozwolone ID w generatorze raportu.
+
+GitHub Actions publikuje tylko te dwa pliki jako `phase1-browser-contract-public`
+przez 7 dni. Raport pokazuje, który scenariusz się nie powiódł; pełną diagnostykę
+uzyskuje się przez lokalne odtworzenie błędu. Jest to świadome ograniczenie
+artefaktów publicznego repozytorium, niezależne od ich czasu przechowywania.
 
 Retry jest wyłączone: niestabilny test ma zostać naprawiony na podstawie
 trace, nie ukryty przez powtórzenia. Nie stosujemy `skip` dla bramki parity.
 
 ## CI i kryterium ukończenia
 
-Weryfikacja lokalna z 8 września 2026:
+Weryfikacja lokalna po poprawkach do PR #4, 8 września 2026:
 
-- 18/18 testów komponentowych i 32/32 testy backendu;
+- 19/19 testów komponentowych, 5/5 testów generatora publicznego raportu
+  i 32/32 testy backendu;
 - 24/24 E2E: po 8 scenariuszy w Chromium, Firefox i WebKit,
-  bez pominięć, ponowień i wyników flaky; czas samych testów 73,5 s;
+  bez pominięć, ponowień i wyników flaky; czas samych testów 77,1 s;
 - lint, typy, format, testy i build: 9/9 zadań Turbo bez cache;
+- po 24/24 testy frontendu dla seedów 42 i 1337 lokalnie oraz w linuksowym
+  obrazie Bun 1.4.2 bez sieci;
+- generator publicznego raportu zachował wszystkie 24 wyniki E2E;
 - 32/32 testy backendu także w linuksowym obrazie Bun 1.4.2,
   z `.env.example` i bez sieci;
 - fixture migracji Better Auth przeszło na jednorazowej bazie PostgreSQL;
 - React Doctor: 90/100, jedno ostrzeżenie o złożoności istniejącego
   `IncidentDetailsHeader`, bez błędów.
 
-Identyfikator pełnego przebiegu: `1788820313772-95753`. Po zakończeniu
+Identyfikator pełnego przebiegu: `1788823344751-49145`. Po zakończeniu
 potwierdzono usunięcie jego kontenerów, sieci, wolumenów i sekretów.
-Pierwszy przebieg GitHub Actions pozostaje do wykonania po wypchnięciu brancha.
+Pierwsze przebiegi GitHub Actions wykryły zależność testów od kolejności:
+opóźniony sygnał Better Auth przechodził do testu logowania po teście zmiany
+organizacji. Poprawka jawnie kończy subskrypcje i anuluje timery. Zielony
+przebieg GitHub Actions po tej poprawce pozostaje do potwierdzenia po pushu.
 
 `.github/workflows/phase1-tests.yml` uruchamia lint, typy, format, testy obu
-workspace’ów i build, a następnie Chromium dla push/PR. Tag wydania lub ręczne
+workspace’ów, dwie losowe kolejności testów frontendu i build, a następnie Chromium dla push/PR. Tag wydania lub ręczne
 uruchomienie z pełną macierzą wykonuje także Firefox i WebKit. Zmiana
 implementacji backendu nadal musi przejść ten sam kontrakt.
 
