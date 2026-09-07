@@ -279,7 +279,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 		if (!organizationId) return;
 		const { id } = req.params;
 
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -404,6 +404,7 @@ router.get(
 	validate(adminIncidentsQuerySchema, "body"),
 	queryAllIncidents,
 );
+if (!router.query) throw new Error("This runtime must support the HTTP QUERY method");
 router.query(
 	"/",
 	requireQueryJson,
@@ -425,7 +426,14 @@ async function downloadFile(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id || !type || !filename) {
+		if (
+			typeof id !== "string" ||
+			!id ||
+			typeof type !== "string" ||
+			!type ||
+			typeof filename !== "string" ||
+			!filename
+		) {
 			return res.status(400).json({
 				success: false,
 				error: {

@@ -9,11 +9,9 @@ export function RouterBridge() {
   const auth = useAuth();
   const [isInitialAuthReady, setIsInitialAuthReady] = useState(() => !auth.isLoading);
 
-  useEffect(() => {
-    if (!auth.isLoading) {
-      setIsInitialAuthReady(true);
-    }
-  }, [auth.isLoading]);
+  if (!isInitialAuthReady && !auth.isLoading) {
+    setIsInitialAuthReady(true);
+  }
 
   useEffect(() => {
     if (!isInitialAuthReady || auth.isLoading) {

@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
-OUT_DIR="${ROOT_DIR}/dev"
+OUT_DIR="${TLS_OUT_DIR:-${ROOT_DIR}/dev}"
 CA_DIR="${OUT_DIR}/ca"
 POSTGRES_USER="${POSTGRES_USER:-bastiondesk_superadmin}"
 

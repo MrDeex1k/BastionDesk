@@ -15,7 +15,7 @@ database/
 │   ├── pg_hba.conf
 │   └── postgresql.conf
 └── init-sql/
-    ├── 01-init.sql        # rozszerzenia, rola i baza danych
+    ├── 01-init.sql        # rozszerzenia w bazie utworzonej przez entrypoint
     ├── 02-create-auth.sql # schemat Better Auth
     └── 03-create-app.sql  # schemat zgłoszeń/incydentów
 ```
@@ -24,6 +24,15 @@ Aktualny projekt nie używa Drizzle ani osobnego systemu migracji. Aplikacja
 korzysta z natywnego Bun SQL oraz `pg`, a Better Auth z własnego połączenia
 `pg.Pool` ([backend/src/lib/database.ts](../../backend/src/lib/database.ts),
 [backend/src/lib/auth.ts](../../backend/src/lib/auth.ts)).
+
+Better Auth 1.7.3 identyfikuje konto przez unikalną parę `providerId/accountId`.
+Nowa baza nie wymaga kolumny `issuer`. Dla istniejącego schematu po 1.7.2
+przygotowano ręczny skrypt
+[`002-better-auth-1.7.3-provider-identity.sql`](../../database/migrations/002-better-auth-1.7.3-provider-identity.sql).
+Zachowuje historyczne wartości `issuer`, dopuszcza nowe konta bez tej wartości
+i przerywa transakcję przy niejednoznacznych parach tożsamości. Nie uruchamia
+się automatycznie; nie stanowi jeszcze systemu migracji planowanego w fazie 2.
+Instrukcję i ograniczenia opisuje [raport aktualizacji](../testing/dependency-refresh-2026-09.md).
 
 ## Funkcjonalności obecnego schematu
 

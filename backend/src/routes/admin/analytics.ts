@@ -382,6 +382,7 @@ router.get(
 	validate(adminMetricsQuerySchema, "body"),
 	queryIncidentMetrics,
 );
+if (!router.query) throw new Error("This runtime must support the HTTP QUERY method");
 router.query(
 	"/metrics",
 	requireQueryJson,

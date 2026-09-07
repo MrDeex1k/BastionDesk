@@ -51,6 +51,7 @@ export function IncidentFileCard({
           size="sm"
           variant="outline"
           className="border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 shrink-0"
+          aria-label={`Pobierz ${title}`}
           onClick={() => onDownload(filename)}
         >
           <FileDown className="mr-1 size-4" />

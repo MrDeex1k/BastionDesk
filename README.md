@@ -81,7 +81,10 @@ Najważniejsze polecenia:
 ```bash
 bun run check      # lint, typecheck i sprawdzenie formatowania
 bun run build      # build wszystkich pakietów, które go definiują
-bun run test       # testy dostępne w pakietach
+bun run test       # testy backendu i komponentów React
+bun run test:components # formularze, uprawnienia i stan UI
+bun run test:e2e   # jednorazowy stos Compose + Chromium
+bun run test:e2e:all # checkpoint Chromium, Firefox i WebKit
 bun run dev        # frontend i backend równolegle
 bun run changelog:generate # generowanie ostatniej sekcji CHANGELOG z Conventional Commits
 ```
@@ -92,6 +95,11 @@ Husky instaluje hooki Git po `bun install`. Hook `pre-commit` uruchamia `bun run
 
 Repozytorium używa jednego kanonicznego rootowego `bun.lock`. Buildy Docker korzystają z niego
 przez filtrowane workspace’y; child lockfile’y nie są już utrzymywane.
+
+Instalację przeglądarek, macierz scenariuszy i CI opisuje
+[kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).
+Aktualne wersje zależności oraz uwagi do schematu Better Auth opisuje
+[aktualizacja zależności z 8 września 2026](docs/testing/dependency-refresh-2026-09.md).
 
 ## Deployment
 

@@ -1,6 +1,6 @@
-import { useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, readJsonError } from "@/lib/api";
 import {
   AlertCircle,
   Upload,
@@ -74,6 +74,12 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    if (!state.showSuccess) return;
+    const timer = setTimeout(() => dispatch({ type: "set-show-success", value: false }), 5000);
+    return () => clearTimeout(timer);
+  }, [state.showSuccess]);
+
   const incidentMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const response = await apiFetch("/api/incidents", {
@@ -82,14 +88,14 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Wystąpił błąd podczas wysyłania zgłoszenia");
+        throw new Error(
+          await readJsonError(response, "Wystąpił błąd podczas wysyłania zgłoszenia"),
+        );
       }
 
       return response.json();
     },
     onSuccess: (data) => {
-      dispatch({ type: "set-show-success", value: true });
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ["myIncidents"] }),
         queryClient.invalidateQueries({ queryKey: ["analystIncidents"] }),
@@ -101,13 +107,11 @@ export function IncidentReportForm({ onSuccess }: IncidentReportFormProps) {
         description: `ID zgłoszenia: ${data.data.id}`,
       });
       dispatch({ type: "reset-form" });
+      dispatch({ type: "set-show-success", value: true });
       if (screenshotInputRef.current) screenshotInputRef.current.value = "";
       if (attachmentInputRef.current) attachmentInputRef.current.value = "";
 
       if (onSuccess) onSuccess();
-
-      // Hide success message after 5 seconds
-      setTimeout(() => dispatch({ type: "set-show-success", value: false }), 5000);
     },
     onError: (error) => {
       toast.error("Nie udało się wysłać zgłoszenia", {

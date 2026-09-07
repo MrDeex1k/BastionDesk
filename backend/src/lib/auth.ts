@@ -112,6 +112,7 @@ export const auth = betterAuth({
 		//   - pracownik: podstawowy dostęp
 		organization({
 			ac,
+			creatorRole: "admin",
 			roles: {
 				admin,
 				analityk,

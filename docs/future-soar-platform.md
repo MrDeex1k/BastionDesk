@@ -506,6 +506,12 @@ implementację można porównać z `1.0.3`.
 
 ## Faza 1 — testy UI i E2E jako kontrakt migracji
 
+Implementacja i macierz scenariuszy: [kontrakt UI i E2E](./testing/phase-1-ui-e2e.md).
+Dodano testy komponentowe, Playwright dla trzech silników, izolowane fixture
+Compose oraz workflow CI. Lokalnie przechodzi 19 testów komponentowych i
+24 E2E (8 scenariuszy × 3 przeglądarki). Formalne zamknięcie fazy wymaga także pierwszego
+zielonego przebiegu nowego workflow na GitHub.
+
 ### Cel
 
 Zabezpieczyć zachowanie bieżącego BastionDesk `1.0.3` z perspektywy użytkownika
@@ -979,13 +985,12 @@ rozbudowany LLM nie są konieczne do obrony, jeśli nie wspierają eksperymentu.
 
 ## Kolejność rozpoczęcia pracy
 
-Pierwsza sesja implementacyjna rozpoczyna Fazę 0, a nie Wazuh lub migrację
-frameworka:
+Faza 0 jest zakończona. Po wdrożeniu kontraktu UI i E2E kolejność pozostaje
+następująca:
 
-1. zatwierdzić scenariusze baseline;
-2. zamknąć niespójności obecnej wersji;
-3. ustalić kontrakty i model migracji;
-4. następnie rozpocząć modularizację core i fundament asynchroniczny.
+1. potwierdzić zieloną macierz przeglądarek i CI fazy 1;
+2. w fazie 2 ustalić kontrakty domenowe i model migracji;
+3. następnie rozpocząć modularizację core i fundament asynchroniczny.
 
 Pierwszym dużym rezultatem jest checkpoint A: system nadal robi wszystko, co
 `1.0.3`, ale ma migracje, modularny core, kontrakty, kolejki i obserwowalność

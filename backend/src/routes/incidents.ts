@@ -820,7 +820,10 @@ router.get(
 		const id = uuidSchema.parse(req.params.id);
 		const { fileType } = req.params;
 
-		if (!fileType || !["screenshot", "attachment", "report", "statement"].includes(fileType)) {
+		if (
+			typeof fileType !== "string" ||
+			!["screenshot", "attachment", "report", "statement"].includes(fileType)
+		) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -1032,7 +1035,14 @@ async function downloadFile(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id || !type || !filename) {
+		if (
+			typeof id !== "string" ||
+			!id ||
+			typeof type !== "string" ||
+			!type ||
+			typeof filename !== "string" ||
+			!filename
+		) {
 			return res.status(400).json({
 				success: false,
 				error: {

@@ -12,3 +12,5 @@ __pycache__/
 artifacts/
 !.env.example
 infra/tls/dev/
+frontend/playwright-report/
+frontend/test-results/

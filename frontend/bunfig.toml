@@ -1,2 +1,6 @@
 [install]
 minimumReleaseAge = 86400
+
+[test]
+root = "./tests"
+preload = ["./tests/support/dom.ts", "./tests/support/setup.ts"]

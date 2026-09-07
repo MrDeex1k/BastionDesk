@@ -90,7 +90,10 @@ export const AddMemberCard = memo(function AddMemberCard({
                 Rola w organizacji
               </Label>
               <Select items={ROLE_ITEMS} value={role} onValueChange={onRoleChange}>
-                <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white focus:ring-violet-500/20">
+                <SelectTrigger
+                  id="role"
+                  className="border-zinc-700 bg-zinc-950 text-white focus:ring-violet-500/20"
+                >
                   <SelectValue placeholder="Wybierz rolę" />
                 </SelectTrigger>
                 <SelectContent className="border-zinc-700 bg-zinc-900 text-white">
