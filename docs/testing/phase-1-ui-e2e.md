@@ -63,7 +63,7 @@ z kontrolowanymi odpowiedziami HTTP.
 | INC-UI-01–03 | Walidacja opisu, multipart z załącznikiem, potwierdzenie sukcesu, zachowanie danych po odrzuceniu. |
 | INC-UI-04–07 | Niedostępny incydent, pusta lista, błąd pobrania i granice paginacji. |
 | RBAC-UI-* | Akcje i edycja notatki tylko dla przypisanego analityka; widoki pracownika, admina i innego analityka. |
-| ORG-UI-01–03 | Zmiana organizacji przeładowuje rolę; wybór roli i dodawanie członka; nowy gość nie dziedziczy poprzedniej organizacji. |
+| ORG-UI-01–03 | Zmiana organizacji przeładowuje rolę; wybór roli i dodawanie członka; utrata aktywnej sesji usuwa organizację i rolę z kontekstu. |
 
 Osobne testy infrastruktury sprawdzają, że publiczny raport nie kopiuje
 sekretów z tytułów, błędów, załączników ani konfiguracji i nie akceptuje
@@ -178,8 +178,12 @@ Identyfikator pełnego przebiegu: `1788823344751-49145`. Po zakończeniu
 potwierdzono usunięcie jego kontenerów, sieci, wolumenów i sekretów.
 Pierwsze przebiegi GitHub Actions wykryły zależność testów od kolejności:
 opóźniony sygnał Better Auth przechodził do testu logowania po teście zmiany
-organizacji. Poprawka jawnie kończy subskrypcje i anuluje timery. Zielony
-przebieg GitHub Actions po tej poprawce pozostaje do potwierdzenia po pushu.
+organizacji. Poprawka jawnie kończy subskrypcje i anuluje timery.
+[Przebieg GitHub Actions dla PR #4](https://github.com/MrDeex1k/BastionDesk/actions/runs/34170197564)
+na commicie `7de36dc` zakończył się powodzeniem: zarówno `checks`, jak i
+`browser-contract` są zielone. Test ORG-UI-03 dodatkowo sprawdza przejście
+z aktywnej sesji `org-b:pracownik` do gościa po odświeżeniu sesji oraz
+wyczyszczenie identyfikatora organizacji i roli.
 
 `.github/workflows/phase1-tests.yml` uruchamia lint, typy, format, testy obu
 workspace’ów, dwie losowe kolejności testów frontendu i build, a następnie Chromium dla push/PR. Tag wydania lub ręczne

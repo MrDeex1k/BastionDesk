@@ -14,6 +14,8 @@ function MembershipProbe() {
       <output aria-label="Aktywna organizacja">
         {auth.isLoading ? "Ładowanie" : `${auth.organizationId}:${auth.role}`}
       </output>
+      <output aria-label="Sesja">{auth.session?.session.id ?? "Brak sesji"}</output>
+      <button onClick={() => auth.refetch()}>Odśwież sesję</button>
       <button
         onClick={async () => {
           await organization.setActive({ organizationId: "org-b" });
@@ -69,13 +71,41 @@ test("ORG-UI-01 switching organization reloads its membership and role", async (
   expect(screen.queryByText("org-a:admin")).toBeNull();
 });
 
-test("ORG-UI-03 a new guest does not inherit the previous client's organization", async () => {
-  respond("GET", "/api/auth/get-session", () => Response.json(null));
-  renderApp(
+test("ORG-UI-03 losing an authenticated session clears its organization and role", async () => {
+  respond("GET", "/api/auth/get-session", () =>
+    Response.json({
+      user: {
+        id: "member-user",
+        email: "member@example.invalid",
+        name: "Member",
+        emailVerified: true,
+        createdAt: "2026-09-04T11:00:00Z",
+        updatedAt: "2026-09-04T11:00:00Z",
+      },
+      session: {
+        id: "session-expiring",
+        userId: "member-user",
+        token: "test-only",
+        activeOrganizationId: "org-b",
+        expiresAt: "2026-09-11T11:00:00Z",
+      },
+    }),
+  );
+  respond("GET", "/api/auth/organization/get-active-member", () =>
+    Response.json({ id: "member-org-b", organizationId: "org-b", role: "pracownik" }),
+  );
+  const { user } = renderApp(
     <AuthProvider>
       <MembershipProbe />
     </AuthProvider>,
   );
+  expect(await screen.findByText("org-b:pracownik")).toBeVisible();
+  expect(screen.getByLabelText("Sesja")).toHaveTextContent("session-expiring");
+
+  respond("GET", "/api/auth/get-session", () => Response.json(null));
+  await user.click(screen.getByRole("button", { name: "Odśwież sesję" }));
+
   expect(await screen.findByText("null:null")).toBeVisible();
+  expect(screen.getByLabelText("Sesja")).toHaveTextContent("Brak sesji");
   expect(screen.queryByText("org-b:pracownik")).toBeNull();
 });
