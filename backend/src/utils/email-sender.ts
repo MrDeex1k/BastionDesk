@@ -5,8 +5,7 @@
  * Zapewnia lazy initialization, weryfikację połączenia i error handling.
  */
 
-import nodemailer from "nodemailer";
-import type SMTPTransport from "nodemailer/lib/smtp-transport";
+import nodemailer, { type Transporter, type SMTPSentMessageInfo } from "nodemailer";
 import { env } from "../lib/env";
 
 // Types
@@ -26,7 +25,7 @@ export interface EmailResult {
 
 // Email Sender Class
 class EmailSender {
-	private transporter: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | null = null;
+	private transporter: Transporter<SMTPSentMessageInfo> | null = null;
 	private isVerified = false;
 	private connectionAttempts = 0;
 	private readonly MAX_CONNECTION_ATTEMPTS = 3;
@@ -54,7 +53,7 @@ class EmailSender {
 	/**
 	 * Tworzy transporter NodeMailer (lazy initialization)
 	 */
-	private createTransporter(): nodemailer.Transporter<SMTPTransport.SentMessageInfo> {
+	private createTransporter(): Transporter<SMTPSentMessageInfo> {
 		if (this.transporter) {
 			return this.transporter;
 		}
@@ -73,7 +72,7 @@ class EmailSender {
 			greetingTimeout: this.CONNECTION_TIMEOUT,
 			socketTimeout: this.CONNECTION_TIMEOUT,
 			dnsTimeout: this.CONNECTION_TIMEOUT,
-		} as SMTPTransport.Options);
+		});
 
 		return this.transporter;
 	}

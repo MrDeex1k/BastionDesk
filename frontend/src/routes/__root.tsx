@@ -95,7 +95,9 @@ function RouteError({ error, reset }: ErrorComponentProps) {
     <div className="flex min-h-[320px] items-center justify-center">
       <div className="max-w-lg rounded-2xl border border-red-900/60 bg-zinc-950/80 px-6 py-5 text-center shadow-xl">
         <h2 className="text-lg font-semibold text-red-300">Nie udało się otworzyć strony</h2>
-        <p className="mt-2 text-sm text-zinc-400">{error.message}</p>
+        <p className="mt-2 text-sm text-zinc-400">
+          {error instanceof Error ? error.message : "Wystąpił nieoczekiwany błąd."}
+        </p>
         <button
           type="button"
           onClick={reset}

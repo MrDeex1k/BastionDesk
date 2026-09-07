@@ -2,6 +2,25 @@
 
 All notable changes to BastionDesk will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Phase 1 UI migration contract: React component tests, isolated Playwright scenarios in Chromium, Firefox and WebKit, Turbo tasks and CI reports.
+- A repeatable Better Auth 1.7.3 account-identity migration with a PostgreSQL integration fixture.
+
+### Fixed
+
+- Fresh PostgreSQL initialization now uses the database created by the official image entrypoint.
+- Fresh MinIO bootstrap waits for authenticated access before creating the versioned bucket.
+- Organization creators receive the application's `admin` role.
+- Incident submission preserves its success notice and displays structured API errors; form controls and file downloads have accessible labels.
+
+### Maintenance
+
+- Updated all Bun workspaces and the UV lockfile under the existing 24-hour release-age policy, including Better Auth 1.7.3, Nodemailer 10 and PyTorch 2.14 CPU.
+- Updated Bun images to 1.4.2, UV images to 0.12.10 and test Mailpit to 1.31.1; checked the remaining pinned images.
+
 ## [1.0.3](https://github.com/MrDeex1k/BastionDesk/compare/v1.0.2...v1.0.3) (2026-08-29)
 
 ### Features

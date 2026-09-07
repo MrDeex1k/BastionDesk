@@ -2,8 +2,12 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
     },
     "dev": {
       "cache": false,
@@ -20,6 +24,37 @@
     },
     "typecheck": {
       "outputs": []
+    },
+    "test:components": {
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false,
+      "passThroughEnv": [
+        "E2E_BASE_URL",
+        "E2E_MAILPIT_URL",
+        "E2E_RUN_ID",
+        "CI",
+        "PLAYWRIGHT_BROWSERS_PATH"
+      ],
+      "outputs": [
+        "playwright-report/**",
+        "test-results/**"
+      ]
+    },
+    "test:e2e:all": {
+      "cache": false,
+      "passThroughEnv": [
+        "E2E_BASE_URL",
+        "E2E_MAILPIT_URL",
+        "E2E_RUN_ID",
+        "CI",
+        "PLAYWRIGHT_BROWSERS_PATH"
+      ],
+      "outputs": [
+        "playwright-report/**",
+        "test-results/**"
+      ]
     }
   }
 }

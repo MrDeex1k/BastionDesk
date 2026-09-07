@@ -1,0 +1,72 @@
+name: UI and migration contract
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+    inputs:
+      full_browser_matrix:
+        description: Run Chromium, Firefox and WebKit checkpoint
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Test-only backend configuration
+        run: cp .env.example .env
+      - run: bun run check
+      - run: bun run test
+      - run: bun run build
+
+  browser-contract:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Install browsers and OS libraries
+        working-directory: frontend
+        run: bun x --no-install playwright install --with-deps chromium firefox webkit
+      - name: Run migration contract on an isolated Compose stack
+        env:
+          FULL_MATRIX: ${{ inputs.full_browser_matrix || startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          if [ "$FULL_MATRIX" = "true" ]; then
+            bun run test:e2e:all
+          else
+            bun run test:e2e
+          fi
+      - name: Preserve browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase1-browser-contract
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            artifacts/phase1/*/compose.log

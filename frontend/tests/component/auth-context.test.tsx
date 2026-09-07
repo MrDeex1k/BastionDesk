@@ -1,0 +1,70 @@
+import { expect, test } from "bun:test";
+import { screen } from "@testing-library/react";
+import { AuthProvider } from "../../src/contexts/AuthContext";
+import { useAuth } from "../../src/hooks/useAuth";
+import { organization } from "../../src/lib/auth-client";
+import { renderApp } from "../support/render";
+import { respond } from "../support/network";
+
+// A consumer exercises the real provider and Better Auth HTTP boundary.
+function MembershipProbe() {
+  const auth = useAuth();
+  return (
+    <>
+      <output aria-label="Aktywna organizacja">
+        {auth.isLoading ? "Ładowanie" : `${auth.organizationId}:${auth.role}`}
+      </output>
+      <button
+        onClick={async () => {
+          await organization.setActive({ organizationId: "org-b" });
+          await auth.refetch();
+        }}
+      >
+        Przełącz organizację
+      </button>
+    </>
+  );
+}
+test("ORG-UI-01 switching organization reloads its membership and role", async () => {
+  let activeOrganizationId = "org-a";
+  const user = {
+    id: "member-user",
+    email: "member@example.invalid",
+    name: "Member",
+    emailVerified: true,
+    createdAt: "2026-09-04T11:00:00Z",
+    updatedAt: "2026-09-04T11:00:00Z",
+  };
+  respond("GET", "/api/auth/get-session", () =>
+    Response.json({
+      user,
+      session: {
+        id: "session-switch",
+        userId: user.id,
+        token: "test-only",
+        activeOrganizationId,
+        expiresAt: "2026-09-11T11:00:00Z",
+      },
+    }),
+  );
+  respond("GET", "/api/auth/organization/get-active-member", () =>
+    Response.json({
+      id: `member-${activeOrganizationId}`,
+      organizationId: activeOrganizationId,
+      role: activeOrganizationId === "org-a" ? "admin" : "pracownik",
+    }),
+  );
+  respond("POST", "/api/auth/organization/set-active", async (request) => {
+    activeOrganizationId = (await request.json()).organizationId;
+    return Response.json({ id: activeOrganizationId });
+  });
+  const { user: interaction } = renderApp(
+    <AuthProvider>
+      <MembershipProbe />
+    </AuthProvider>,
+  );
+  expect(await screen.findByText("org-a:admin")).toBeVisible();
+  await interaction.click(screen.getByRole("button", { name: "Przełącz organizację" }));
+  expect(await screen.findByText("org-b:pracownik")).toBeVisible();
+  expect(screen.queryByText("org-a:admin")).toBeNull();
+});

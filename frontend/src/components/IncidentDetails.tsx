@@ -783,6 +783,7 @@ function IncidentServiceSection({
       {isAssignedToMe && mode === "analyst" ? (
         <div className="space-y-3">
           <Textarea
+            aria-label="Notatki analityka"
             placeholder="Wprowadź notatki analityka..."
             value={noteContent}
             onChange={(event) => onNoteChange(event.target.value)}
@@ -876,7 +877,13 @@ function AnalystFileDownload({
         <p className={`text-sm font-medium ${classes.label}`}>{label}</p>
         <p className="text-xs text-zinc-500">{filename}</p>
       </div>
-      <Button size="sm" variant="outline" className={classes.button} onClick={onDownload}>
+      <Button
+        size="sm"
+        variant="outline"
+        className={classes.button}
+        onClick={onDownload}
+        aria-label={`Pobierz ${filename}`}
+      >
         Pobierz
       </Button>
     </div>

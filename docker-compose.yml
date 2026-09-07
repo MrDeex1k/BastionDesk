@@ -181,10 +181,19 @@ services:
           sleep 2
         done
         if [ "$${BOOTSTRAP_NODE}" = "true" ]; then
-          mc alias set minio https://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
-          mc mb --ignore-existing minio/"$${S3_BUCKET}"
-          mc version enable minio/"$${S3_BUCKET}" || true
-          sleep 5  # Czekaj na synchronizację bucketa w distributed MinIO
+          # Readiness may precede IAM initialization on a fresh cluster.
+          # Never let mc interpret an unconfigured alias as a local directory.
+          ready=false
+          for i in $(seq 1 30); do
+            if mc alias set minio https://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          [ "$$ready" = true ] || { kill $$pid; exit 1; }
+          mc mb --ignore-existing minio/"$${S3_BUCKET}" || { kill $$pid; exit 1; }
+          mc version enable minio/"$${S3_BUCKET}" || { kill $$pid; exit 1; }
         fi
         wait $$pid
     volumes:

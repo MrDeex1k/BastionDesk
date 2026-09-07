@@ -303,7 +303,14 @@ async function downloadFile(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id || !type || !filename) {
+		if (
+			typeof id !== "string" ||
+			!id ||
+			typeof type !== "string" ||
+			!type ||
+			typeof filename !== "string" ||
+			!filename
+		) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -496,7 +503,7 @@ async function assignIncident(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -597,7 +604,7 @@ async function unassignIncident(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -708,7 +715,7 @@ async function updateIncidentStatus(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -863,7 +870,7 @@ async function updateIncidentNotes(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -978,7 +985,7 @@ async function resolveIncident(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -1082,7 +1089,7 @@ async function getIncidentDetails(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -1260,7 +1267,7 @@ async function uploadReport(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
@@ -1385,7 +1392,7 @@ async function uploadStatement(req: Request, res: Response) {
 		if (!organizationId) return;
 
 		// Sprawdź wymagane parametry
-		if (!id) {
+		if (typeof id !== "string" || !id) {
 			return res.status(400).json({
 				success: false,
 				error: {
