@@ -38,12 +38,12 @@
     "test:e2e:external:all": "turbo run test:e2e:all"
   },
   "devDependencies": {
-    "@commitlint/cli": "21.2.2",
-    "@commitlint/config-conventional": "21.2.2",
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3",
     "conventional-changelog-cli": "5.0.0",
     "conventional-changelog-conventionalcommits": "10.4.0",
     "husky": "9.1.7",
     "sfw": "2.0.6",
-    "turbo": "2.10.12"
+    "turbo": "2.11.2"
   }
 }

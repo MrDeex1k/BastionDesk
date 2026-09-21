@@ -1,6 +1,6 @@
 FROM busybox:1.38.0-musl AS wget-src
 
-FROM minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
+FROM quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
 
 FROM coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
 

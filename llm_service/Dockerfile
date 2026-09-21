@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.12.10-python3.13-trixie-slim AS builder
+FROM ghcr.io/astral-sh/uv:0.12.17-python3.13-trixie-slim AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ RUN uv sync --locked
 
 RUN chmod +x start.sh
 
-FROM ghcr.io/astral-sh/uv:0.12.10-python3.13-trixie-slim AS runtime
+FROM ghcr.io/astral-sh/uv:0.12.17-python3.13-trixie-slim AS runtime
 
 WORKDIR /app
 

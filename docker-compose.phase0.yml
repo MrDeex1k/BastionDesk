@@ -1,6 +1,6 @@
 services:
   smtp-test:
-    image: ghcr.io/axllent/mailpit:v1.31.1
+    image: ghcr.io/axllent/mailpit:v1.31.2
     restart: "no"
     environment:
       MP_DATABASE: /tmp/mailpit.db

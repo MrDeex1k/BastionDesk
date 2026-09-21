@@ -1,8 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["eslint", "typescript", "unicorn", "oxc", "react"],
+  "jsPlugins": ["@shadcn/lint"],
   "categories": {
     "correctness": "error"
+  },
+  "rules": {
+    "shadcn/no-inline-styles": "error",
+    "shadcn/no-unknown-classes": "error"
   },
   "env": {
     "browser": true
