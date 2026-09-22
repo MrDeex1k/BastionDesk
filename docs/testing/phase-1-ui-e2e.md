@@ -137,7 +137,7 @@ Raport HTML jest w `frontend/playwright-report`, wynik JSON i ślady w
 Log nieudanego stosu jest w `artifacts/phase1/<RUN_ID>/compose.log`.
 Wszystkie te ścieżki są ignorowane przez Git. Surowe dane mogą zawierać cookies,
 linki i dane jednorazowych kont testowych; służą wyłącznie lokalnej diagnostyce.
-Workflow nie publikuje surowych raportów, trace, zrzutów, logów ani certyfikatów.
+Surowych raportów, trace, zrzutów, logów ani certyfikatów nie należy publikować.
 
 `bun run --cwd frontend test:e2e:report` tworzy od nowa katalog
 `artifacts/phase1-public` z `results.json` i `index.html`. Do raportu przenoszone
@@ -148,15 +148,14 @@ wyników daje `unavailable`, a błędny JSON zatrzymuje generowanie. Nie jest to
 redakcja regexem nad surowymi plikami. Przy dodawaniu scenariusza trzeba
 uzupełnić dozwolone ID w generatorze raportu.
 
-GitHub Actions publikuje tylko te dwa pliki jako `phase1-browser-contract-public`
-przez 7 dni. Raport pokazuje, który scenariusz się nie powiódł; pełną diagnostykę
-uzyskuje się przez lokalne odtworzenie błędu. Jest to świadome ograniczenie
-artefaktów publicznego repozytorium, niezależne od ich czasu przechowywania.
+Raport pokazuje, który scenariusz się nie powiódł; pełną diagnostykę uzyskuje
+się przez lokalne odtworzenie błędu. Przy udostępnianiu wyników należy
+przekazywać tylko wygenerowane `results.json` i `index.html`.
 
 Retry jest wyłączone: niestabilny test ma zostać naprawiony na podstawie
 trace, nie ukryty przez powtórzenia. Nie stosujemy `skip` dla bramki parity.
 
-## CI i kryterium ukończenia
+## Weryfikacja i kryterium ukończenia
 
 Weryfikacja lokalna po poprawkach do PR #4, 8 września 2026:
 
@@ -185,14 +184,9 @@ na commicie `7de36dc` zakończył się powodzeniem: zarówno `checks`, jak i
 z aktywnej sesji `org-b:pracownik` do gościa po odświeżeniu sesji oraz
 wyczyszczenie identyfikatora organizacji i roli.
 
-`.github/workflows/phase1-tests.yml` uruchamia lint, typy, format, testy obu
-workspace’ów, dwie losowe kolejności testów frontendu i build, a następnie Chromium dla push/PR. Tag wydania lub ręczne
-uruchomienie z pełną macierzą wykonuje także Firefox i WebKit. Zmiana
-implementacji backendu nadal musi przejść ten sam kontrakt.
-
-Zamknięcie fazy wymaga zielonego przebiegu lokalnego wszystkich przeglądarek
-oraz pierwszego zielonego przebiegu CI. Dodanie workflow do repozytorium samo
-w sobie nie dowodzi wykonania CI.
+Po zmianach uruchom lokalnie `bun run check`, `bun run test`,
+`bun run --cwd frontend test:order` oraz `bun run test:e2e:all`.
+Zmiana implementacji backendu nadal musi przejść ten sam kontrakt.
 
 ## Źródła
 
