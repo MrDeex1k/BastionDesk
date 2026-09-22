@@ -11,7 +11,7 @@ COPY frontend ./frontend
 WORKDIR /app/frontend
 RUN bun run build
 
-FROM nginx:1.31.5-alpine3.24
+FROM nginx:1.31.6-alpine3.24
 
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf

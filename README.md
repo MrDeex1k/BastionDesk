@@ -98,8 +98,8 @@ przez filtrowane workspace’y; child lockfile’y nie są już utrzymywane.
 
 Instalację przeglądarek, macierz scenariuszy i CI opisuje
 [kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).
-Aktualne wersje zależności oraz uwagi do schematu Better Auth opisuje
-[aktualizacja zależności z 8 września 2026](docs/testing/dependency-refresh-2026-09.md).
+Aktualne wersje zależności określają manifesty i pliki lockfile. Uwagi do
+schematu Better Auth opisuje [dokumentacja bazy](docs/database/database.md).
 
 ## Deployment
 
