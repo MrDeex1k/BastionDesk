@@ -32,7 +32,12 @@ przygotowano ręczny skrypt
 Zachowuje historyczne wartości `issuer`, dopuszcza nowe konta bez tej wartości
 i przerywa transakcję przy niejednoznacznych parach tożsamości. Nie uruchamia
 się automatycznie; nie stanowi jeszcze systemu migracji planowanego w fazie 2.
-Instrukcję i ograniczenia opisuje [raport aktualizacji](../testing/dependency-refresh-2026-09.md).
+Przed uruchomieniem nowego backendu należy zatrzymać zapisy auth, wykonać
+backup i sprawdzić jego odtworzenie. Skrypt trzeba najpierw uruchomić na kopii
+bazy przez `psql -X -v ON_ERROR_STOP=1 -f
+database/migrations/002-better-auth-1.7.3-provider-identity.sql`, a potem
+zweryfikować logowanie i rejestrację. Niejednoznaczne pary
+`providerId/accountId` wymagają ręcznego rozstrzygnięcia.
 
 ## Funkcjonalności obecnego schematu
 
