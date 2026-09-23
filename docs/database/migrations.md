@@ -105,9 +105,11 @@ kontenera z prefiksem `bastiondesk-migrations-`.
 
 `0001_core_operations.sql` dodaje `core_command_receipts` i `core_audit` bez
 zmiany danych incydentów lub tabel auth. Należy wykonać `plan` i `apply`
-**przed udostępnieniem zapisów nowego Core**, również po świeżej inicjalizacji
+**przed uruchomieniem nowego Core**, również po świeżej inicjalizacji
 bazy 1.0.3. Migrator i pliki SQL są dostępne w obrazie backendu; uruchomienie
 migratora jest osobnym krokiem operatora, nie automatyczną migracją przy starcie.
+Backend przed otwarciem portu sprawdza obecność tabel i wpisu 0001 w historii.
+Bramka startu nie zastępuje pełnego sprawdzenia fingerprintu przez `plan`.
 
 `MIGRATION_DIRECTORY` może wskazać zaufany katalog operatora z manifestem
 baseline i plikami SQL; domyślny pozostaje `database/versioned`. Testy bazowego

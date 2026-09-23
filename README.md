@@ -85,6 +85,8 @@ bun run test       # testy backendu i komponentów React
 bun run test:components # formularze, uprawnienia i stan UI
 bun run test:e2e   # jednorazowy stos Compose + Chromium
 bun run test:e2e:all # checkpoint Chromium, Firefox i WebKit
+bun run test:core:http # kontrakt HTTP Core, RBAC, GET/QUERY
+bun run test:core:db # transakcje, idempotencja, audyt na izolowanym PostgreSQL
 bun run test:migrations # izolowany PostgreSQL: baseline, historia, rollback i restore
 bun run dev        # frontend i backend równolegle
 bun run changelog:generate # generowanie ostatniej sekcji CHANGELOG z Conventional Commits
@@ -95,7 +97,12 @@ Husky instaluje hooki Git po `bun install`. Hook `pre-commit` uruchamia `bun run
 `feat(frontend): dodaj filtrowanie incydentów` albo `fix(backend): popraw walidację zapytania`.
 
 Repozytorium używa jednego kanonicznego rootowego `bun.lock`. Buildy Docker korzystają z niego
-przez filtrowane workspace’y; child lockfile’y nie są już utrzymywane.
+przez filtrowane workspace’y. Wyjątek: odizolowany probe Elysia 2 w
+`scripts/spikes/elysia2` ma własny lockfile i nie jest częścią builda produkcyjnego.
+
+Core fazy 3 wymaga migracji `0001_core_operations` przed startem, również
+na świeżej bazie. Brak migracji blokuje nasłuchiwanie backendu.
+[Zakres Core i wyniki](docs/backend/phase-3-core.md).
 
 Faza 2 dodaje jawne polecenia `db:migrate:plan` i `db:migrate:apply`, wymagające
 osobnego połączenia migratora. Zakres baseline i procedurę opisuje

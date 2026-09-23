@@ -39,7 +39,7 @@ Module({ controllers: [CoreHealth] })(CoreModule);
 export async function createCoreApplication(
 	routes: {
 		paths: string[];
-		method?: "get" | "post" | "patch" | "put";
+		method?: "get" | "post" | "patch" | "put" | "query";
 		handle(req: Request, res: Response): Promise<unknown>;
 	}[] = [],
 ) {
@@ -57,6 +57,7 @@ export async function createCoreApplication(
 				post: RequestMethod.POST,
 				patch: RequestMethod.PATCH,
 				put: RequestMethod.PUT,
+				query: RequestMethod.QUERY,
 			}[route.method ?? "get"],
 		})(
 			Endpoint.prototype,
@@ -70,6 +71,10 @@ export async function createCoreApplication(
 	class ConfiguredCore {}
 	Module({ imports: [CoreModule], controllers })(ConfiguredCore);
 	const http = express();
+	http.use((_req, res, next) => {
+		res.setHeader("Cache-Control", "private, no-store");
+		next();
+	});
 	const app = await NestFactory.create(ConfiguredCore, new ExpressAdapter(http), {
 		logger: false,
 		bodyParser: false,

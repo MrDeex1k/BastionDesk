@@ -52,7 +52,7 @@ export function coreCommandHandler(identity: IdentityReader, writes: IncidentWri
 			: req.path.startsWith("/api/admin/")
 				? "admin"
 				: "simple";
-		const parts = req.path.split("/");
+		const parts = req.path.replace(/\/+$/, "").split("/");
 		const action = parts.at(-1)!;
 		try {
 			const live = await runCore(

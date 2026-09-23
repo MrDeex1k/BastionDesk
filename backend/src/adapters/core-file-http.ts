@@ -67,9 +67,9 @@ export function coreFileHandler(
 			const admin = req.path.startsWith("/api/admin/");
 			if ((workflow && live.role === "pracownik") || (admin && live.role !== "admin"))
 				throw new DomainError("FORBIDDEN");
-			const parts = req.path.split("/");
+			const parts = req.path.replace(/\/+$/, "").split("/");
 			const id = uuidSchema.parse(parts[workflow || admin ? 4 : 3]);
-			if (req.method === "GET") {
+			if (req.method === "GET" || req.method === "HEAD") {
 				const type = parts.at(-2)!;
 				const filename = decodeURIComponent(parts.at(-1)!);
 				const singular = new Map([

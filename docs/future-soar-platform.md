@@ -605,6 +605,11 @@ kontraktów bez kopiowania modeli legacy.
 
 ## Faza 3 — modularny core incydentów
 
+Status 23 września 2026: etapy 3.1–3.5 gotowe technicznie, do odbioru.
+Core NestJS/Effect obsługuje workflow incydentów we wspólnym procesie
+z Expressem; sieciowe wydzielenie auth pozostaje fazą 5.
+[Realizacja i weryfikacja](backend/phase-3-core.md).
+
 ### Cel
 
 Oddzielić logikę domenową od HTTP i przygotować core na alerty.
@@ -995,9 +1000,9 @@ pełny zielony przebieg. Fundamenty fazy 2 zostały odebrane. Kolejność dalsze
 
 1. utrzymywać zieloną macierz przeglądarek i kontrole lokalne fazy 1
    (workflowy GitHub Actions usunięto 22 września 2026);
-2. rozpocząć fazę 3: uruchomić NestJS Core i przenieść pierwszy moduł,
-   wykorzystując kontrakty oraz model migracji z fazy 2;
-3. po osiągnięciu parity przejść do fundamentu asynchronicznego w fazie 4.
+2. odebrać gotowe etapy 3.1–3.5: modularny Core, workflow, pliki, audyt
+   i idempotencję, zweryfikowane macierzą E2E;
+3. przejść do fundamentu asynchronicznego w fazie 4.
 
 Pierwszym dużym rezultatem jest checkpoint A: system nadal robi wszystko, co
 `1.0.3`, ale ma migracje, modularny core, kontrakty, kolejki i obserwowalność

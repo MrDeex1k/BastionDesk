@@ -65,8 +65,9 @@ Docelowy transport `ReadCurrentIdentity`: wewnętrzne POST
 bez publikacji przez publiczny NGINX. Body jest profilem claims po weryfikacji
 podpisu w Core; odpowiedź ma `{identity: LiveIdentity | null}`, `Cache-Control:
 no-store`. mTLS identyfikuje usługę, JWT użytkownika nie zastępuje tej tożsamości.
-Endpoint i klient mTLS zostaną podłączone przy uruchomieniu Core; prototyp
-wywołuje port w procesie, nie udaje testu sieci mTLS.
+Endpoint i klient mTLS zostaną podłączone przy wydzieleniu usług w fazie 5.
+Faza 3 używa rzeczywistego portu świeżej tożsamości w jednym procesie
+([ADR-0004](../adr/0004-core-in-process.md)); nie ma jeszcze sieciowego hopu JWT/mTLS.
 
 `LiveIdentity`: subject, sessionId, organizationId, role i sessionExpiresAt.
 Przy zmianie roli następny odczyt widzi nową rolę. Zmiana organizacji, usunięcie
@@ -142,6 +143,6 @@ Auth bez Elysia; powyższy probe jest dodatkową bramką zgodności frameworka.
 Przed fazą 5 ponownie oceniamy aktualne wydanie 2.x. Testy używają
 Request/Response w procesie i pamięciowego adaptera; nie zastępują testu
 przeglądarki, TLS/mTLS, reverse proxy, trwałego key store ani restartu.
-Aktualne pełne E2E weryfikuje nadal legacy 1.0.3; nowy przepływ zostanie
-podłączony i objęty E2E przy migracji pierwszego modułu Core. Nie dodano
+Pełne E2E fazy 3 weryfikuje Core z adapterem świeżej sesji w procesie.
+Sieciowy JWT/JWKS pozostaje prototypem do wdrożenia w fazie 5. Nie dodano
 social loginu ani OIDC.

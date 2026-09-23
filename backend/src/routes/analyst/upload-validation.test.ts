@@ -4,53 +4,58 @@ import type { Request, Response } from "express";
 let putObjectCalls = 0;
 let lastStorageKey: string | null = null;
 
-await mock.module("../../lib/database.js", () => ({
-	query: async () => [],
-	queryOne: async () => ({
-		id: "00000000-0000-4000-8000-000000000001",
-		analystId: "analyst-a",
-		status: "Raport w trakcie",
-		organizationId: "organization-a",
-	}),
-}));
-
 await mock.module("../../lib/env.js", () => ({ env: { S3_BUCKET: "baseline-test" } }));
 
 await mock.module("../../lib/storage.js", () => ({
 	getObjectBuffer: async () => null,
+	presignObject: async () => "url",
+	deleteObject: async () => {},
 	putObject: async (key: string) => {
 		putObjectCalls++;
 		lastStorageKey = key;
 	},
 }));
 
-await mock.module("../../middleware/auth.middleware.js", () => ({
-	getRequiredOrganizationId: (req: { organizationId?: string }) => req.organizationId ?? null,
-}));
+const { coreFileHandler } = await import("../../adapters/core-file-http");
+const row = {
+	id: "00000000-0000-4000-8000-000000000001",
+	analystId: "analyst-a",
+	status: "Raport w trakcie",
+	organizationId: "organization-a",
+} as import("../../types").Incident;
+const handler = coreFileHandler(
+	{
+		read: async () => ({
+			subject: "analyst-a",
+			organizationId: "organization-a",
+			role: "analityk",
+			sessionId: "s",
+			sessionExpiresAt: Math.floor(Date.now() / 1000) + 60,
+		}),
+	},
+	{ get: async () => row, list: async () => ({ incidents: [], total: 0 }) },
+	{
+		create: async () => {
+			throw new Error("Unexpected create");
+		},
+		mutate: async (_identity, _id, _change, _mode, decide) => ({
+			before: row,
+			incident: { ...row, ...decide(row) },
+		}),
+	},
+);
 
-const { default: router } = await import("./incidents.js");
-
-interface RouterLayer {
-	route?: {
-		path: string;
-		methods: Record<string, boolean>;
-		stack: Array<{ handle: (req: Request, res: Response, next: () => void) => void }>;
-	};
-}
-
-function getReportHandler() {
-	const layer = (router.stack as RouterLayer[]).find(
-		(candidate) => candidate.route?.path === "/:id/reports" && candidate.route.methods.post,
-	);
-	const handler = layer?.route?.stack.at(-1)?.handle;
-	if (!handler) throw new Error("Report upload handler not found");
-	return handler;
-}
-
-async function uploadReport(reportData: unknown) {
+async function uploadReport(reportData: unknown, method = "POST") {
 	return await new Promise<{ status: number; body: unknown }>((resolve, reject) => {
 		let status = 200;
 		const req = {
+			method,
+			path:
+				method === "HEAD"
+					? "/api/analyst/incidents/00000000-0000-4000-8000-000000000001/files/reports/report.pdf"
+					: "/api/analyst/incidents/00000000-0000-4000-8000-000000000001/reports",
+			headers: {},
+			get: () => undefined,
 			params: { id: "00000000-0000-4000-8000-000000000001" },
 			body: { reportData },
 			user: { id: "analyst-a" },
@@ -69,7 +74,7 @@ async function uploadReport(reportData: unknown) {
 		} as unknown as Response;
 
 		try {
-			getReportHandler()(req, res, () => reject(new Error("Unexpected next()")));
+			void handler(req, res).catch(reject);
 		} catch (error) {
 			reject(error);
 		}
@@ -77,6 +82,12 @@ async function uploadReport(reportData: unknown) {
 }
 
 describe("analyst upload validation", () => {
+	test("HEAD download follows read policy without uploading a document", async () => {
+		putObjectCalls = 0;
+		const result = await uploadReport(undefined, "HEAD");
+		expect(result.status).toBe(404);
+		expect(putObjectCalls).toBe(0);
+	});
 	test("INC-03-03 rejects invalid base64 before writing to storage", async () => {
 		putObjectCalls = 0;
 

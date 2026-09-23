@@ -194,7 +194,7 @@ try {
       "chown 1000:1000 /phase1-certs/backend/client.key /phase1-certs/llm_service/server.key; chown 999:999 /phase1-certs/database/server.key; chown 70:70 /phase1-certs/pgbouncer/server.key /phase1-certs/pgbouncer/client.key; chown 0:0 /phase1-certs/storage-*/private.key",
     ]);
   }
-  await compose(["up", "-d", "--wait", "--wait-timeout", "240"]);
+  await compose(["up", "-d", "--wait", "--wait-timeout", "240", "database"]);
   await compose([
     "exec",
     "-T",
@@ -203,7 +203,8 @@ try {
     "-ec",
     'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /migration-fixture.sql',
   ]);
-  await compose(["exec", "-T", "backend", "bun", "src/migrations/cli.ts", "apply"]);
+  await compose(["run", "--rm", "--no-deps", "--user", "0:0", "backend", "bun", "src/migrations/cli.ts", "apply"]);
+  await compose(["up", "-d", "--wait", "--wait-timeout", "240"]);
   const testEnvironment = {
     E2E_BASE_URL: baseUrl,
     E2E_MAILPIT_URL: `http://127.0.0.1:${mailPort}`,

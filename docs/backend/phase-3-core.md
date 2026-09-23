@@ -7,10 +7,10 @@ bez uruchamiania migracji istniejącej instalacji użytkownika.
 | Etap | Zakres | Status |
 | --- | --- | --- |
 | 3.1 | NestJS Core obok Expressa, lifecycle, port świeżej tożsamości, Effect | Gotowe |
-| 3.2 | Listy i szczegóły, scope organizacji i uprawnień | Gotowe; QUERY admin do porządkowania w 3.5 |
+| 3.2 | Listy i szczegóły, scope organizacji i uprawnień | Gotowe |
 | 3.3 | Tworzenie, przypisywanie, statusy, notatki, rozstrzygnięcia | Gotowe |
 | 3.4 | Pliki, trwały audyt oraz idempotencja operacji | Gotowe |
-| 3.5 | Parity API, izolacja tenantów, pełne E2E i odbiór | W toku |
+| 3.5 | Parity API, izolacja tenantów, pełne E2E i odbiór | Gotowe technicznie; do odbioru użytkownika |
 
 ## 3.1
 
@@ -86,3 +86,25 @@ Końcowa weryfikacja 3.4: 65 testów backendu, 24 frontendu, check i integracje
 PostgreSQL przechodzą. Poprawiony test czeka na zakończenie logowania przed
 zmianą organizacji. Pełna macierz E2E po tej korekcie: 24/24. Odbiór 3.5
 ponownie obejmie końcowy stan runtime i nowe klucze obiektów storage.
+
+
+## 3.5
+
+Administrator korzysta z Core również przy GET/QUERY listy, filtrach i prostym
+podsumowaniu. Usunięto zastąpione handlery incydentów. Schematy zapytań są
+kontraktami niezależnymi od Expressa. Zachowano nagłówki QUERY/deprecation,
+formaty sukcesu, obsługę końcowego slash i bezpieczny odczyt przez HEAD.
+
+Backend przed otwarciem portu wymaga tabel oraz wpisu migracji 0001. Migrację
+wykonuje operator; runner E2E stosuje ją przed uruchomieniem aplikacji.
+Zaktualizowano instrukcję wdrożenia i granice kontraktu tożsamości.
+
+Weryfikacja 23 września 2026: `bun run check`, 66 testów backendu, 24 frontendu,
+HTTP Core, integracja Core/PostgreSQL i migrator — zielone. Macierz E2E:
+24/24, run `1790185176229-3989`. Po E2E dodano poprawkę HEAD pobierania,
+potwierdzoną osobnym testem regresji i ponownym check/test; nie zmienia GET/POST.
+[Pokrycie i ograniczenia odbioru](../testing/phase-3-core.md).
+
+Faza 3 jest gotowa technicznie do odbioru. Następna faza 4 obejmuje messaging,
+outbox, retry/DLQ i obserwowalność. Wydzielenie Elysia 2 + Better Auth do osobnej
+usługi nadal należy do fazy 5. Istniejąca baza użytkownika nie była migrowana.

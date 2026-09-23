@@ -1,3 +1,4 @@
+import { assertCoreSchema } from "../adapters/core-schema";
 import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -71,6 +72,7 @@ try {
 		await pool.query(
 			await readFile(new URL(`../../../database/init-sql/${file}`, import.meta.url), "utf8"),
 		);
+	await assert.rejects(() => assertCoreSchema(pool!), /CORE_MIGRATIONS_REQUIRED/);
 	const migrator = new Client({
 		host: "127.0.0.1",
 		port,
@@ -100,6 +102,7 @@ try {
 		[],
 	);
 	await migrator.end();
+	await assertCoreSchema(pool);
 	await pool.query(
 		`INSERT INTO "user" (id,email) VALUES ('a','a@example.test'),('b','b@example.test'); INSERT INTO organization (id,name,slug) VALUES ('org','Org','org'),('foreign','Foreign','foreign');`,
 	);

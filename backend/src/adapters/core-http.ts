@@ -39,7 +39,7 @@ export function coreReadHandler(identity: IdentityReader, reads: IncidentReads) 
 				(live.role === "pracownik" || (roleRoute === "admin" && live.role !== "admin"))
 			)
 				throw new DomainError("FORBIDDEN");
-			const last = req.path.split("/").at(-1)!;
+			const last = req.path.replace(/\/+$/, "").split("/").at(-1)!;
 			const views = new Map<string, ListView>([
 				["my", "mine"],
 				["assigned", "assigned"],
