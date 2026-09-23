@@ -40,6 +40,7 @@ Object.assign(env, {
   POSTGRES_PASSWORD: crypto.randomUUID(),
   BETTER_AUTH_SECRET: crypto.randomUUID(),
   CSRF_SECRET: crypto.randomUUID(),
+  RABBITMQ_PASSWORD: crypto.randomUUID(),
   MINIO_ROOT_PASSWORD: crypto.randomUUID(),
   AUTH_PASSWORD_BREACH_CHECK_ENABLED: "false",
   SMTP_HOST: "smtp-test",
@@ -191,7 +192,7 @@ try {
       `${tlsDirectory}:/phase1-certs`,
       "backend",
       "-ec",
-      "chown 1000:1000 /phase1-certs/backend/client.key /phase1-certs/llm_service/server.key; chown 999:999 /phase1-certs/database/server.key; chown 70:70 /phase1-certs/pgbouncer/server.key /phase1-certs/pgbouncer/client.key; chown 0:0 /phase1-certs/storage-*/private.key",
+      "chown 1000:1000 /phase1-certs/backend/client.key /phase1-certs/llm_service/server.key; chown 999:999 /phase1-certs/database/server.key /phase1-certs/rabbitmq/tls.key; chown 70:70 /phase1-certs/pgbouncer/server.key /phase1-certs/pgbouncer/client.key; chown 0:0 /phase1-certs/storage-*/private.key",
     ]);
   }
   await compose(["up", "-d", "--wait", "--wait-timeout", "240", "database"]);

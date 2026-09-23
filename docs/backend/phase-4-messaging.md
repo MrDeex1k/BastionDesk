@@ -8,7 +8,7 @@ Etapy kończymy osobnymi commitami.
 | 4.1 | Discovery i wybór topologii | Gotowe |
 | 4.2 | Kontrakt, routing, retry i DLQ | Gotowe |
 | 4.3 | Outbox/inbox i trwała deduplikacja | Gotowe |
-| 4.4 | Worker klasyfikacji LLM | Plan |
+| 4.4 | Worker klasyfikacji LLM | Gotowe |
 | 4.5 | Telemetria, awarie i runbook | Plan |
 
 ## Ustalenia discovery
@@ -70,3 +70,17 @@ Integracja PostgreSQL przeszła: atomowy rollback, brak drugiego zadania po
 replay, jeden właściciel dzierżawy, fencing starego wyniku, tenant scope,
 cztery próby, DLQ i replay ograniczony organizacją. Backend wymaga teraz także
 migracji 0002 przed startem. Dotychczasowy callback LLM zastąpi worker w 4.4.
+
+## 4.4 — pierwszy worker
+
+`classifier-worker` uruchamia relay i konsumenta Effect poza procesem HTTP.
+Compose dodaje RabbitMQ po AMQPS i osobny wolumen danych brokera. Przeglądarka
+nie czeka na LLM, a worker ładuje opis incydentu z właściwej organizacji.
+Deadline gRPC nie może przekroczyć 90 s przy dzierżawie 120 s. Po rozłączeniu
+worker zamyka kanały i ponawia połączenie; baza pozostaje źródłem zadań.
+
+Dotychczasowy callback best-effort usunięto. Wynik klasyfikacji nie nadpisuje
+już ustawionej kategorii. Test PostgreSQL potwierdza pojedynczy efekt pomimo
+duplikatu. Check, 69 testów backendu i 24 frontendu przechodzą. Pełne E2E
+z AMQPS i osobnym workerem: 24/24, run `1790188912054-10365`.
+Końcowy odbiór 4.5 obejmie dodatkowe oczekiwanie na kategorię w E2E.

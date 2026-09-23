@@ -1,4 +1,6 @@
 import { makeCommand, withReceipt } from "../adapters/core-receipts";
+import { Effect } from "effect";
+import { classificationJob } from "../messaging/worker";
 import { jobStore } from "../messaging/store";
 import { assertCoreSchema } from "../adapters/core-schema";
 import { migrate } from "../migrations/runner";
@@ -401,6 +403,29 @@ try {
 	assert.equal(await jobs.replay(failedId, "foreign"), true);
 	const restartedJobs = jobStore(pool);
 	assert(await restartedJobs.claim(failedId), "replay survives store recreation");
+
+	const workerIncident = await writes.create(a, { ...createInput, id: crypto.randomUUID() });
+	const workerId = (
+		await pool.query<{ id: string }>("SELECT id FROM core_jobs WHERE incident_id=$1", [
+			workerIncident.id,
+		])
+	).rows[0]!.id;
+	let calls = 0;
+	const classifier = {
+		classify: async () => {
+			calls++;
+			return "Żółty";
+		},
+	};
+	assert.equal(
+		await Effect.runPromise(classificationJob(jobs, classifier, workerId)),
+		"completed",
+	);
+	assert.equal(
+		await Effect.runPromise(classificationJob(jobs, classifier, workerId)),
+		"duplicate",
+	);
+	assert.equal(calls, 1);
 	const beforeRollback = (await pool.query("SELECT count(*) FROM core_jobs")).rows[0].count;
 	const broken = createIncidentWrites(async (work) =>
 		transaction(async (client) => {

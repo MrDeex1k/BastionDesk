@@ -128,6 +128,56 @@ services:
     networks:
       - bastiondesk-net-internal
 
+  rabbitmq:
+    image: rabbitmq:4.2.5-management-alpine
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-bastiondesk}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/rabbitmq:/certs/rabbitmq:ro
+    networks:
+      - bastiondesk-net-internal
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  classifier-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["bun", "src/messaging/main.ts"]
+    restart: unless-stopped
+    stop_grace_period: 100s
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqps://${RABBITMQ_USER:-bastiondesk}:${RABBITMQ_PASSWORD}@rabbitmq:5671
+      RABBITMQ_TLS_CA: /certs/ca/ca.crt
+    volumes:
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/backend:/certs/backend:ro
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      llm_service:
+        condition: service_healthy
+    networks:
+      - bastiondesk-net-internal
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3334').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   frontend:
     build:
       context: .
@@ -324,6 +374,7 @@ services:
       start_period: 10s
 
 volumes:
+  rabbitmq-data:
   postgres-data:
     driver: local
   huggingface-model-cache:
