@@ -634,6 +634,11 @@ testy porównawcze starej i nowej ścieżki przechodzą.
 
 ## Faza 4 — kolejki, niezawodność i obserwowalność
 
+Status 23 września 2026: etapy 4.1–4.5 gotowe technicznie do odbioru.
+PostgreSQL outbox/inbox, RabbitMQ, worker LLM, retry/DLQ, audytowany replay
+i OTLP zweryfikowano na izolowanym stosie. Redis nie jest wdrażany bez
+konsumenta odtwarzalnego cache. [Realizacja](backend/phase-4-messaging.md).
+
 ### Cel
 
 Stworzyć wspólną podstawę dla workerów i pomiarów.
@@ -1002,7 +1007,8 @@ pełny zielony przebieg. Fundamenty fazy 2 zostały odebrane. Kolejność dalsze
    (workflowy GitHub Actions usunięto 22 września 2026);
 2. odebrać gotowe etapy 3.1–3.5: modularny Core, workflow, pliki, audyt
    i idempotencję, zweryfikowane macierzą E2E;
-3. przejść do fundamentu asynchronicznego w fazie 4.
+3. odebrać fundament asynchroniczny fazy 4, a następnie przejść do
+   wydzielenia tożsamości i gateway w fazie 5.
 
 Pierwszym dużym rezultatem jest checkpoint A: system nadal robi wszystko, co
 `1.0.3`, ale ma migracje, modularny core, kontrakty, kolejki i obserwowalność

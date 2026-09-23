@@ -40,6 +40,7 @@ Object.assign(env, {
   POSTGRES_PASSWORD: crypto.randomUUID(),
   BETTER_AUTH_SECRET: crypto.randomUUID(),
   CSRF_SECRET: crypto.randomUUID(),
+  RABBITMQ_PASSWORD: crypto.randomUUID(),
   MINIO_ROOT_PASSWORD: crypto.randomUUID(),
   AUTH_PASSWORD_BREACH_CHECK_ENABLED: "false",
   SMTP_HOST: "smtp-test",
@@ -169,7 +170,7 @@ try {
     `${root}/database/migrations/002-better-auth-1.7.3-provider-identity.sql:/migration.sql:ro`,
     `${root}/scripts/fixtures/phase1-account-migration.sql:/migration-fixture.sql:ro`,
   );
-  config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`);
+  config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`, `${root}/scripts/fixtures/phase4-probe.ts:/app/backend/phase4-probe.ts:ro`);
   config.services.backend.depends_on["smtp-test"] = { condition: "service_healthy" };
   config.services.nginx.ports = [`127.0.0.1:${port}:8080`];
   await Bun.write(configFile, JSON.stringify(config, null, 2));
@@ -212,7 +213,22 @@ try {
   };
   const task = process.argv.includes("--all") ? "test:e2e:all" : "test:e2e";
   await command(["bun", "x", "--no-install", "turbo", "run", task], testEnvironment);
-  console.log(`[phase1] PASS ${task}`);
+  await compose(["stop", "classifier-worker", "rabbitmq"]);
+  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "seed"]);
+  await compose(["up", "-d", "--wait", "--wait-timeout", "120", "rabbitmq", "classifier-worker"]);
+  const probe = JSON.parse(await compose(["exec", "-T", "backend", "cat", "/tmp/phase4-probe.json"], true));
+  const countHandled = async () => (await compose(["logs", "--no-color", "classifier-worker"], true))
+    .split("\n").filter(line => line.includes(`Delivery handled ${probe.jobId} duplicate`)).length;
+  const beforeDuplicates = await countHandled();
+  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "duplicates"]);
+  let duplicatesHandled = false;
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if (await countHandled() >= beforeDuplicates + 2) { duplicatesHandled = true; break; }
+    await Bun.sleep(1000);
+  }
+  if (!duplicatesHandled) throw new Error("Worker did not handle both duplicate deliveries");
+  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "verify"]);
+  console.log(`[phase1] PASS ${task} and durable-worker recovery`);
 } catch (error) {
   if (started) {
     try {

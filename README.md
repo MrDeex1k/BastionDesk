@@ -90,6 +90,8 @@ bun run test:components # formularze, uprawnienia i stan UI
 bun run test:e2e   # jednorazowy stos Compose + Chromium
 bun run test:e2e:all # checkpoint Chromium, Firefox i WebKit
 bun run test:core:http # kontrakt HTTP Core, RBAC, GET/QUERY
+bun run test:messaging:broker # routing, DLQ, confirms i restart RabbitMQ
+bun run test:messaging:telemetry # eksport OTLP i propagacja trace
 bun run test:core:db # transakcje, idempotencja, audyt na izolowanym PostgreSQL
 bun run test:migrations # izolowany PostgreSQL: baseline, historia, rollback i restore
 bun run dev        # frontend i backend równolegle
@@ -104,9 +106,11 @@ Repozytorium używa jednego kanonicznego rootowego `bun.lock`. Buildy Docker kor
 przez filtrowane workspace’y. Wyjątek: odizolowany probe Elysia 2 w
 `scripts/spikes/elysia2` ma własny lockfile i nie jest częścią builda produkcyjnego.
 
-Core fazy 3 wymaga migracji `0001_core_operations` przed startem, również
+Core wymaga migracji `0001_core_operations` i `0002_durable_jobs` przed startem, również
 na świeżej bazie. Brak migracji blokuje nasłuchiwanie backendu.
 [Zakres Core i wyniki](docs/backend/phase-3-core.md).
+Faza 4 dodaje worker LLM, RabbitMQ po TLS, retry/DLQ i opcjonalny OTLP.
+[Uruchomienie i replay](docs/backend/messaging-runbook.md).
 
 Faza 2 dodaje jawne polecenia `db:migrate:plan` i `db:migrate:apply`, wymagające
 osobnego połączenia migratora. Zakres baseline i procedurę opisuje

@@ -92,6 +92,8 @@ mv "${OUT_DIR}/pgbouncer-client/tls.crt" "${OUT_DIR}/pgbouncer/client.crt"
 mv "${OUT_DIR}/pgbouncer-client/tls.key" "${OUT_DIR}/pgbouncer/client.key"
 rm -rf "${OUT_DIR}/pgbouncer-client"
 
+generate_cert "rabbitmq" "rabbitmq" "DNS:rabbitmq,DNS:localhost"
+
 generate_storage_cert "storage-1"
 generate_storage_cert "storage-2"
 generate_storage_cert "storage-3"
@@ -99,6 +101,7 @@ generate_storage_cert "storage-4"
 
 chmod 600 \
 	"${CA_DIR}/ca.key" \
+	"${OUT_DIR}/rabbitmq/tls.key" \
 	"${OUT_DIR}/backend/client.key" \
 	"${OUT_DIR}/llm_service/server.key" \
 	"${OUT_DIR}/database/server.key" \

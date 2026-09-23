@@ -1,0 +1,108 @@
+import { startTelemetry } from "./telemetry";
+import assert from "node:assert/strict";
+import { declareTopology, publishConfirmed } from "./broker";
+import { topology } from "./contract";
+import { connect } from "amqplib";
+
+const name = `bastiondesk-messaging-${crypto.randomUUID()}`;
+const password = crypto.randomUUID();
+async function docker(args: string[]) {
+	const child = Bun.spawn(["docker", ...args], {
+		env: { ...process.env, RABBITMQ_DEFAULT_PASS: password },
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const [output, error, code] = await Promise.all([
+		new Response(child.stdout).text(),
+		new Response(child.stderr).text(),
+		child.exited,
+	]);
+	if (code) throw new Error(`Docker ${args[0]}: ${error}`);
+	return output;
+}
+const collector = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => Response.json({}) });
+process.env.OTEL_ENABLED = "true";
+process.env.OTEL_EXPORTER_OTLP_ENDPOINT = `http://127.0.0.1:${collector.port}`;
+process.env.OTEL_LOGS_EXPORTER = "none";
+const telemetry = startTelemetry("broker-probe");
+let started = false;
+try {
+	await docker([
+		"run",
+		"-d",
+		"--name",
+		name,
+		"-e",
+		"RABBITMQ_DEFAULT_USER=probe",
+		"-e",
+		"RABBITMQ_DEFAULT_PASS",
+		"-p",
+		"127.0.0.1::5672",
+		"rabbitmq:4.2.5-management-alpine",
+	]);
+	started = true;
+	let port = (await docker(["port", name, "5672/tcp"])).trim().split(":").at(-1);
+	let url = `amqp://probe:${password}@127.0.0.1:${port}`;
+	async function ready() {
+		for (let n = 0; n < 90; n++) {
+			try {
+				return await connect(url, { timeout: 2000 });
+			} catch {
+				await Bun.sleep(500);
+			}
+		}
+		throw new Error("BROKER_START_TIMEOUT");
+	}
+	const connection = await ready();
+	const channel = await connection.createConfirmChannel();
+	await channel.assertQueue("probe", { durable: true, arguments: { "x-queue-type": "quorum" } });
+	channel.sendToQueue("probe", Buffer.from("durable"), { persistent: true });
+	await channel.waitForConfirms();
+	await declareTopology(channel);
+	const jobId = crypto.randomUUID();
+	await publishConfirmed(channel, jobId, false, `00-${"4".repeat(32)}-${"5".repeat(16)}-01`);
+	const delivery = await channel.get(topology.queue, { noAck: false });
+	assert(delivery);
+	assert(
+		String(delivery.properties.headers?.traceparent).startsWith(`00-${"4".repeat(32)}-`),
+		"OTel context crosses real AMQP delivery",
+	);
+	channel.nack(delivery, false, false);
+	let dead = false;
+	for (let i = 0; i < 40; i++) {
+		const entry = await channel.get(topology.deadQueue, { noAck: false });
+		if (entry) {
+			channel.ack(entry);
+			dead = true;
+			break;
+		}
+		await Bun.sleep(100);
+	}
+	assert(dead, "rejected delivery reaches DLQ");
+	await channel.unbindQueue(topology.queue, topology.exchange, topology.routingKey);
+	await assert.rejects(
+		() => publishConfirmed(channel, crypto.randomUUID()),
+		/UNROUTABLE_MESSAGE/,
+	);
+	await connection.close();
+	await docker(["restart", name]);
+	port = (await docker(["port", name, "5672/tcp"])).trim().split(":").at(-1);
+	url = `amqp://probe:${password}@127.0.0.1:${port}`;
+	const restarted = await ready();
+	const reader = await restarted.createChannel();
+	const message = await reader.get("probe", { noAck: false });
+	assert(message && message.content.toString() === "durable");
+	await reader.close();
+	const retry = await restarted.createChannel();
+	const redelivery = await retry.get("probe", { noAck: false });
+	assert(redelivery && redelivery.fields.redelivered);
+	retry.ack(redelivery);
+	await restarted.close();
+	console.log(
+		"PASS RabbitMQ quorum confirm, mandatory return, DLQ, restart persistence and unacked redelivery",
+	);
+} finally {
+	if (started) await docker(["rm", "-f", "-v", name]);
+	await telemetry.shutdown();
+	await collector.stop(true);
+}

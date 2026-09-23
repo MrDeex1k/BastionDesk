@@ -1,0 +1,20 @@
+# Local diagnostic collector; replace debug exporter for production retention/UI.
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector:0.148.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otelcol/config.yaml:ro
+    networks:
+      - bastiondesk-net-internal
+    restart: unless-stopped
+  backend:
+    environment:
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_LOGS_EXPORTER: none
+  classifier-worker:
+    environment:
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_LOGS_EXPORTER: none

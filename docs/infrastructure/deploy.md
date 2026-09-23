@@ -1,7 +1,7 @@
 # Deployment Guide
 
 Ten dokument opisuje bazowy sposób wdrożenia BastionDesk `1.0.3` oraz
-dodatkowy, wymagany krok migracji dla bieżącego Core fazy 3.
+dodatkowy, wymagany krok migracji dla bieżącego Core faz 3–4.
 
 ## Supported Mode
 
@@ -37,6 +37,8 @@ Docker Compose uruchamia następujące usługi:
 - `storage-1` do `storage-4` - distributed MinIO po HTTPS
 - `llm_service` - klasyfikacja incydentów przez lokalny model
 - `backend` - API i Better Auth
+- `rabbitmq` - dostarczanie zadań przez AMQPS
+- `classifier-worker` - relay i trwała klasyfikacja incydentów
 - `frontend` - statyczny build SPA
 - `nginx` - główny reverse proxy i punkt wejścia do aplikacji
 
@@ -126,9 +128,9 @@ docker compose build
 docker compose up -d --wait database
 ```
 
-Przed uruchomieniem backendu fazy 3 wykonaj `plan` i `apply` zgodnie z
+Przed uruchomieniem backendu i workera fazy 4 wykonaj `plan` i `apply` zgodnie z
 [instrukcją migracji](../database/migrations.md), również dla świeżej bazy.
-Core wymaga `0001_core_operations`; bez niej proces kończy start błędem
+Core wymaga `0001_core_operations` i `0002_durable_jobs`; bez nich kończy start błędem
 `CORE_MIGRATIONS_REQUIRED`. Nie wykonuje automatycznie DDL.
 
 Migrator potrzebuje bezpośredniego połączenia do `database:5432` oraz własnego
@@ -175,6 +177,9 @@ Mapowanie hosta używane obecnie przez Compose:
 - `4567 -> nginx:8080` - główna aplikacja
 
 Pozostałe usługi są dostępne wyłącznie wewnątrz sieci Docker Compose. Dzięki temu użytkownik końcowy korzysta z jednego publicznego entrypointu, a backend, baza, PgBouncer, LLM i storage nie są bezpośrednio publikowane na hoście.
+
+Szczegóły nowych sekretów, certyfikatu RabbitMQ, telemetrii i replay:
+[runbook messagingu](../backend/messaging-runbook.md).
 
 ## Runtime Verification
 

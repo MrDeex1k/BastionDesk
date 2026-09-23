@@ -11,6 +11,9 @@
   "scripts": {
     "db:migrate:plan": "bun backend/src/migrations/cli.ts plan",
     "db:migrate:apply": "bun backend/src/migrations/cli.ts apply",
+    "test:messaging:broker": "bun backend/src/messaging/discovery.ts",
+    "test:messaging:telemetry": "bun backend/src/messaging/telemetry.integration.ts",
+    "jobs": "bun backend/src/messaging/cli.ts",
     "test:core:http": "bun scripts/test-core-http.ts",
     "test:core:db": "bun backend/src/core/integration.ts",
     "test:migrations": "bun backend/src/migrations/integration.ts",

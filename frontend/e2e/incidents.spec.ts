@@ -29,6 +29,18 @@ test("INC-E2E-01 employee report → analyst notes and documents → employee do
   });
   await page.getByRole("button", { name: "WYŚLIJ ZGŁOSZENIE" }).click();
   await expect(page.getByText("Sukces!", { exact: true })).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get("/api/incidents/my");
+        const body = await response.json();
+        return body.data?.find(
+          (incident: { userDescription: string }) => incident.userDescription === description,
+        )?.llmCategory;
+      },
+      { timeout: 20000 },
+    )
+    .toBe("Żółty");
   await page.getByRole("button", { name: "Pokaż moje zgłoszenia" }).click();
   await page.getByRole("button").filter({ hasText: description }).click();
   await expect(page.getByText(description, { exact: true })).toBeVisible();
