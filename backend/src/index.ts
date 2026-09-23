@@ -147,6 +147,9 @@ app.get("/api", (_req, res) => {
 import incidentsRouter from "./routes/incidents";
 import apiRoutes from "./routes/index";
 
+const core = await (await import("./core/application")).createCoreApplication();
+app.get("/api/core/health", core.http);
+
 // Rate Limiting dla własnych endpointów (zgodnie z Better-Auth: 100 req/10s)
 app.use("/api/incidents", requireCsrf, apiRateLimiter, incidentsRouter);
 app.use("/api/admin", requireCsrf, apiRateLimiter);
@@ -178,6 +181,7 @@ async function gracefulShutdown(signal: string) {
 		console.log("HTTP server closed");
 
 		try {
+			await core.close();
 			await closeDatabase();
 			console.log("Database connections closed");
 		} catch (error) {
