@@ -1,3 +1,4 @@
+import { enqueueClassification } from "../messaging/store";
 import { DomainError } from "../contracts/errors";
 import { makeCommand, withReceipt, recordFailure } from "./core-receipts";
 import type { IncidentWrites } from "../core/incidents/commands";
@@ -144,6 +145,7 @@ export function createIncidentWrites(transaction = withIncidentTransaction): Inc
 								JSON.stringify(input.userAttachmentMetadata),
 							],
 						);
+						await enqueueClassification(client, command, input.id);
 						return {
 							value: result.rows[0]!,
 							resourceId: input.id,

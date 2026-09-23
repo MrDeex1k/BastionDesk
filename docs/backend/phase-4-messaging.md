@@ -7,7 +7,7 @@ Etapy kończymy osobnymi commitami.
 | --- | --- | --- |
 | 4.1 | Discovery i wybór topologii | Gotowe |
 | 4.2 | Kontrakt, routing, retry i DLQ | Gotowe |
-| 4.3 | Outbox/inbox i trwała deduplikacja | Plan |
+| 4.3 | Outbox/inbox i trwała deduplikacja | Gotowe |
 | 4.4 | Worker klasyfikacji LLM | Plan |
 | 4.5 | Telemetria, awarie i runbook | Plan |
 
@@ -53,3 +53,20 @@ AMQPS z weryfikacją CA; plaintext jest dostępny tylko w jawnych testach loopba
 
 Weryfikacja: 69 testów backendu, check i rzeczywisty RabbitMQ (routing, DLQ,
 mandatory return, restart i ponowne dostarczenie).
+
+## 4.3 — trwały rejestr
+
+Migracja 0002 dodaje `core_jobs`. Utworzenie incydentu, receipt, audyt i zadanie
+są jedną transakcją. `completed` pełni funkcję inbox: duplikat nie zapisuje
+ponownie kategorii ani audytu. Dzierżawa 120 s i losowy token odrzucają spóźnione
+wyniki; każda nowa dzierżawa zużywa próbę, również po awarii procesu.
+
+Relay ponawia nieukończone dostarczenia co 30 s, wybierając porcje przez
+`FOR UPDATE SKIP LOCKED`. Potwierdzenie RabbitMQ nie usuwa zadania z PostgreSQL.
+Stan `dead` jest trwałym DLQ; kopia wskaźnika trafia również do kolejki DLQ.
+Brak automatycznej retencji — usunięcie ukończonego zadania usuwa deduplikację.
+
+Integracja PostgreSQL przeszła: atomowy rollback, brak drugiego zadania po
+replay, jeden właściciel dzierżawy, fencing starego wyniku, tenant scope,
+cztery próby, DLQ i replay ograniczony organizacją. Backend wymaga teraz także
+migracji 0002 przed startem. Dotychczasowy callback LLM zastąpi worker w 4.4.

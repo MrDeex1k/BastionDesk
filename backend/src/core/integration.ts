@@ -1,4 +1,5 @@
 import { makeCommand, withReceipt } from "../adapters/core-receipts";
+import { jobStore } from "../messaging/store";
 import { assertCoreSchema } from "../adapters/core-schema";
 import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
@@ -90,6 +91,13 @@ try {
 	);
 	const migrations = [
 		{
+			id: "0002_durable_jobs",
+			sql: await readFile(
+				new URL("../../../database/versioned/0002_durable_jobs.sql", import.meta.url),
+				"utf8",
+			),
+		},
+		{
 			id: "0001_core_operations",
 			sql: await readFile(
 				new URL("../../../database/versioned/0001_core_operations.sql", import.meta.url),
@@ -97,6 +105,7 @@ try {
 			),
 		},
 	];
+	migrations.sort((a, b) => a.id.localeCompare(b.id));
 	await migrate(migrator, baseline.fingerprint, migrations, "apply");
 	assert.deepEqual(
 		(await migrate(migrator, baseline.fingerprint, migrations, "apply")).pending,
@@ -340,6 +349,76 @@ try {
 	);
 	assert(denied.rows.length > 0);
 	assert(denied.rows.every((row) => row.entry.changedFields.length === 0));
+
+	const jobs = jobStore(pool);
+	const jobRows = await pool.query<{ id: string }>(
+		"SELECT id FROM core_jobs WHERE incident_id=$1",
+		[firstCreate.id],
+	);
+	assert.equal(jobRows.rowCount, 1, "replay does not enqueue twice");
+	const jobId = jobRows.rows[0]!.id;
+	const [claimA, claimB] = await Promise.all([jobs.claim(jobId), jobs.claim(jobId)]);
+	const claim = claimA ?? claimB;
+	assert(claim && !(claimA && claimB), "one lease owner");
+	assert.equal(await jobs.description(claim), createInput.userDescription);
+	assert.equal(await jobs.description({ ...claim, organization_id: "foreign" }), null);
+	await pool.query(
+		"UPDATE core_jobs SET lease_until=clock_timestamp()-interval '1 second' WHERE id=$1",
+		[jobId],
+	);
+	const newer = await jobs.claim(jobId);
+	assert(newer);
+	assert.equal(await jobs.complete(claim, "Czerwony"), false, "stale lease fenced out");
+	assert.equal(await jobs.complete(newer, "Zielony"), true);
+	assert.equal(await jobs.complete(newer, "Czerwony"), false, "duplicate outcome ignored");
+	assert.equal(await jobs.claim(jobId), null);
+	assert.equal(
+		(await pool.query("SELECT * FROM core_audit WHERE command_id=$1", [jobId])).rowCount,
+		1,
+	);
+	const failedId = (
+		await pool.query<{ id: string }>("SELECT id FROM core_jobs WHERE incident_id=$1", [
+			otherTenant.id,
+		])
+	).rows[0]!.id;
+	for (let attempt = 1; attempt <= 4; attempt++) {
+		const failed = await jobs.claim(failedId);
+		assert(failed);
+		assert.equal(failed.attempts, attempt);
+		await jobs.fail(failed, "LLM_UNAVAILABLE", true);
+		if (attempt < 4) {
+			assert.equal(await jobs.claim(failedId), null, "retry waits until due");
+			await pool.query("UPDATE core_jobs SET available_at=clock_timestamp() WHERE id=$1", [
+				failedId,
+			]);
+		}
+	}
+	assert.equal(
+		(await pool.query("SELECT state FROM core_jobs WHERE id=$1", [failedId])).rows[0].state,
+		"dead",
+	);
+	assert.equal(await jobs.replay(failedId, "org"), false);
+	assert.equal(await jobs.replay(failedId, "foreign"), true);
+	const restartedJobs = jobStore(pool);
+	assert(await restartedJobs.claim(failedId), "replay survives store recreation");
+	const beforeRollback = (await pool.query("SELECT count(*) FROM core_jobs")).rows[0].count;
+	const broken = createIncidentWrites(async (work) =>
+		transaction(async (client) => {
+			await work(client);
+			throw new Error("AFTER_OUTBOX_INSERT");
+		}),
+	);
+	await assert.rejects(
+		() => broken.create(a, { ...createInput, id: crypto.randomUUID() }),
+		/AFTER_OUTBOX_INSERT/,
+	);
+	assert.equal(
+		(await pool.query("SELECT count(*) FROM core_jobs")).rows[0].count,
+		beforeRollback,
+	);
+	console.log(
+		"PASS atomic outbox, replay deduplication, leases, tenant scope, stale result fencing, retries and DLQ replay",
+	);
 	console.log(
 		"PASS migration repeat, concurrent receipt replay, conflict, restart and minimal audit",
 	);
