@@ -1,4 +1,5 @@
 import type { Response } from "express";
+import { errorResponse } from "../contracts/errors";
 
 export function sendErrorResponse(
 	res: Response,
@@ -7,12 +8,5 @@ export function sendErrorResponse(
 	message: string,
 	details?: unknown,
 ): Response {
-	return res.status(statusCode).json({
-		success: false,
-		error: {
-			code,
-			message,
-			...(details !== undefined ? { details } : {}),
-		},
-	});
+	return res.status(statusCode).json(errorResponse(code, message, details));
 }

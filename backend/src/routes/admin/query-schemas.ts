@@ -1,6 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
-import { incidentCategorySchema, incidentStatusSchema } from "../../utils/validation.js";
+import {
+	incidentCategorySchema,
+	incidentStatusSchema,
+	pageRequestSchema,
+} from "../../contracts/index.js";
 
 const userIdSchema = z.string().min(1).max(128);
 
@@ -73,12 +77,7 @@ const timezoneSchema = z
 
 export const adminIncidentsQuerySchema = z
 	.strictObject({
-		pagination: z
-			.strictObject({
-				page: z.number().int().min(1).max(1000).default(1),
-				limit: z.number().int().min(1).max(100).default(20),
-			})
-			.default({ page: 1, limit: 20 }),
+		pagination: pageRequestSchema.default({ page: 1, limit: 20 }),
 		filters: z
 			.strictObject({
 				statuses: z.array(incidentStatusSchema).max(6).optional(),

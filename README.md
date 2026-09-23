@@ -85,6 +85,7 @@ bun run test       # testy backendu i komponentów React
 bun run test:components # formularze, uprawnienia i stan UI
 bun run test:e2e   # jednorazowy stos Compose + Chromium
 bun run test:e2e:all # checkpoint Chromium, Firefox i WebKit
+bun run test:migrations # izolowany PostgreSQL: baseline, historia, rollback i restore
 bun run dev        # frontend i backend równolegle
 bun run changelog:generate # generowanie ostatniej sekcji CHANGELOG z Conventional Commits
 ```
@@ -95,6 +96,10 @@ Husky instaluje hooki Git po `bun install`. Hook `pre-commit` uruchamia `bun run
 
 Repozytorium używa jednego kanonicznego rootowego `bun.lock`. Buildy Docker korzystają z niego
 przez filtrowane workspace’y; child lockfile’y nie są już utrzymywane.
+
+Faza 2 dodaje jawne polecenia `db:migrate:plan` i `db:migrate:apply`, wymagające
+osobnego połączenia migratora. Zakres baseline i procedurę opisuje
+[instrukcja migracji](docs/database/migrations.md).
 
 Instalację przeglądarek, macierz scenariuszy i CI opisuje
 [kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).

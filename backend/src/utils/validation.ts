@@ -2,7 +2,10 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
+import { incidentStatusSchema, incidentCategorySchema, userRoleSchema } from "../contracts";
 import { sendErrorResponse } from "../lib/api-response";
+
+export { incidentStatusSchema, incidentCategorySchema, userRoleSchema };
 
 export const uuidSchema = z.string().uuid({ message: "Nieprawidłowy format UUID" });
 
@@ -23,19 +26,6 @@ export const paginationSchema = z.object({
 	page: z.coerce.number().int().min(1).default(1),
 	limit: z.coerce.number().int().min(1).max(100).default(20),
 });
-
-// Zgodne z 03-create-app.sql: incident_status ENUM
-export const incidentStatusSchema = z.enum([
-	"Zgłoszony",
-	"Raport w trakcie",
-	"Raport złożony",
-	"Sprawozdanie w trakcie",
-	"Sprawozdanie złożone",
-	"Odrzucone",
-]);
-
-// Zgodne z 03-create-app.sql: incident_category ENUM
-export const incidentCategorySchema = z.enum(["Czerwony", "Żółty", "Zielony"]);
 
 // Schemat dla tworzenia incydentu (multipart/form-data)
 // Pliki będą obsługiwane oddzielnie przez file middleware
@@ -63,8 +53,6 @@ export const updateIncidentNoteSchema = z.object({
 export const resolveIncidentSchema = z.object({
 	resolved: z.boolean(),
 });
-
-export const userRoleSchema = z.enum(["admin", "analityk", "pracownik"]);
 
 export const createOrganizationSchema = z.object({
 	name: z

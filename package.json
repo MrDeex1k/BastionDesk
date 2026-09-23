@@ -9,6 +9,9 @@
     "backend"
   ],
   "scripts": {
+    "db:migrate:plan": "bun backend/src/migrations/cli.ts plan",
+    "db:migrate:apply": "bun backend/src/migrations/cli.ts apply",
+    "test:migrations": "bun backend/src/migrations/integration.ts",
     "build": "turbo run build",
     "check": "turbo run lint typecheck format",
     "changelog:generate": "conventional-changelog -n changelog.config.mjs -i CHANGELOG.md -s -r 1",
