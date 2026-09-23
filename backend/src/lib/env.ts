@@ -118,10 +118,8 @@ const rawEnv = {
 	DB_TLS_KEY_PATH: getEnvVar("DB_TLS_KEY_PATH"),
 
 	// Better-Auth
-	BETTER_AUTH_SECRET: getEnvVar("BETTER_AUTH_SECRET"),
 	BETTER_AUTH_URL: getEnvVar("BETTER_AUTH_URL"),
 	BETTER_AUTH_TRUSTED_ORIGINS: getEnvVar("BETTER_AUTH_TRUSTED_ORIGINS"),
-	CSRF_SECRET: getEnvVar("CSRF_SECRET"),
 	AUTH_PASSWORD_BREACH_CHECK_ENABLED: getEnvBoolean("AUTH_PASSWORD_BREACH_CHECK_ENABLED", true),
 
 	// WebAuthn / PassKeys
@@ -202,15 +200,6 @@ export const env = {
 
 // Tryb produkcyjny
 if (env.NODE_ENV === "production") {
-	if (env.BETTER_AUTH_SECRET.includes("dev-secret")) {
-		throw new Error("BETTER_AUTH_SECRET must be changed in production!");
-	}
-	if (env.BETTER_AUTH_SECRET.length < 32) {
-		throw new Error("BETTER_AUTH_SECRET must be at least 32 characters in production!");
-	}
-	if (env.CSRF_SECRET.length < 32) {
-		throw new Error("CSRF_SECRET must be at least 32 characters in production!");
-	}
 	for (const origin of [
 		env.FRONTEND_ORIGIN,
 		env.BETTER_AUTH_ORIGIN,

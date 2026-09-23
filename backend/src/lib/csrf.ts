@@ -1,3 +1,4 @@
+import { csrfSecret } from "../auth/secrets";
 import crypto from "node:crypto";
 import type { Response } from "express";
 import { env } from "./env";
@@ -102,7 +103,7 @@ export function verifyCsrfToken(token: string, subject: string): boolean {
 
 function signCsrfPayload(subject: string, nonce: string, expiresAt: string): string {
 	return crypto
-		.createHmac("sha256", env.CSRF_SECRET)
+		.createHmac("sha256", csrfSecret)
 		.update(`${subject}:${nonce}:${expiresAt}`)
 		.digest("base64url");
 }

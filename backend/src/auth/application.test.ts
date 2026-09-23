@@ -37,3 +37,25 @@ test("Elysia dispatch preserves raw bodies and cookies while isolating internal 
 		(await send("/api/incidents", { headers: { origin: "https://evil.test" } })).status,
 	).toBe(403);
 });
+
+test("gateway rate limiting rejects bursts before running auth or Core", async () => {
+	let calls = 0;
+	const handle = async () => {
+		calls++;
+		return new Response();
+	};
+	const app = createAuthApplication({
+		origins: [],
+		limit: 2,
+		auth: handle,
+		csrf: handle,
+		signup: handle,
+		proxy: handle,
+		health: async () => true,
+	});
+	for (const expected of [200, 200, 429])
+		expect(
+			(await app.handle(new Request("https://desk.test/api/auth/get-session"))).status,
+		).toBe(expected);
+	expect(calls).toBe(2);
+});

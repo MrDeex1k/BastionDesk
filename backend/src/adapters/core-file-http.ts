@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { fromNodeHeaders } from "better-auth/node";
+import { fromNodeHeaders } from "../identity/transport";
 import { DomainError } from "../contracts/errors";
 import { currentIdentity, identityLayer, type IdentityReader } from "../core/identity";
 import { getIncident, readsLayer, type IncidentReads } from "../core/incidents/reads";

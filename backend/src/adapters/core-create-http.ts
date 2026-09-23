@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { operationRequest } from "./core-operation";
 import type { Request, Response } from "express";
 import { Effect } from "effect";
-import { fromNodeHeaders } from "better-auth/node";
+import { fromNodeHeaders } from "../identity/transport";
 import {
 	createIncident,
 	writesLayer,

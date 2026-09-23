@@ -8,6 +8,7 @@
  * - Organization (multi-tenancy z rolami)
  */
 
+import { authSecret } from "../auth/secrets";
 import fs from "node:fs";
 import { coreJwtPlugin } from "../identity/auth-bridge";
 import { authIssuer } from "../identity/network-config";
@@ -47,7 +48,7 @@ const passwordBreachPlugins = env.AUTH_PASSWORD_BREACH_CHECK_ENABLED
 
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
-	secret: env.BETTER_AUTH_SECRET,
+	secret: authSecret,
 	trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGIN_LIST,
 	database: authPool,
 	disabledPaths: ["/token"],
