@@ -1,6 +1,7 @@
 # Deployment Guide
 
-Ten dokument opisuje wspierany sposób wdrożenia BastionDesk `1.0.3`.
+Ten dokument opisuje bazowy sposób wdrożenia BastionDesk `1.0.3` oraz
+dodatkowy, wymagany krok migracji dla bieżącego Core fazy 3.
 
 ## Supported Mode
 
@@ -122,8 +123,30 @@ Z katalogu głównego repo:
 cp .env.example .env
 sh infra/tls/generate-dev-certs.sh
 docker compose build
+docker compose up -d --wait database
+```
+
+Przed uruchomieniem backendu fazy 3 wykonaj `plan` i `apply` zgodnie z
+[instrukcją migracji](../database/migrations.md), również dla świeżej bazy.
+Core wymaga `0001_core_operations`; bez niej proces kończy start błędem
+`CORE_MIGRATIONS_REQUIRED`. Nie wykonuje automatycznie DDL.
+
+Migrator potrzebuje bezpośredniego połączenia do `database:5432` oraz własnego
+certyfikatu klienta zgodnego z użytkownikiem PostgreSQL. Przykład uruchomienia
+w sieci Compose po przygotowaniu chronionego pliku `.env.migrator` i certyfikatów:
+
+```bash
+docker compose run --rm --no-deps --env-from-file .env.migrator \
+  --volume /absolute/path/migrator:/certs/migrator:ro \
+  backend bun src/migrations/cli.ts plan
+# Po weryfikacji planu uruchom to samo polecenie z apply zamiast plan.
 docker compose up -d
 ```
+
+Plik migratora zawiera `MIGRATION_DATABASE_URL`, `MIGRATION_TLS_CA`,
+`MIGRATION_TLS_CERT` i `MIGRATION_TLS_KEY` (nazwy sprawdź w instrukcji migracji).
+Certyfikaty muszą być czytelne dla użytkownika kontenera. Nie zapisuj sekretów
+w repozytorium.
 
 Generator nie wczytuje automatycznie pliku `.env`. Jeśli zmienisz
 `POSTGRES_USER` względem wartości domyślnej, przekaż tę samą nazwę podczas

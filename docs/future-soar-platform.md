@@ -390,13 +390,14 @@ tymczasowe współistnienie starego Express backendu, auth service i NestJS Core
    przeglądarkowe E2E Playwright jako kontrakt zachowania dla migracji.
 3. Zdefiniować kontrakty domenowe, event envelope, tenant scope oraz kontrakt
    JWT/JWKS.
-4. Uruchomić Elysia 2 + Better Auth jako osobny auth service i skierować do
-   niego wyłącznie ścieżki auth.
-5. Dodać weryfikację JWT/JWKS do ścieżki przejściowej oraz NestJS Core.
-6. Uruchomić NestJS obok Expressa i przenosić moduły przez adaptery, zaczynając
-   od incydentów i audytu.
+4. W fazie 2 zweryfikować JWT/JWKS i przejściowy adapter tożsamości dla Core,
+   przy auth nadal obsługiwanym przez Express z Better Auth.
+5. W fazie 3 uruchomić NestJS obok Expressa i przenosić moduły przez adaptery,
+   zaczynając od incydentów i audytu. W fazie 4 dodać fundament asynchroniczny.
+6. W fazie 5 uruchomić Elysia 2 + Better Auth jako osobny auth service i
+   przełączyć kontrakt tożsamości według wyników spike'u fazy 2.
 7. Przełączać ruch przez NGINX po osiągnięciu parity funkcjonalnego,
-   bezpieczeństwa i obserwowalności.
+   bezpieczeństwa i obserwowalności, osobno dla migrowanych modułów i auth.
 8. Usunąć Better Auth z Expressa, a następnie wygasić legacy route'y i sam
    Express, gdy wszystkie moduły będą obsługiwane przez NestJS.
 
@@ -569,6 +570,10 @@ BastionDesk `2.0`.
 
 ## Faza 2 — migracje i kontrakty domenowe
 
+Fundamenty i prototypy odebrane przez właściciela w punkcie 2.5 dnia
+23 września 2026. Produkcyjne użycie kontraktów przez pierwszy moduł Core
+pozostaje w fazie 3. Paczki pracy, wdrożone kontrakty i zakres odbioru: [plan fazy 2](backend/phase-2-foundations.md).
+
 ### Cel
 
 Przygotować rozwój bez utraty danych i bez big-bang rewrite.
@@ -599,6 +604,11 @@ kontraktów bez kopiowania modeli legacy.
 - wersjonowanie API, eventów i błędów.
 
 ## Faza 3 — modularny core incydentów
+
+Status 23 września 2026: etapy 3.1–3.5 gotowe technicznie, do odbioru.
+Core NestJS/Effect obsługuje workflow incydentów we wspólnym procesie
+z Expressem; sieciowe wydzielenie auth pozostaje fazą 5.
+[Realizacja i weryfikacja](backend/phase-3-core.md).
 
 ### Cel
 
@@ -985,12 +995,14 @@ rozbudowany LLM nie są konieczne do obrony, jeśli nie wspierają eksperymentu.
 
 ## Kolejność rozpoczęcia pracy
 
-Faza 0 jest zakończona. Po wdrożeniu kontraktu UI i E2E kolejność pozostaje
-następująca:
+Faza 0 jest zakończona, a kontrakt UI i E2E fazy 1 został wdrożony i miał
+pełny zielony przebieg. Fundamenty fazy 2 zostały odebrane. Kolejność dalszej pracy:
 
-1. potwierdzić zieloną macierz przeglądarek i CI fazy 1;
-2. w fazie 2 ustalić kontrakty domenowe i model migracji;
-3. następnie rozpocząć modularizację core i fundament asynchroniczny.
+1. utrzymywać zieloną macierz przeglądarek i kontrole lokalne fazy 1
+   (workflowy GitHub Actions usunięto 22 września 2026);
+2. odebrać gotowe etapy 3.1–3.5: modularny Core, workflow, pliki, audyt
+   i idempotencję, zweryfikowane macierzą E2E;
+3. przejść do fundamentu asynchronicznego w fazie 4.
 
 Pierwszym dużym rezultatem jest checkpoint A: system nadal robi wszystko, co
 `1.0.3`, ale ma migracje, modularny core, kontrakty, kolejki i obserwowalność

@@ -95,14 +95,19 @@ adapterów integracyjnych.
 1. Zamknąć i zmierzyć baseline 1.0.3.
 2. Wprowadzić kontrakty domenowe, event envelope, tenant scope i kontrakt
    JWT/JWKS.
-3. Uruchomić Elysia 2 + Better Auth obok Expressa; przenieść ścieżki auth.
-4. Dodać verifier JWT/JWKS do NestJS oraz przejściowo do ścieżek, które muszą
-   działać przed pełnym przełączeniem.
-5. Uruchomić NestJS Core obok Expressa i migrować moduły przez adaptery.
-6. Przełączać ruch przez NGINX po osiągnięciu parity funkcjonalnego,
-   bezpieczeństwa i obserwowalności.
-7. Usunąć Better Auth z Expressa.
+3. W fazie 2 zweryfikować kontrakt JWT/JWKS i przejściowy adapter tożsamości
+   dla Core, podczas gdy właścicielem auth pozostaje Express z Better Auth.
+4. W fazie 3 uruchomić NestJS Core obok Expressa i migrować moduły przez
+   adaptery. Core nie importuje instancji Better Auth.
+5. W fazie 4 dodać fundament asynchroniczny i obserwowalność.
+6. W fazie 5 uruchomić Elysia 2 + Better Auth obok Expressa, przenieść ścieżki
+   auth i przełączyć kontrakt tożsamości według wyników spike'u fazy 2.
+7. Przełączać ruch przez NGINX po osiągnięciu parity funkcjonalnego,
+   bezpieczeństwa i obserwowalności; następnie usunąć Better Auth z Expressa.
 8. Wygasić Express dopiero po przeniesieniu wszystkich odpowiedzialności core.
+
+Kolejność doprecyzowano 23 września 2026 zgodnie z numerowanymi fazami roadmapy.
+Zakres i status prac opisuje [plan fazy 2](../backend/phase-2-foundations.md).
 
 Approval człowieka, joby i stan workflowu są trwałe w PostgreSQL. Nie wolno
 utrzymywać oczekującego approval wyłącznie w pamięci fibra Effect.
@@ -125,6 +130,15 @@ Koszty:
 - większy narzut poznawczy przez NestJS i EffectTS.
 
 ## Decyzje pozostawione do spike’ów
+
+Aktualizacja 23 września 2026: mechanizm bridge, Ed25519, TTL/rotacja,
+bieżący odczyt członkostwa i revocation rozstrzyga
+[ADR-0003](0003-identity-bridge.md). Potwierdzono Better Auth 1.7.5 i jose
+6.2.12 na Bun 1.4.2 oraz mount z przypiętą Elysia **2.0.0-beta.14**.
+Elysia 2 jest przyjętą wersją docelową; przed fazą 5 sprawdzamy aktualne
+wydanie 2.x i ponawiamy testy przy zmianie wersji.
+Poniższa lista zachowuje pierwotny zakres discovery, a status prac określa
+ADR-0003 i plan fazy 2.
 
 - dokładny mechanizm browser token exchange;
 - wersje Elysia 2, Better Auth i EffectTS kompatybilne z Bun;

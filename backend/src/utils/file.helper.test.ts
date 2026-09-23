@@ -1,6 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, spyOn } from "bun:test";
 import { AppError } from "../middleware/error.middleware.js";
-import { parseBase64FileUpload } from "./file.helper.js";
+import { parseBase64FileUpload, generateStorageKey } from "./file.helper.js";
 
 function pdfData(content = "%PDF-1.7\nfixture") {
 	return Buffer.from(content).toString("base64");
@@ -95,4 +95,15 @@ describe("base64 analyst file validation", () => {
 			"INVALID_FILE_CONTENT",
 		);
 	});
+});
+
+test("simultaneous uploads with the same filename never share an object key", () => {
+	const clock = spyOn(Date, "now").mockReturnValue(1000);
+	try {
+		const first = generateStorageKey("incident", "report", "report.pdf");
+		const second = generateStorageKey("incident", "report", "report.pdf");
+		expect(first).not.toBe(second);
+	} finally {
+		clock.mockRestore();
+	}
 });

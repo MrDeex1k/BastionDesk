@@ -1,19 +1,9 @@
 //Type Definitions
+import type { UserRole, IncidentStatus, IncidentCategory } from "../contracts";
+export type { UserRole, IncidentStatus, IncidentCategory };
 
 export type LoginMethod = "password" | "passkey" | "oauth";
-export type UserRole = "admin" | "analityk" | "pracownik";
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
-// Zgodne z 03-create-app.sql: IncidentStatus ENUM (polskie nazwy)
-export type IncidentStatus =
-	| "Zgłoszony"
-	| "Raport w trakcie"
-	| "Raport złożony"
-	| "Sprawozdanie w trakcie"
-	| "Sprawozdanie złożone"
-	| "Odrzucone";
-
-// Zgodne z 03-create-app.sql: incident_category ENUM
-export type IncidentCategory = "Czerwony" | "Żółty" | "Zielony";
 
 export interface ApiResponse<T = unknown> {
 	success: boolean;

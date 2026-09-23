@@ -20,7 +20,9 @@ database/
     └── 03-create-app.sql  # schemat zgłoszeń/incydentów
 ```
 
-Aktualny projekt nie używa Drizzle ani osobnego systemu migracji. Aplikacja
+Projekt ma jawny [migrator wersjonowanego SQL](migrations.md), wprowadzony w
+fazie 2; pierwszym krokiem jest adoptowanie dokładnego schematu 1.0.3.
+Migrator nie uruchamia się przy starcie aplikacji. Projekt nie używa Drizzle. Aplikacja
 korzysta z natywnego Bun SQL oraz `pg`, a Better Auth z własnego połączenia
 `pg.Pool` ([backend/src/lib/database.ts](../../backend/src/lib/database.ts),
 [backend/src/lib/auth.ts](../../backend/src/lib/auth.ts)).

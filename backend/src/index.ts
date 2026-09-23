@@ -70,7 +70,14 @@ app.use(
 		origin: env.CORS_ORIGINS,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "QUERY", "OPTIONS"],
 		credentials: true,
-		allowedHeaders: ["Accept", "Authorization", "Content-Type", "X-CSRF-Token"],
+		allowedHeaders: [
+			"Accept",
+			"Authorization",
+			"Content-Type",
+			"X-CSRF-Token",
+			"Idempotency-Key",
+			"X-Correlation-Id",
+		],
 		maxAge: 600,
 	}),
 );
@@ -144,13 +151,74 @@ app.get("/api", (_req, res) => {
 	});
 });
 
-import incidentsRouter from "./routes/incidents";
 import apiRoutes from "./routes/index";
 
+const { coreIncidentWrites } = await import("./adapters/core-incident-writes");
+const { coreWriteRoutes, coreCommandHandler } = await import("./adapters/core-command-http");
+const { coreFileRoutes, coreFileHandler } = await import("./adapters/core-file-http");
+const { coreCreateHandler } = await import("./adapters/core-create-http");
+const { coreAdminRoutes, coreAdminHandler } = await import("./adapters/core-admin-http");
+const { executeAdminIncidentsQuery, readIncidentFilters, readIncidentSummary } =
+	await import("./adapters/core-admin-reads");
+const { coreIdentity } = await import("./adapters/core-identity");
+const { coreIncidentReads } = await import("./adapters/core-incident-reads");
+const { coreReadPaths, coreReadHandler } = await import("./adapters/core-http");
+await (await import("./adapters/core-schema")).assertCoreSchema();
+const core = await (
+	await import("./core/application")
+).createCoreApplication([
+	...coreAdminRoutes.map((route) => ({
+		...route,
+		handle: coreAdminHandler(coreIdentity, {
+			query: executeAdminIncidentsQuery,
+			filters: readIncidentFilters,
+			summary: readIncidentSummary,
+		}),
+	})),
+	{ paths: coreReadPaths, handle: coreReadHandler(coreIdentity, coreIncidentReads) },
+	...coreFileRoutes.map((route) => ({
+		...route,
+		handle: coreFileHandler(coreIdentity, coreIncidentReads, coreIncidentWrites),
+	})),
+	...coreWriteRoutes.map((route) => ({
+		...route,
+		handle: coreCommandHandler(coreIdentity, coreIncidentWrites),
+	})),
+	{
+		method: "post",
+		paths: ["/api/incidents"],
+		handle: coreCreateHandler(coreIdentity, coreIncidentWrites),
+	},
+]);
+app.get("/api/core/health", core.http);
+
+for (const route of coreAdminRoutes) {
+	if (route.method === "query") {
+		if (!app.query) throw new Error("This runtime must support HTTP QUERY");
+		app.query(route.paths, requireCsrf, apiRateLimiter, core.http);
+	} else app.get(route.paths, requireCsrf, apiRateLimiter, core.http);
+}
+app.get(coreReadPaths, requireCsrf, apiRateLimiter, core.http);
+
+for (const route of coreFileRoutes)
+	app.route(route.paths)[route.method](requireCsrf, apiRateLimiter, core.http);
+for (const route of coreWriteRoutes)
+	app.route(route.paths)[route.method](requireCsrf, apiRateLimiter, core.http);
+app.post("/api/incidents", requireCsrf, apiRateLimiter, core.http);
+
 // Rate Limiting dla własnych endpointów (zgodnie z Better-Auth: 100 req/10s)
-app.use("/api/incidents", requireCsrf, apiRateLimiter, incidentsRouter);
 app.use("/api/admin", requireCsrf, apiRateLimiter);
 app.use("/api/analyst", requireCsrf, apiRateLimiter);
+const { requireAuth, requireRole } = await import("./middleware/auth.middleware");
+const { rejectUnsupportedQueryMethod } = await import("./routes/admin/query-schemas");
+app.all(
+	"/api/admin/incidents",
+	requireCsrf,
+	apiRateLimiter,
+	requireAuth,
+	requireRole(["admin"]),
+	rejectUnsupportedQueryMethod("GET, HEAD, QUERY, OPTIONS"),
+);
 app.use("/api", apiRoutes); // Podłącza /api/admin/* i /api/analyst/*
 
 app.use(notFoundHandler);
@@ -178,6 +246,7 @@ async function gracefulShutdown(signal: string) {
 		console.log("HTTP server closed");
 
 		try {
+			await core.close();
 			await closeDatabase();
 			console.log("Database connections closed");
 		} catch (error) {

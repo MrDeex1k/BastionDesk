@@ -2,6 +2,7 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
+import { DomainError, domainErrorResponse } from "../contracts/errors";
 import { sendErrorResponse } from "../lib/api-response";
 import { env } from "../lib/env";
 import { LlmServiceError } from "../lib/llm-client";
@@ -126,6 +127,12 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
 	}
 
 	// Obsługa własnych błędów aplikacji
+	if (err instanceof DomainError) {
+		const response = domainErrorResponse(err);
+		res.status(response.status).json(response.body);
+		return;
+	}
+
 	if (err instanceof AppError) {
 		sendError(
 			res,

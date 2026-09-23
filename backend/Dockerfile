@@ -11,6 +11,7 @@ RUN bun install --frozen-lockfile --production --filter bastiondesk-backend
 
 COPY --chown=bun:bun backend/ ./backend
 COPY --chown=bun:bun proto ./proto
+COPY --chown=bun:bun database/versioned ./database/versioned
 
 WORKDIR /app/backend
 
