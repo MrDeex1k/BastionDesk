@@ -7,7 +7,9 @@ bezpiecznego w URL (np. losowy hex). Nowe certyfikaty developerskie obejmują
 `rabbitmq`; nie regeneruj certyfikatów istniejącej instalacji bez zaplanowanej
 rotacji. Serwer AMQPS wymaga `tls.crt` i `tls.key` z SAN `rabbitmq`, podpisanych
 przez CA instalacji. Prywatny klucz musi być czytelny przez UID RabbitMQ
-w danym obrazie (999 w referencyjnym), z uprawnieniami 0600.
+w danym obrazie, z uprawnieniami 0600. Entrypoint Compose kopiuje klucz z
+montowania tylko do odczytu i nadaje kopii właściciela `rabbitmq` przed
+obniżeniem uprawnień. Nie wymaga zmiany właściciela plików na hoście.
 
 Przed startem backendu i workera wykonaj `db:migrate:plan` oraz
 `db:migrate:apply` osobnym połączeniem operatora według
@@ -59,12 +61,17 @@ dla zaufanego operatora mającego dostęp do kontenera i bazy, nie przez publicz
 
 ```bash
 docker compose exec backend bun src/messaging/cli.ts list ORGANIZATION_ID
-docker compose exec backend bun src/messaging/cli.ts replay ORGANIZATION_ID JOB_UUID OPERATOR_ID
+docker compose exec backend bun src/messaging/cli.ts replay ORGANIZATION_ID JOB_UUID
 ```
 
-Lista zwraca maksymalnie 100 nieukończonych zadań i bezpieczny kod błędu.
+Lista zwraca `jobs` (do 100 rekordów) i `nextCursor`. Kolejną stronę pobierz
+przez `list ORGANIZATION_ID active NEXT_CURSOR`; filtr `active` można zastąpić
+`pending`, `running` lub `dead`. Powtarzaj z tym samym filtrem do `nextCursor: null`.
+Porządek jest według UUID; lista odzwierciedla aktualny stan, nie snapshot.
+Przy równoległych zmianach powtórz przegląd od początku.
 Replay dotyczy tylko `dead` w wskazanej organizacji, zeruje budżet czterech prób
-i zapisuje audyt operatora w tej samej transakcji. Nie używaj purgowania kolejki
+i zapisuje audyt stałej tożsamości serwisowej `job-operator` w tej samej
+transakcji. CLI nie uwierzytelnia indywidualnej osoby i nie przyjmuje jej ID. Nie używaj purgowania kolejki
 jako zamiennika replay. Wiadomości niezgodne ze schematem w kolejce DLQ trzeba
 zbadać osobno; nie istnieje dla nich zaufany wpis `core_jobs` i CLI ich nie wznawia.
 

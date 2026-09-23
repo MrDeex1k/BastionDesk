@@ -192,7 +192,7 @@ try {
       `${tlsDirectory}:/phase1-certs`,
       "backend",
       "-ec",
-      "chown 1000:1000 /phase1-certs/backend/client.key /phase1-certs/llm_service/server.key; chown 999:999 /phase1-certs/database/server.key /phase1-certs/rabbitmq/tls.key; chown 70:70 /phase1-certs/pgbouncer/server.key /phase1-certs/pgbouncer/client.key; chown 0:0 /phase1-certs/storage-*/private.key",
+      "chown 1000:1000 /phase1-certs/backend/client.key /phase1-certs/llm_service/server.key; chown 999:999 /phase1-certs/database/server.key; chown 70:70 /phase1-certs/pgbouncer/server.key /phase1-certs/pgbouncer/client.key; chown 0:0 /phase1-certs/storage-*/private.key",
     ]);
   }
   await compose(["up", "-d", "--wait", "--wait-timeout", "240", "database"]);
@@ -216,6 +216,17 @@ try {
   await compose(["stop", "classifier-worker", "rabbitmq"]);
   await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "seed"]);
   await compose(["up", "-d", "--wait", "--wait-timeout", "120", "rabbitmq", "classifier-worker"]);
+  const probe = JSON.parse(await compose(["exec", "-T", "backend", "cat", "/tmp/phase4-probe.json"], true));
+  const countHandled = async () => (await compose(["logs", "--no-color", "classifier-worker"], true))
+    .split("\n").filter(line => line.includes(`Delivery handled ${probe.jobId} duplicate`)).length;
+  const beforeDuplicates = await countHandled();
+  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "duplicates"]);
+  let duplicatesHandled = false;
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if (await countHandled() >= beforeDuplicates + 2) { duplicatesHandled = true; break; }
+    await Bun.sleep(1000);
+  }
+  if (!duplicatesHandled) throw new Error("Worker did not handle both duplicate deliveries");
   await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "verify"]);
   console.log(`[phase1] PASS ${task} and durable-worker recovery`);
 } catch (error) {

@@ -1,3 +1,4 @@
+import { listJobs } from "../messaging/operations";
 import { makeCommand, withReceipt } from "../adapters/core-receipts";
 import { Effect } from "effect";
 import { classificationJob } from "../messaging/worker";
@@ -401,6 +402,13 @@ try {
 	);
 	assert.equal(await jobs.replay(failedId, "org"), false);
 	assert.equal(await jobs.replay(failedId, "foreign"), true);
+	const replayAudit = (
+		await pool.query(
+			"SELECT entry FROM core_audit WHERE entry->>'action'='job.replay.v1' AND entry->'resource'->>'id'=$1",
+			[failedId],
+		)
+	).rows[0].entry;
+	assert.deepEqual(replayAudit.actor, { kind: "service", id: "job-operator" });
 	const restartedJobs = jobStore(pool);
 	assert(await restartedJobs.claim(failedId), "replay survives store recreation");
 
@@ -444,6 +452,28 @@ try {
 	console.log(
 		"PASS atomic outbox, replay deduplication, leases, tenant scope, stale result fencing, retries and DLQ replay",
 	);
+	const pagedIds: string[] = [];
+	for (let i = 0; i < 102; i++) {
+		const incident = await writes.create(a, { ...createInput, id: crypto.randomUUID() });
+		const row = (
+			await pool.query(
+				"UPDATE core_jobs SET state='dead', created_at='2026-01-01' WHERE incident_id=$1 RETURNING id",
+				[incident.id],
+			)
+		).rows[0];
+		pagedIds.push(row.id);
+	}
+	const firstPage = await listJobs(pool, "org", { state: "dead" });
+	assert.equal(firstPage.jobs.length, 100);
+	assert(firstPage.nextCursor);
+	const secondPage = await listJobs(pool, "org", { state: "dead", after: firstPage.nextCursor });
+	assert.equal(secondPage.nextCursor, null);
+	const found = [...firstPage.jobs, ...secondPage.jobs].map((row) => row.id);
+	assert.equal(new Set(found).size, found.length);
+	for (const id of pagedIds) assert(found.includes(id));
+	const foreignPage = await listJobs(pool, "foreign", { state: "dead" });
+	assert(!foreignPage.jobs.some((row) => pagedIds.includes(row.id)));
+	console.log("PASS paginated dead jobs, tenant isolation and fixed replay service identity");
 	console.log(
 		"PASS migration repeat, concurrent receipt replay, conflict, restart and minimal audit",
 	);

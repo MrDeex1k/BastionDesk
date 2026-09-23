@@ -251,10 +251,15 @@ async function gracefulShutdown(signal: string) {
 		try {
 			await core.close();
 			await closeDatabase();
-			await telemetry.shutdown();
 			console.log("Database connections closed");
 		} catch (error) {
 			console.error("Error closing database:", error);
+		} finally {
+			try {
+				await telemetry.shutdown();
+			} catch (error) {
+				console.error("Error shutting down telemetry:", error);
+			}
 		}
 
 		process.exit(0);

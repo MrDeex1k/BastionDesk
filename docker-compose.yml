@@ -131,6 +131,8 @@ services:
   rabbitmq:
     image: rabbitmq:4.2.5-management-alpine
     hostname: rabbitmq
+    entrypoint: ["sh", "/etc/rabbitmq/tls-entrypoint.sh"]
+    command: ["rabbitmq-server"]
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-bastiondesk}
@@ -139,7 +141,8 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
       - ./infra/tls/dev/ca:/certs/ca:ro
-      - ./infra/tls/dev/rabbitmq:/certs/rabbitmq:ro
+      - ./infra/tls/dev/rabbitmq:/certs/rabbitmq-source:ro
+      - ./infra/rabbitmq/entrypoint.sh:/etc/rabbitmq/tls-entrypoint.sh:ro
     networks:
       - bastiondesk-net-internal
     healthcheck:
