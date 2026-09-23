@@ -147,8 +147,21 @@ app.get("/api", (_req, res) => {
 import incidentsRouter from "./routes/incidents";
 import apiRoutes from "./routes/index";
 
-const core = await (await import("./core/application")).createCoreApplication();
+const { coreIdentity } = await import("./adapters/core-identity");
+const { coreIncidentReads } = await import("./adapters/core-incident-reads");
+const { coreReadPaths, coreReadHandler } = await import("./adapters/core-http");
+const core = await (
+	await import("./core/application")
+).createCoreApplication([
+	{ paths: coreReadPaths, handle: coreReadHandler(coreIdentity, coreIncidentReads) },
+]);
 app.get("/api/core/health", core.http);
+
+// Keep literal legacy routes ahead of the Core :id matcher.
+app.get(coreReadPaths, requireCsrf, apiRateLimiter, (req, res, next) => {
+	if (req.path === "/api/admin/incidents/filters") return next();
+	return core.http(req, res, next);
+});
 
 // Rate Limiting dla własnych endpointów (zgodnie z Better-Auth: 100 req/10s)
 app.use("/api/incidents", requireCsrf, apiRateLimiter, incidentsRouter);
