@@ -1,3 +1,4 @@
+import { makeCommand, withReceipt } from "../adapters/core-receipts";
 import { assertCoreSchema } from "../adapters/core-schema";
 import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
@@ -279,6 +280,61 @@ try {
 		createRequest,
 	);
 	assert.notEqual(otherTenant.id, firstCreate.id);
+	const userCommand = makeCommand(
+		a,
+		"note",
+		created.id,
+		{ note: "actor isolation" },
+		{
+			idempotencyKey: "same-actor-id",
+			commandId: crypto.randomUUID(),
+			correlationId: crypto.randomUUID(),
+		},
+	);
+	const serviceCommand = {
+		...userCommand,
+		id: crypto.randomUUID(),
+		context: {
+			...userCommand.context,
+			actor: { kind: "service" as const, id: a.subject },
+		},
+	};
+	let executions = 0;
+	const runActor = (command: typeof userCommand) =>
+		transaction((client) =>
+			withReceipt(
+				client,
+				command,
+				async () => {
+					executions++;
+					return {
+						value: command.context.actor.kind,
+						resourceId: created.id,
+						changedFields: [],
+					};
+				},
+				() => {},
+			),
+		);
+	assert.deepEqual(await Promise.all([runActor(userCommand), runActor(serviceCommand)]), [
+		"user",
+		"service",
+	]);
+	assert.deepEqual(await Promise.all([runActor(userCommand), runActor(serviceCommand)]), [
+		"user",
+		"service",
+	]);
+	assert.equal(executions, 2, "each actor kind executes once and replays its own result");
+	assert.equal(
+		(
+			await pool.query(
+				"SELECT * FROM core_command_receipts WHERE idempotency_key='same-actor-id'",
+			)
+		).rowCount,
+		2,
+	);
+	console.log("PASS user and service with the same ID have isolated receipts and replay results");
+
 	const denied = await pool.query(
 		"SELECT entry FROM core_audit WHERE entry->>'outcome'='denied'",
 	);

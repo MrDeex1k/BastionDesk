@@ -10,6 +10,8 @@ let authenticated = false;
 let role: LiveIdentity["role"] = "pracownik";
 let scopeSeen: unknown;
 let projectionCalls = 0;
+let listCalls = 0;
+let statusSeen: string | undefined;
 const identity = { read: async (): Promise<LiveIdentity | null> => authenticated ? {
   subject: "u", organizationId: "org", role, sessionId: "s",
   sessionExpiresAt: Math.floor(Date.now() / 1000) + 60,
@@ -26,7 +28,7 @@ const admin = coreAdminHandler(identity, {
 const core = await createCoreApplication([
   ...coreAdminRoutes.map((route) => ({ ...route, handle: admin })),
   { paths: coreReadPaths, handle: coreReadHandler(identity, {
-    list: async (scope) => { scopeSeen = scope; return { incidents: [], total: 0 }; },
+    list: async (scope, input) => { listCalls++; statusSeen = input.status; scopeSeen = scope; return { incidents: [], total: 0 }; },
     get: async () => null,
   }) },
 ]);
@@ -54,6 +56,22 @@ try {
   assert.equal((await fetch(`${base}/api/incidents/${crypto.randomUUID()}`)).status, 404);
   assert.equal((await fetch(`${base}/api/admin/incidents/filters`)).status, 403);
   assert.equal(projectionCalls, 0);
+  for (const readerRole of ["analityk", "admin"] as const) {
+    role = readerRole;
+    const before = listCalls;
+    const invalid = await fetch(`${base}/api/analyst/incidents/assigned?status=foo`);
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).error.code, "VALIDATION_ERROR");
+    assert.equal(listCalls, before, "invalid enum must not reach repository");
+    for (const status of ["Zgłoszony", "Raport w trakcie"]) {
+      assert.equal((await fetch(`${base}/api/analyst/incidents/assigned?status=${encodeURIComponent(status)}`)).status, 200);
+      assert.equal(statusSeen, status);
+    }
+    assert.equal((await fetch(`${base}/api/analyst/incidents/assigned`)).status, 200);
+    assert.equal(statusSeen, undefined);
+    assert.equal((await fetch(`${base}/api/analyst/incidents/assigned?status=foo&status=bar`)).status, 200);
+    assert.equal(statusSeen, undefined);
+  }
   role = "admin";
   const legacy = await fetch(`${base}/api/admin/incidents`);
   assert.equal(legacy.status, 200);

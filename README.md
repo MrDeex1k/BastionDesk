@@ -38,8 +38,12 @@ Zasady przyjmowania wkładu zewnętrznego opisuje `CONTRIBUTING.md`.
    tę samą wartość do generatora, np.
    `POSTGRES_USER=<wartość-z-.env> sh infra/tls/generate-dev-certs.sh`.
 4. Uruchamiamy `docker compose build`.
-5. Uruchamiamy `docker compose up` lub `docker compose up -d`, jeśli stack ma działać w tle.
-6. Z aplikacji korzystamy przez `http://localhost:4567` — to jedyny publiczny entrypoint stacka.
+5. Uruchamiamy bazę: `docker compose up -d --wait database`.
+6. Wykonujemy `plan` i `apply` migratora zgodnie z
+   [instrukcją wdrożenia](docs/infrastructure/deploy.md). Bez migracji
+   `0001_core_operations` backend nie wystartuje.
+7. Uruchamiamy `docker compose up` lub `docker compose up -d`, jeśli stack ma działać w tle.
+8. Z aplikacji korzystamy przez `http://localhost:4567` — to jedyny publiczny entrypoint stacka.
 
 Szczegółowe wymagania i ograniczenia opisuje
 [instrukcja wdrożenia](docs/infrastructure/deploy.md).

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Effect } from "effect";
 import { fromNodeHeaders } from "better-auth/node";
+import { incidentStatusSchema } from "../contracts";
 import { DomainError } from "../contracts/errors";
 import { currentIdentity, identityLayer, type IdentityReader } from "../core/identity";
 import {
@@ -76,10 +77,13 @@ export function coreReadHandler(identity: IdentityReader, reads: IncidentReads) 
 						...pagination,
 						...(roleRoute
 							? {
-									status:
-										typeof req.query.status === "string"
-											? req.query.status
-											: undefined,
+									status: incidentStatusSchema
+										.optional()
+										.parse(
+											typeof req.query.status === "string"
+												? req.query.status
+												: undefined,
+										),
 									sortBy,
 									sortOrder: sortOrder as "asc" | "desc",
 								}

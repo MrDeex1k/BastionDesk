@@ -40,21 +40,37 @@ export async function withReceipt<T>(
 	authorizeReplay: (value: T) => void,
 ): Promise<T> {
 	const scope = receiptScope(command);
-	const params = [scope.organizationId, scope.actor.id, scope.operation, scope.idempotencyKey];
+	const params = [
+		scope.organizationId,
+		scope.actor.kind,
+		scope.actor.id,
+		scope.operation,
+		scope.idempotencyKey,
+	];
 	// Transaction-scoped lock serializes claims, including absent rows and retries.
 	await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
 		JSON.stringify(params),
 	]);
 	const saved = (
 		await client.query(
-			"SELECT fingerprint, result FROM core_command_receipts WHERE organization_id=$1 AND actor_id=$2 AND operation=$3 AND idempotency_key=$4",
+			"SELECT organization_id, actor_kind, actor_id, operation, idempotency_key, fingerprint, result FROM core_command_receipts WHERE organization_id=$1 AND actor_kind=$2 AND actor_id=$3 AND operation=$4 AND idempotency_key=$5",
 			params,
 		)
 	).rows[0];
 	const decision = decideIdempotency(
 		command,
 		saved
-			? { scope, fingerprint: saved.fingerprint, state: "completed", result: saved.result }
+			? {
+					scope: {
+						organizationId: saved.organization_id,
+						actor: { kind: saved.actor_kind, id: saved.actor_id },
+						operation: saved.operation,
+						idempotencyKey: saved.idempotency_key,
+					},
+					fingerprint: saved.fingerprint,
+					state: "completed",
+					result: saved.result,
+				}
 			: null,
 	);
 	if (decision.kind === "replay") {
@@ -80,7 +96,7 @@ export async function withReceipt<T>(
 		[entry.id, entry.organizationId, entry.commandId, JSON.stringify(entry)],
 	);
 	await client.query(
-		"INSERT INTO core_command_receipts (organization_id,actor_id,operation,idempotency_key,fingerprint,result) VALUES ($1,$2,$3,$4,$5,$6)",
+		"INSERT INTO core_command_receipts (organization_id,actor_kind,actor_id,operation,idempotency_key,fingerprint,result) VALUES ($1,$2,$3,$4,$5,$6,$7)",
 		[...params, commandFingerprint(command), JSON.stringify(result.value)],
 	);
 	return result.value;
