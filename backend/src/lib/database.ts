@@ -47,7 +47,7 @@ export function getDb(): SQL {
  * Pobierz bezpieczny pool pg dla zapytań tekstowych z parametrami.
  * Używany tam, gdzie kod nadal operuje na klasycznym SQL z placeholderami $1, $2...
  */
-function getPgPool(): Pool {
+export function getPgPool(): Pool {
 	if (!_pool) {
 		_pool = new Pool({
 			connectionString: env.DATABASE_URL,

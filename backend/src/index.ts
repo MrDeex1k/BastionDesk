@@ -147,6 +147,9 @@ app.get("/api", (_req, res) => {
 import incidentsRouter from "./routes/incidents";
 import apiRoutes from "./routes/index";
 
+const { coreIncidentWrites } = await import("./adapters/core-incident-writes");
+const { coreWriteRoutes, coreCommandHandler } = await import("./adapters/core-command-http");
+const { coreCreateHandler } = await import("./adapters/core-create-http");
 const { coreIdentity } = await import("./adapters/core-identity");
 const { coreIncidentReads } = await import("./adapters/core-incident-reads");
 const { coreReadPaths, coreReadHandler } = await import("./adapters/core-http");
@@ -154,6 +157,15 @@ const core = await (
 	await import("./core/application")
 ).createCoreApplication([
 	{ paths: coreReadPaths, handle: coreReadHandler(coreIdentity, coreIncidentReads) },
+	...coreWriteRoutes.map((route) => ({
+		...route,
+		handle: coreCommandHandler(coreIdentity, coreIncidentWrites),
+	})),
+	{
+		method: "post",
+		paths: ["/api/incidents"],
+		handle: coreCreateHandler(coreIdentity, coreIncidentWrites),
+	},
 ]);
 app.get("/api/core/health", core.http);
 
@@ -162,6 +174,10 @@ app.get(coreReadPaths, requireCsrf, apiRateLimiter, (req, res, next) => {
 	if (req.path === "/api/admin/incidents/filters") return next();
 	return core.http(req, res, next);
 });
+
+for (const route of coreWriteRoutes)
+	app[route.method](route.paths, requireCsrf, apiRateLimiter, core.http);
+app.post("/api/incidents", requireCsrf, apiRateLimiter, core.http);
 
 // Rate Limiting dla własnych endpointów (zgodnie z Better-Auth: 100 req/10s)
 app.use("/api/incidents", requireCsrf, apiRateLimiter, incidentsRouter);

@@ -8,8 +8,8 @@ bez uruchamiania migracji istniejącej instalacji użytkownika.
 | --- | --- | --- |
 | 3.1 | NestJS Core obok Expressa, lifecycle, port świeżej tożsamości, Effect | Gotowe |
 | 3.2 | Listy i szczegóły, scope organizacji i uprawnień | Gotowe; QUERY admin do porządkowania w 3.5 |
-| 3.3 | Tworzenie, przypisywanie, statusy, notatki, rozstrzygnięcia | W toku |
-| 3.4 | Pliki, trwały audyt oraz idempotencja operacji | Do wykonania |
+| 3.3 | Tworzenie, przypisywanie, statusy, notatki, rozstrzygnięcia | Gotowe |
+| 3.4 | Pliki, trwały audyt oraz idempotencja operacji | W toku |
 | 3.5 | Parity API, izolacja tenantów, pełne E2E i odbiór | Do wykonania |
 
 ## 3.1
@@ -35,3 +35,20 @@ końcowego porządkowania w 3.5; nie deklarujemy jeszcze migracji całego API.
 Testy: 60 backend, 24 frontend (cache), check, rzeczywisty HTTP Core
 (401/403/404, świeża sesja i scope). E2E 24/24 dla trzech przeglądarek,
 run `1790183263486-99336`.
+
+## 3.3
+
+Komendy tworzenia, przypisania/oddania, statusu, notatki i rozstrzygnięcia
+przechodzą przez NestJS oraz use case'y Effect. Polityki rozróżniają legacy
+PATCH i workflow analityka (PUT), zachowując istniejące reguły przejść.
+Repozytorium wykonuje sprawdzenie stanu, uprawnień i UPDATE w jednej transakcji
+z `SELECT FOR UPDATE`. Core nie przyjmuje aktora ani organizacji z body.
+
+Integracja PostgreSQL (`bun backend/src/core/integration.ts`) potwierdziła
+jednego zwycięzcę konkurencyjnego przypisania, tenant scope oraz rollback po
+błędzie. Check i 63 testy backendu przechodzą, frontend 24 (cache).
+E2E: 24/24, run `1790183673725-99990`.
+
+Klasyfikacja LLM pozostaje best-effort do fazy 4. Upload przed zapisem SQL
+może pozostawić osierocony obiekt; przy niejednoznacznym potwierdzeniu COMMIT
+nie usuwamy obiektu, który mógł już zostać powiązany z incydentem.

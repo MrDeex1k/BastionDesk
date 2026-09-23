@@ -2,6 +2,8 @@ import "reflect-metadata";
 import {
 	Controller,
 	Get,
+	RequestMapping,
+	RequestMethod,
 	Module,
 	Req,
 	Res,
@@ -35,7 +37,11 @@ Module({ controllers: [CoreHealth] })(CoreModule);
 
 /** Composition root owns lifecycle; Core opens no public listener of its own. */
 export async function createCoreApplication(
-	routes: { paths: string[]; handle(req: Request, res: Response): Promise<unknown> }[] = [],
+	routes: {
+		paths: string[];
+		method?: "get" | "post" | "patch" | "put";
+		handle(req: Request, res: Response): Promise<unknown>;
+	}[] = [],
 ) {
 	const controllers = routes.map((route) => {
 		class Endpoint {
@@ -44,7 +50,15 @@ export async function createCoreApplication(
 			}
 		}
 		Controller()(Endpoint);
-		Get(route.paths)(
+		RequestMapping({
+			path: route.paths,
+			method: {
+				get: RequestMethod.GET,
+				post: RequestMethod.POST,
+				patch: RequestMethod.PATCH,
+				put: RequestMethod.PUT,
+			}[route.method ?? "get"],
+		})(
 			Endpoint.prototype,
 			"handle",
 			Object.getOwnPropertyDescriptor(Endpoint.prototype, "handle")!,
