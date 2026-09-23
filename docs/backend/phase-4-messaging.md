@@ -6,7 +6,7 @@ Etapy kończymy osobnymi commitami.
 | Etap | Zakres | Status |
 | --- | --- | --- |
 | 4.1 | Discovery i wybór topologii | Gotowe |
-| 4.2 | Kontrakt, routing, retry i DLQ | Plan |
+| 4.2 | Kontrakt, routing, retry i DLQ | Gotowe |
 | 4.3 | Outbox/inbox i trwała deduplikacja | Plan |
 | 4.4 | Worker klasyfikacji LLM | Plan |
 | 4.5 | Telemetria, awarie i runbook | Plan |
@@ -37,3 +37,19 @@ utratę hosta. Docelowe HA wymaga co najmniej trzech węzłów i kopii PostgreSQ
 Discovery potwierdziło publisher confirm, zachowanie wiadomości po restarcie
 oraz redelivery bez ACK. Test: `bun backend/src/messaging/discovery.ts`.
 Runner ponownie odczytuje losowy port po restarcie kontenera. Check przechodzi.
+
+## 4.2 — kontrakt dostarczenia
+
+Wersja 1 zawiera wyłącznie `schemaVersion`, `type` i `jobId`; walidator odrzuca
+inne pola i payload ponad 1 KiB. Exchange direct `bastiondesk.jobs.v1` kieruje
+`incident.classify.v1` do kolejki quorum `bastiondesk.classifier.v1`.
+Błędne wiadomości trafiają przez DLX do `bastiondesk.classifier.dead.v1`.
+Potwierdzenie publikacji wymaga także braku mandatory return.
+
+Próby: maksymalnie 4, opóźnienia 5/30/120 s. Błąd trwały kończy próby od razu.
+Terminy retry i DLQ są stanem PostgreSQL; broker nie wyznacza liczby wykonań.
+Prefetch 1 ogranicza równoległość pojedynczego konsumenta. Domyślnie wymagamy
+AMQPS z weryfikacją CA; plaintext jest dostępny tylko w jawnych testach loopback.
+
+Weryfikacja: 69 testów backendu, check i rzeczywisty RabbitMQ (routing, DLQ,
+mandatory return, restart i ponowne dostarczenie).

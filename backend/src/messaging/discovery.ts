@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { declareTopology, publishConfirmed } from "./broker";
+import { topology } from "./contract";
 import { connect } from "amqplib";
 
 const name = `bastiondesk-messaging-${crypto.randomUUID()}`;
@@ -50,6 +52,28 @@ try {
 	await channel.assertQueue("probe", { durable: true, arguments: { "x-queue-type": "quorum" } });
 	channel.sendToQueue("probe", Buffer.from("durable"), { persistent: true });
 	await channel.waitForConfirms();
+	await declareTopology(channel);
+	const jobId = crypto.randomUUID();
+	await publishConfirmed(channel, jobId);
+	const delivery = await channel.get(topology.queue, { noAck: false });
+	assert(delivery);
+	channel.nack(delivery, false, false);
+	let dead = false;
+	for (let i = 0; i < 40; i++) {
+		const entry = await channel.get(topology.deadQueue, { noAck: false });
+		if (entry) {
+			channel.ack(entry);
+			dead = true;
+			break;
+		}
+		await Bun.sleep(100);
+	}
+	assert(dead, "rejected delivery reaches DLQ");
+	await channel.unbindQueue(topology.queue, topology.exchange, topology.routingKey);
+	await assert.rejects(
+		() => publishConfirmed(channel, crypto.randomUUID()),
+		/UNROUTABLE_MESSAGE/,
+	);
 	await connection.close();
 	await docker(["restart", name]);
 	port = (await docker(["port", name, "5672/tcp"])).trim().split(":").at(-1);
@@ -64,7 +88,9 @@ try {
 	assert(redelivery && redelivery.fields.redelivered);
 	retry.ack(redelivery);
 	await restarted.close();
-	console.log("PASS RabbitMQ quorum confirm, restart persistence and unacked redelivery");
+	console.log(
+		"PASS RabbitMQ quorum confirm, mandatory return, DLQ, restart persistence and unacked redelivery",
+	);
 } finally {
 	if (started) await docker(["rm", "-f", "-v", name]);
 }
