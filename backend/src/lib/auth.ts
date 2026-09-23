@@ -9,6 +9,8 @@
  */
 
 import fs from "node:fs";
+import { coreJwtPlugin } from "../identity/auth-bridge";
+import { authIssuer } from "../identity/network-config";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { haveIBeenPwned, organization } from "better-auth/plugins";
@@ -20,7 +22,7 @@ import { passkeyCheckPlugin } from "./passkey-check-plugin";
 import { ac, admin, analityk, pracownik } from "./permissions";
 
 // Database Pool Configuration
-const pool = new Pool({
+export const authPool = new Pool({
 	connectionString: env.DATABASE_URL,
 	ssl: {
 		rejectUnauthorized: true,
@@ -47,7 +49,8 @@ export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
 	secret: env.BETTER_AUTH_SECRET,
 	trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGIN_LIST,
-	database: pool,
+	database: authPool,
+	disabledPaths: ["/token"],
 
 	// Email and Password Authentication
 	emailAndPassword: {
@@ -84,6 +87,7 @@ export const auth = betterAuth({
 
 	// Plugins
 	plugins: [
+		coreJwtPlugin(authIssuer),
 		// PassKey (WebAuthn/U2F) - klucze sprzętowe
 		passkey({
 			rpID: env.WEBAUTHN_RP_ID,
