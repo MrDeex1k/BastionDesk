@@ -122,7 +122,7 @@ działającego połączenia lub `503` w przypadku błędu.
 
 ## Autoryzacja i organizacje
 
-Konfiguracja w `src/lib/auth.ts` obejmuje:
+Konfiguracja w `src/auth/instance.ts` obejmuje:
 
 - email i hasło, z obowiązkową weryfikacją emaila;
 - hasła o długości od 10 do 128 znaków;
@@ -184,7 +184,8 @@ oba połączenia działają; w przeciwnym razie zwraca HTTP `503` i
 
 `GET /api` zwraca nazwę API, wersję `1.0.3` i podstawowe grupy endpointów.
 Endpoint `/health` nie jest przekazywany przez publiczny reverse proxy w
-aktualnym Compose; healthcheck kontenera wywołuje go lokalnie na porcie `3333`.
+aktualnym Compose; healthcheck Core wywołuje lokalny endpoint na `127.0.0.1:3335`.
+Usługi auth i Core komunikują się przez mTLS — [runbook fazy 5](phase-5-identity.md).
 
 ## Storage i LLM
 

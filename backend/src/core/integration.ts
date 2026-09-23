@@ -91,7 +91,32 @@ try {
 			"utf8",
 		),
 	);
+	await pool.query(`
+  INSERT INTO "user" (id,email) VALUES ('auth-upgrade','upgrade@example.test');
+  INSERT INTO organization (id,name,slug) VALUES ('auth-upgrade','Upgrade','auth-upgrade');
+  INSERT INTO member (id,"userId","organizationId",role) VALUES ('auth-upgrade','auth-upgrade','auth-upgrade','admin');
+  INSERT INTO session (id,"userId",token,"expiresAt","activeOrganizationId") VALUES ('auth-upgrade','auth-upgrade','existing-session',now()+interval '1 day','auth-upgrade');
+  INSERT INTO account (id,"userId","accountId","providerId",password) VALUES ('auth-upgrade','auth-upgrade','auth-upgrade','credential','existing-password-hash');
+  INSERT INTO passkey (id,"userId","publicKey","credentialId",counter,"deviceType") VALUES ('auth-upgrade','auth-upgrade','existing-public-key','existing-credential',7,'singleDevice');
+ `);
+	const authTables = ["user", "session", "account", "organization", "member", "passkey"];
+	const authSnapshot = async () =>
+		Promise.all(
+			authTables.map(
+				async (table) =>
+					(await pool!.query(`SELECT to_jsonb(t) AS data FROM "${table}" t ORDER BY id`))
+						.rows,
+			),
+		);
+	const beforeAuthUpgrade = await authSnapshot();
 	const migrations = [
+		{
+			id: "0003_auth_jwks",
+			sql: await readFile(
+				new URL("../../../database/versioned/0003_auth_jwks.sql", import.meta.url),
+				"utf8",
+			),
+		},
 		{
 			id: "0002_durable_jobs",
 			sql: await readFile(
@@ -113,6 +138,18 @@ try {
 		(await migrate(migrator, baseline.fingerprint, migrations, "apply")).pending,
 		[],
 	);
+	assert.deepEqual(
+		await authSnapshot(),
+		beforeAuthUpgrade,
+		"upgrade preserves accounts, sessions, organizations, roles and PassKeys byte for byte",
+	);
+	await pool.query(
+		'SELECT "publicKey", "privateKey", "createdAt", "expiresAt", alg, crv FROM jwks',
+	);
+	await pool.query(
+		`DELETE FROM organization WHERE id='auth-upgrade'; DELETE FROM "user" WHERE id='auth-upgrade'`,
+	);
+	console.log("PASS full 1.0.3 upgrade preserves identity records and adds JWKS");
 	await migrator.end();
 	await assertCoreSchema(pool);
 	await pool.query(

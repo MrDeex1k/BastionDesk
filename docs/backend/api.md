@@ -104,7 +104,7 @@ HTTP `503`.
 
 **Przykład curl:**
 ```bash
-docker compose exec backend wget -qO- http://127.0.0.1:3333/health
+docker compose exec backend wget -qO- http://127.0.0.1:3335/health
 ```
 
 **Response (Success):**

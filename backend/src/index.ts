@@ -1,3 +1,4 @@
+import { apiInfo } from "./contracts/api-info";
 import { startTelemetry, httpTelemetry } from "./messaging/telemetry";
 import { createServer } from "node:http";
 import { mtlsServer } from "./identity/transport";
@@ -116,18 +117,7 @@ app.get("/api/email/health", async (_req, res) => {
 
 // API Info
 app.get("/api", (_req, res) => {
-	res.json({
-		message: "BastionDesk API",
-		version: "1.0.3",
-		endpoints: {
-			auth: "/api/auth/*",
-			incidents: "/api/incidents",
-			analyst: "/api/analyst/*",
-			admin: "/api/admin/*",
-			health: "/health",
-			emailHealth: "/api/email/health",
-		},
-	});
+	res.json(apiInfo);
 });
 
 import apiRoutes from "./routes/index";

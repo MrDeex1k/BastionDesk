@@ -144,13 +144,7 @@ services:
       - NODE_EXTRA_CA_CERTS=/certs/ca/ca.crt
       - SSL_CERT_FILE=/certs/ca/ca.crt
     depends_on:
-      llm_service:
-        condition: service_healthy
       pgbouncer:
-        condition: service_healthy
-      storage-1:
-        condition: service_healthy
-      storage-3:
         condition: service_healthy
     volumes:
       - ./infra/tls/dev/ca:/certs/ca:ro
@@ -236,6 +230,8 @@ services:
     ports:
       - "4567:8080"
     depends_on:
+      backend:
+        condition: service_healthy
       auth-service:
         condition: service_healthy
       frontend:

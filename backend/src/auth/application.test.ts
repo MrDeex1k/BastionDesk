@@ -23,6 +23,13 @@ test("Elysia dispatch preserves raw bodies and cookies while isolating internal 
 		app.handle(new Request(`https://desk.test${path}`, init));
 	expect((await send("/api/auth/get-session")).headers.getSetCookie()).toHaveLength(2);
 	expect((await send("/internal/identity/resolve")).status).toBe(404);
+	expect(await (await send("/api")).json()).toMatchObject({ version: "1.0.3" });
+	const navigation = {
+		headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" },
+	};
+	expect((await send("/api/auth/verify-email?token=fixture", navigation)).status).toBe(200);
+	expect((await send("/api/auth/reset-password/fixture", navigation)).status).toBe(200);
+	expect((await send("/api/auth/get-session", navigation)).status).toBe(403);
 	expect(
 		(
 			await send("/api/incidents", {

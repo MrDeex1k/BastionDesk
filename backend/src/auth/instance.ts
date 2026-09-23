@@ -8,7 +8,7 @@
  * - Organization (multi-tenancy z rolami)
  */
 
-import { authSecret } from "../auth/secrets";
+import { authSecret } from "./secrets";
 import fs from "node:fs";
 import { coreJwtPlugin } from "../identity/auth-bridge";
 import { authIssuer } from "../identity/network-config";
@@ -16,11 +16,11 @@ import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { haveIBeenPwned, organization } from "better-auth/plugins";
 import { Pool } from "pg";
-import { sendResetPasswordEmail, sendVerificationEmail } from "./email";
-import { env } from "./env";
-import { organizationHelpersPlugin } from "./organization-helpers-plugin";
-import { passkeyCheckPlugin } from "./passkey-check-plugin";
-import { ac, admin, analityk, pracownik } from "./permissions";
+import { sendResetPasswordEmail, sendVerificationEmail } from "../lib/email";
+import { env } from "../lib/env";
+import { organizationHelpersPlugin } from "../lib/organization-helpers-plugin";
+import { passkeyCheckPlugin } from "../lib/passkey-check-plugin";
+import { ac, admin, analityk, pracownik } from "../lib/permissions";
 
 // Database Pool Configuration
 export const authPool = new Pool({
@@ -34,6 +34,7 @@ export const authPool = new Pool({
 	max: 20,
 	idleTimeoutMillis: 30000,
 	connectionTimeoutMillis: 2000,
+	query_timeout: 2000,
 });
 
 // Better-Auth Instance

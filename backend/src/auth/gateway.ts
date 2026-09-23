@@ -1,7 +1,7 @@
 import { issueCoreToken, coreRequestHeaders } from "../identity/auth-bridge";
 import { authIssuer } from "../identity/network-config";
 import { internalFetch } from "../identity/transport";
-import { auth } from "../lib/auth";
+import { auth } from "./instance";
 import { failure } from "./application";
 import { checkCsrf } from "./csrf";
 import { authIdentity } from "./state";

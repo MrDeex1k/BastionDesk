@@ -5,7 +5,7 @@ import { authIssuer } from "../identity/network-config";
 import { mtlsServer, serveInternal } from "../identity/transport";
 import { csrfResponse } from "./csrf";
 import { signup } from "./signup";
-import { auth, authPool } from "../lib/auth";
+import { auth, authPool } from "./instance";
 import { checkDatabaseConnection, closeDatabase } from "../lib/database";
 import { env } from "../lib/env";
 import { createAuthApplication } from "./application";

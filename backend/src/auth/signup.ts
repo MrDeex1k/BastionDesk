@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { auth } from "../lib/auth";
+import { auth } from "./instance";
 import { queryOne, sql } from "../lib/database";
 import { createOrganizationSchema, emailSchema, passwordSchema } from "../utils/validation";
 import { checkCsrf } from "./csrf";
@@ -17,7 +17,7 @@ const schema = z.object({
 export async function signup(request: Request): Promise<Response> {
 	const forbidden = await checkCsrf(request);
 	if (forbidden) return forbidden;
-	const parsed = schema.safeParse(await request.json());
+	const parsed = schema.safeParse(await request.json().catch(() => null));
 	if (!parsed.success) return failure(400, "VALIDATION_ERROR");
 	const body = parsed.data;
 	if (await queryOne("SELECT id FROM organization WHERE slug = $1", [body.organizationSlug]))

@@ -173,6 +173,7 @@ try {
   );
   config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`, `${root}/scripts/fixtures/phase4-probe.ts:/app/backend/phase4-probe.ts:ro`);
   config.services.backend.depends_on["smtp-test"] = { condition: "service_healthy" };
+  config.services["auth-service"].volumes.push(`${root}/scripts/fixtures/phase5-probe.ts:/app/backend/phase5-probe.ts:ro`);
   config.services["auth-service"].depends_on["smtp-test"] = { condition: "service_healthy" };
   config.services.nginx.ports = [`127.0.0.1:${port}:8080`];
   await Bun.write(configFile, JSON.stringify(config, null, 2));
@@ -208,6 +209,10 @@ try {
   ]);
   await compose(["run", "--rm", "--no-deps", "--user", "0:0", "backend", "bun", "src/migrations/cli.ts", "apply"]);
   await compose(["up", "-d", "--wait", "--wait-timeout", "240"]);
+  await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "seed"]);
+  await compose(["restart", "auth-service"]);
+  await compose(["up", "-d", "--wait", "--wait-timeout", "30", "auth-service"]);
+  await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "resume"]);
   const testEnvironment = {
     E2E_BASE_URL: baseUrl,
     E2E_MAILPIT_URL: `http://127.0.0.1:${mailPort}`,

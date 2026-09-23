@@ -35,7 +35,7 @@ if (failed.length) {
 "$(dirname "$0")/test-phase0-integration.sh"
 
 docker compose exec -T backend bun -e '
-const response = await fetch("http://127.0.0.1:3333/health");
+const response = await fetch("http://127.0.0.1:3335/health");
 if (!response.ok) process.exit(1);
 '
 

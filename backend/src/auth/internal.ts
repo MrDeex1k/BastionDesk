@@ -1,4 +1,4 @@
-import { auth } from "../lib/auth";
+import { auth } from "./instance";
 import { authIssuer } from "../identity/network-config";
 import { createCoreVerifier } from "../identity/verifier";
 import { liveIdentitySchema } from "../identity/contract";

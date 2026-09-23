@@ -667,6 +667,8 @@ a job jest widoczny w trace i metrykach.
 
 ## Faza 5 — tożsamość i gateway
 
+Implementacja 5.1–5.5: [zakres i runbook](backend/phase-5-identity.md).
+
 ### Cel
 
 Wydzielić auth do osobnego serwisu Elysia 2 + Better Auth i ustanowić

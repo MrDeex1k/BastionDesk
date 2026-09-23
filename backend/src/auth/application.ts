@@ -1,3 +1,4 @@
+import { apiInfo } from "../contracts/api-info";
 import { Elysia } from "elysia";
 
 export type AuthGatewayPorts = {
@@ -25,7 +26,11 @@ export function createAuthApplication(ports: AuthGatewayPorts) {
 			);
 		}
 		if (origin && !ports.origins.includes(origin)) return failure(403, "CSRF_ORIGIN_INVALID");
-		if (request.headers.get("sec-fetch-site") === "cross-site")
+		const emailNavigation =
+			request.method === "GET" &&
+			request.headers.get("sec-fetch-mode") === "navigate" &&
+			(path === "/api/auth/verify-email" || path.startsWith("/api/auth/reset-password/"));
+		if (!emailNavigation && request.headers.get("sec-fetch-site") === "cross-site")
 			return failure(403, "FORBIDDEN");
 		const now = Date.now();
 		for (const [key, value] of buckets) if (value.until <= now) buckets.delete(key);
@@ -40,6 +45,8 @@ export function createAuthApplication(ports: AuthGatewayPorts) {
 		if (++bucket.count > (ports.limit ?? 300)) return failure(429, "RATE_LIMITED");
 		try {
 			if (request.method === "OPTIONS") response = new Response(null, { status: 204 });
+			else if (path === "/api" && ["GET", "HEAD"].includes(request.method))
+				response = Response.json(apiInfo);
 			else if (path === "/api/csrf" && request.method === "GET")
 				response = await ports.csrf(request);
 			else if (

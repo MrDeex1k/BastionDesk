@@ -25,7 +25,7 @@ fazie 2; pierwszym krokiem jest adoptowanie dokładnego schematu 1.0.3.
 Migrator nie uruchamia się przy starcie aplikacji. Projekt nie używa Drizzle. Aplikacja
 korzysta z natywnego Bun SQL oraz `pg`, a Better Auth z własnego połączenia
 `pg.Pool` ([backend/src/lib/database.ts](../../backend/src/lib/database.ts),
-[backend/src/lib/auth.ts](../../backend/src/lib/auth.ts)).
+[backend/src/auth/instance.ts](../../backend/src/auth/instance.ts)).
 
 Better Auth 1.7.3 identyfikuje konto przez unikalną parę `providerId/accountId`.
 Nowa baza nie wymaga kolumny `issuer`. Dla istniejącego schematu po 1.7.2
@@ -344,7 +344,7 @@ rekordu nadrzędnego.
 ## Konfiguracja Better Auth
 
 Konfiguracja runtime znajduje się w
-[`backend/src/lib/auth.ts`](../../backend/src/lib/auth.ts). Obecnie obejmuje:
+[`backend/src/auth/instance.ts`](../../backend/src/auth/instance.ts). Obecnie obejmuje:
 
 - email/password z minimalną długością hasła 10 znaków, maksymalną 128 znaków
   i wymaganą weryfikacją emaila;

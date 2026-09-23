@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { auth } from "../lib/auth";
+import { auth } from "./instance";
 import { env } from "../lib/env";
 import {
 	CSRF_ANON_COOKIE,

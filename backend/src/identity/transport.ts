@@ -63,7 +63,9 @@ export function serveInternal(handle: (request: Request) => Promise<Response>, o
 				headers: fromNodeHeaders(req.headers),
 			});
 			const result = await handle(request);
-			res.writeHead(result.status, Object.fromEntries(result.headers));
+			const headers = new Headers(result.headers);
+			headers.set("cache-control", "no-store");
+			res.writeHead(result.status, Object.fromEntries(headers));
 			res.end(Buffer.from(await result.arrayBuffer()));
 		})().catch(() => {
 			if (!res.headersSent) res.writeHead(503);
