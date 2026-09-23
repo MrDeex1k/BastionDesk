@@ -1,3 +1,4 @@
+import { startTelemetry, httpTelemetry } from "./messaging/telemetry";
 /**
  * BastionDesk Backend
  *
@@ -21,7 +22,9 @@ import {
 } from "./middleware";
 import signUpWithOrganizationRouter from "./routes/auth/sign-up-with-organization";
 
+const telemetry = startTelemetry("bastiondesk-backend");
 const app = express();
+app.use(httpTelemetry);
 
 // Trust proxy - wymagane dla express-rate-limit z nginx
 app.set("trust proxy", 1);
@@ -248,6 +251,7 @@ async function gracefulShutdown(signal: string) {
 		try {
 			await core.close();
 			await closeDatabase();
+			await telemetry.shutdown();
 			console.log("Database connections closed");
 		} catch (error) {
 			console.error("Error closing database:", error);

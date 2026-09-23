@@ -1,3 +1,4 @@
+import { traced, traceCarrier, SpanKind } from "./telemetry";
 import { connect, type Channel, type ConfirmChannel, type ConsumeMessage } from "amqplib";
 import { readFileSync } from "node:fs";
 import { decodeDelivery, deliverySchema, topology, type Delivery } from "./contract";
@@ -25,39 +26,51 @@ export async function declareTopology(channel: Channel) {
 }
 
 /** One in-flight publish per channel; a return must fail even when confirmed. */
-export async function publishConfirmed(channel: ConfirmChannel, jobId: string, dead = false) {
-	const delivery = deliverySchema.parse({ schemaVersion: 1, type: topology.routingKey, jobId });
-	let returned = false;
-	const onReturn = () => {
-		returned = true;
-	};
-	channel.on("return", onReturn);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	try {
-		await Promise.race([
-			new Promise<void>((resolve, reject) => {
-				channel.publish(
-					dead ? topology.deadExchange : topology.exchange,
-					topology.routingKey,
-					Buffer.from(JSON.stringify(delivery)),
-					{
-						persistent: true,
-						mandatory: true,
-						messageId: jobId,
-						contentType: "application/json",
-					},
-					(error) => (error ? reject(error) : resolve()),
-				);
-			}),
-			new Promise<never>((_resolve, reject) => {
-				timer = setTimeout(() => reject(new Error("CONFIRM_TIMEOUT")), 5000);
-			}),
-		]);
-		if (returned) throw new Error("UNROUTABLE_MESSAGE");
-	} finally {
-		clearTimeout(timer);
-		channel.off("return", onReturn);
-	}
+export async function publishConfirmed(
+	channel: ConfirmChannel,
+	jobId: string,
+	dead = false,
+	parent?: string | null,
+) {
+	return traced("messaging.publish", parent, SpanKind.PRODUCER, async () => {
+		const delivery = deliverySchema.parse({
+			schemaVersion: 1,
+			type: topology.routingKey,
+			jobId,
+		});
+		let returned = false;
+		const onReturn = () => {
+			returned = true;
+		};
+		channel.on("return", onReturn);
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			await Promise.race([
+				new Promise<void>((resolve, reject) => {
+					channel.publish(
+						dead ? topology.deadExchange : topology.exchange,
+						topology.routingKey,
+						Buffer.from(JSON.stringify(delivery)),
+						{
+							persistent: true,
+							mandatory: true,
+							messageId: jobId,
+							contentType: "application/json",
+							headers: traceCarrier(),
+						},
+						(error) => (error ? reject(error) : resolve()),
+					);
+				}),
+				new Promise<never>((_resolve, reject) => {
+					timer = setTimeout(() => reject(new Error("CONFIRM_TIMEOUT")), 5000);
+				}),
+			]);
+			if (returned) throw new Error("UNROUTABLE_MESSAGE");
+		} finally {
+			clearTimeout(timer);
+			channel.off("return", onReturn);
+		}
+	});
 }
 
 export function brokerOptions(environment: Record<string, string | undefined>) {
@@ -104,7 +117,7 @@ export async function openBroker(environment = process.env) {
 		connection,
 		publisher,
 		consumer,
-		async consume(handle: (delivery: Delivery) => Promise<void>) {
+		async consume(handle: (delivery: Delivery, parent?: string) => Promise<void>) {
 			return consumer.consume(
 				topology.queue,
 				(message: ConsumeMessage | null) => {
@@ -119,7 +132,11 @@ export async function openBroker(environment = process.env) {
 						consumer.nack(message, false, false);
 						return;
 					}
-					void handle(delivery)
+					const parent = message.properties.headers?.traceparent;
+					void handle(
+						delivery,
+						typeof parent === "string" && parent.length <= 128 ? parent : undefined,
+					)
 						.then(() => consumer.ack(message))
 						.catch(() => {
 							// A database outage must not turn into a tight requeue loop. Reconnect later.

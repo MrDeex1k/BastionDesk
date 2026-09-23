@@ -9,7 +9,7 @@ Etapy kończymy osobnymi commitami.
 | 4.2 | Kontrakt, routing, retry i DLQ | Gotowe |
 | 4.3 | Outbox/inbox i trwała deduplikacja | Gotowe |
 | 4.4 | Worker klasyfikacji LLM | Gotowe |
-| 4.5 | Telemetria, awarie i runbook | Plan |
+| 4.5 | Telemetria, awarie i runbook | Gotowe technicznie; do odbioru |
 
 ## Ustalenia discovery
 
@@ -84,3 +84,34 @@ już ustawionej kategorii. Test PostgreSQL potwierdza pojedynczy efekt pomimo
 duplikatu. Check, 69 testów backendu i 24 frontendu przechodzą. Pełne E2E
 z AMQPS i osobnym workerem: 24/24, run `1790188912054-10365`.
 Końcowy odbiór 4.5 obejmie dodatkowe oczekiwanie na kategorię w E2E.
+
+## 4.5 — odbiór
+
+OTLP HTTP eksportuje trace z HTTP przez persisted traceparent i nagłówek AMQP
+po konsumenta oraz metryki backlog, lag, wyników i czasu prób. Eksport jest
+opcjonalny; lokalny kolektor i konfigurację produkcyjną opisuje
+[runbook](messaging-runbook.md). CLI obsługuje listę zadań i ograniczony tenantem,
+audytowany replay ze stanu dead.
+
+Końcowy check i testy: 69 backend, 24 frontend, integracja Core/PostgreSQL,
+regresja migratora, discovery RabbitMQ i rzeczywisty eksport OTLP — zielone.
+Test OTLP potwierdza także relacje parent/child dwóch równoległych trace,
+a discovery potwierdza przekazanie traceparent przez rzeczywiste AMQP.
+Walidator obrazu kolektora 0.148.0 i konfiguracja Compose przechodzą.
+
+E2E: 24/24, run `1790189270042-11029`, z oczekiwaniem na wynik klasyfikacji.
+Dodatkowy probe zatrzymuje broker i worker, tworzy incydent przez rzeczywisty
+adapter Core, wznawia usługi i potwierdza pojedynczy audyt mimo ponownych
+dostarczeń. Wszystkie te operacje dotyczą wyłącznie izolowanych danych.
+Po E2E dodano tylko atrybuty diagnostyczne spanu; osobny test OTLP i check
+potwierdzają końcowy kod obserwowalności.
+
+Migracja 0002 nie odtwarza automatycznie klasyfikacji historycznych incydentów;
+nowy workflow obejmuje nowo tworzone zadania. Nie wdrożono nieużywanego Redis,
+HA brokera ani archiwum telemetrii. Wywołanie LLM może się powtórzyć po awarii,
+ale zapis skutku w PostgreSQL jest deduplikowany. Retencja zadań i sprzątanie
+osieroconych obiektów S3 pozostają osobnymi decyzjami operacyjnymi.
+
+Faza 4 jest gotowa technicznie do odbioru. Kolejna faza 5 wydziela Elysia 2 +
+Better Auth i uruchamia sieciowy kontrakt JWT/JWKS. Branch fazy 4 zawiera bazę
+fazy 3; po jej squash merge należy przenieść tylko commity fazy 4 na nowe main.

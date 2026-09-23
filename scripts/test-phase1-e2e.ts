@@ -170,7 +170,7 @@ try {
     `${root}/database/migrations/002-better-auth-1.7.3-provider-identity.sql:/migration.sql:ro`,
     `${root}/scripts/fixtures/phase1-account-migration.sql:/migration-fixture.sql:ro`,
   );
-  config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`);
+  config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`, `${root}/scripts/fixtures/phase4-probe.ts:/app/backend/phase4-probe.ts:ro`);
   config.services.backend.depends_on["smtp-test"] = { condition: "service_healthy" };
   config.services.nginx.ports = [`127.0.0.1:${port}:8080`];
   await Bun.write(configFile, JSON.stringify(config, null, 2));
@@ -213,7 +213,11 @@ try {
   };
   const task = process.argv.includes("--all") ? "test:e2e:all" : "test:e2e";
   await command(["bun", "x", "--no-install", "turbo", "run", task], testEnvironment);
-  console.log(`[phase1] PASS ${task}`);
+  await compose(["stop", "classifier-worker", "rabbitmq"]);
+  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "seed"]);
+  await compose(["up", "-d", "--wait", "--wait-timeout", "120", "rabbitmq", "classifier-worker"]);
+  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "verify"]);
+  console.log(`[phase1] PASS ${task} and durable-worker recovery`);
 } catch (error) {
   if (started) {
     try {

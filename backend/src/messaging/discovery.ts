@@ -1,3 +1,4 @@
+import { startTelemetry } from "./telemetry";
 import assert from "node:assert/strict";
 import { declareTopology, publishConfirmed } from "./broker";
 import { topology } from "./contract";
@@ -19,6 +20,11 @@ async function docker(args: string[]) {
 	if (code) throw new Error(`Docker ${args[0]}: ${error}`);
 	return output;
 }
+const collector = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => Response.json({}) });
+process.env.OTEL_ENABLED = "true";
+process.env.OTEL_EXPORTER_OTLP_ENDPOINT = `http://127.0.0.1:${collector.port}`;
+process.env.OTEL_LOGS_EXPORTER = "none";
+const telemetry = startTelemetry("broker-probe");
 let started = false;
 try {
 	await docker([
@@ -54,9 +60,13 @@ try {
 	await channel.waitForConfirms();
 	await declareTopology(channel);
 	const jobId = crypto.randomUUID();
-	await publishConfirmed(channel, jobId);
+	await publishConfirmed(channel, jobId, false, `00-${"4".repeat(32)}-${"5".repeat(16)}-01`);
 	const delivery = await channel.get(topology.queue, { noAck: false });
 	assert(delivery);
+	assert(
+		String(delivery.properties.headers?.traceparent).startsWith(`00-${"4".repeat(32)}-`),
+		"OTel context crosses real AMQP delivery",
+	);
 	channel.nack(delivery, false, false);
 	let dead = false;
 	for (let i = 0; i < 40; i++) {
@@ -93,4 +103,6 @@ try {
 	);
 } finally {
 	if (started) await docker(["rm", "-f", "-v", name]);
+	await telemetry.shutdown();
+	await collector.stop(true);
 }

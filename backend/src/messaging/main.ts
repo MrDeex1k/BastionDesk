@@ -1,3 +1,4 @@
+import { startTelemetry, queueMetrics } from "./telemetry";
 import { Effect } from "effect";
 import { openBroker, publishConfirmed } from "./broker";
 import { jobStore } from "./store";
@@ -10,6 +11,7 @@ import { env } from "../lib/env";
 // Deadline must leave enough time to commit before the lease expires.
 if (env.LLM_RPC_TIMEOUT_MS <= 0 || env.LLM_RPC_TIMEOUT_MS > 90000)
 	throw new Error("WORKER_LLM_TIMEOUT_MUST_BE_BETWEEN_1_AND_90000");
+const telemetry = startTelemetry("bastiondesk-classifier");
 await assertCoreSchema();
 const store = jobStore(getPgPool());
 let stopping = false;
@@ -44,9 +46,9 @@ try {
 				closed = true;
 				lastRelay = 0;
 			});
-			await current.consume(async ({ jobId }) => {
+			await current.consume(async ({ jobId }, parent) => {
 				const task = Effect.runPromise(
-					classificationJob(store, { classify: classifyIncident }, jobId),
+					classificationJob(store, { classify: classifyIncident }, jobId, parent),
 				);
 				active.add(task);
 				try {
@@ -59,9 +61,15 @@ try {
 				const jobs = await store.dispatchBatch();
 				for (const job of jobs) {
 					if (stopping || closed) break;
-					await publishConfirmed(current.publisher, job.id, job.state === "dead");
+					await publishConfirmed(
+						current.publisher,
+						job.id,
+						job.state === "dead",
+						job.traceparent,
+					);
 					if (job.state === "dead") await store.publishedDead(job.id);
 				}
+				queueMetrics(await store.metrics());
 				lastRelay = Date.now();
 				await Bun.sleep(1000);
 			}
@@ -78,4 +86,5 @@ try {
 } finally {
 	await health.stop(true);
 	await closeDatabase();
+	await telemetry.shutdown();
 }

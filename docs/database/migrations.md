@@ -128,3 +128,13 @@ awaria samego audytu nie zmienia pierwotnego błędu. Błędy przed wejściem do
 repozytorium (np. brak sesji, niepoprawne HTTP) pozostają logami warstwy wejścia.
 Audyt przechowuje metadane, bez treści dokumentów i notatek; nie jest jeszcze
 zewnętrznym, odpornym na działania administratora archiwum.
+
+
+## Rozszerzenie fazy 4
+
+`0002_durable_jobs.sql` dodaje trwały rejestr outbox/inbox oraz retry/DLQ.
+Backend i worker wymagają 0001 i 0002 przed startem. Migracja nie tworzy zadań
+dla historycznych incydentów ani nie modyfikuje danych auth. Wykonaj backup,
+`plan` i `apply` według tej samej procedury; nie pomijaj bramki startu.
+Nowy backup musi obejmować `core_jobs` wraz z audytem i receipts.
+[Obsługa zadań, replay i ograniczenia](../backend/messaging-runbook.md).

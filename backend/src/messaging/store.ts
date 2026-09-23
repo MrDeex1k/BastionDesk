@@ -1,3 +1,4 @@
+import { traceParent } from "./telemetry";
 import type { Pool, PoolClient } from "pg";
 import type { Command } from "../contracts/operations";
 import { createAuditEntry } from "../contracts/audit";
@@ -32,7 +33,7 @@ export async function enqueueClassification(
 			topology.routingKey,
 			command.context.correlationId,
 			command.id,
-			traceparent ?? null,
+			traceparent ?? traceParent() ?? null,
 		],
 	);
 }
@@ -54,6 +55,17 @@ export function jobStore(pool: Pool) {
 		}
 	}
 	return {
+		async metrics() {
+			return (
+				await pool.query<{
+					state: string;
+					count: number;
+					lag: number;
+				}>(`SELECT state, count(*)::int AS count,
+  greatest(0, extract(epoch FROM clock_timestamp()-min(created_at)))::float AS lag
+  FROM core_jobs WHERE state IN ('pending','running','dead') GROUP BY state`)
+			).rows;
+		},
 		async dispatchBatch() {
 			return transaction(async (client) => {
 				// Exhausted leases include worker crashes, so a poison job cannot retry forever.
@@ -64,13 +76,13 @@ export function jobStore(pool: Pool) {
 					[maxAttempts],
 				);
 				return (
-					await client.query<Pick<Job, "id" | "state">>(`WITH due AS (
+					await client.query<Pick<Job, "id" | "state" | "traceparent">>(`WITH due AS (
      SELECT id FROM core_jobs WHERE publish_after <= clock_timestamp()
      AND ((state='pending' AND available_at <= clock_timestamp()) OR
       (state='running' AND lease_until < clock_timestamp()) OR state='dead')
      ORDER BY publish_after LIMIT 20 FOR UPDATE SKIP LOCKED)
      UPDATE core_jobs j SET publish_after=clock_timestamp()+interval '30 seconds'
-     FROM due WHERE j.id=due.id RETURNING j.id,j.state`)
+     FROM due WHERE j.id=due.id RETURNING j.id,j.state,j.traceparent`)
 				).rows;
 			});
 		},
@@ -162,17 +174,45 @@ export function jobStore(pool: Pool) {
 				[job.id, job.lease_token, decision.state, code, decision.delaySeconds],
 			);
 		},
-		async replay(id: string, organizationId: string) {
-			return (
-				(
-					await pool.query(
-						`UPDATE core_jobs SET state='pending', attempts=0, last_error=NULL,
-    available_at=clock_timestamp(), publish_after=clock_timestamp()
-    WHERE id=$1 AND organization_id=$2 AND state='dead' RETURNING id`,
-						[id, organizationId],
-					)
-				).rowCount === 1
-			);
+
+		async replay(id: string, organizationId: string, operator = "operator") {
+			return transaction(async (client) => {
+				const result = await client.query<Job>(
+					`UPDATE core_jobs SET state='pending', attempts=0, last_error=NULL,
+     available_at=clock_timestamp(), publish_after=clock_timestamp()
+     WHERE id=$1 AND organization_id=$2 AND state='dead' RETURNING *`,
+					[id, organizationId],
+				);
+				const job = result.rows[0];
+				if (!job) return false;
+				const commandId = crypto.randomUUID();
+				const entry = createAuditEntry(
+					{
+						organizationId,
+						actor: { kind: "service", id: operator },
+						correlationId: job.correlation_id,
+						causationId: job.id,
+					},
+					organizationId,
+					{
+						id: crypto.randomUUID(),
+						commandId,
+						source: "job-operator",
+						action: "job.replay.v1",
+						resource: { type: "job", id },
+						occurredAt: new Date().toISOString(),
+						outcome: "succeeded",
+						reasonCode: "SYSTEM_RULE",
+						changedFields: ["state", "attempts"],
+						provenance: [],
+					},
+				);
+				await client.query(
+					"INSERT INTO core_audit (id,organization_id,command_id,entry) VALUES ($1,$2,$3,$4)",
+					[entry.id, organizationId, commandId, JSON.stringify(entry)],
+				);
+				return true;
+			});
 		},
 	};
 }
