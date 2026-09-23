@@ -18,7 +18,8 @@
 		"lint": "oxlint --type-aware src/",
 		"lint:fix": "oxlint --type-aware --fix src/",
 		"format": "oxfmt --check src/",
-		"format:fix": "oxfmt --write src/"
+		"format:fix": "oxfmt --write src/",
+		"start:auth": "bun run src/auth/main.ts"
 	},
 	"devDependencies": {
 		"@types/bun": "1.4.2",

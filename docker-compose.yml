@@ -128,6 +128,38 @@ services:
     networks:
       - bastiondesk-net-internal
 
+  auth-service:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["bun", "src/auth/main.ts"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_EXTRA_CA_CERTS=/certs/ca/ca.crt
+      - SSL_CERT_FILE=/certs/ca/ca.crt
+    depends_on:
+      llm_service:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      storage-1:
+        condition: service_healthy
+      storage-3:
+        condition: service_healthy
+    volumes:
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/backend:/certs/backend:ro
+    networks:
+      - bastiondesk-net-internal
+
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3340/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   rabbitmq:
     image: rabbitmq:4.2.5-management-alpine
     hostname: rabbitmq
