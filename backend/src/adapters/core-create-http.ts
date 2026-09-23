@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { operationRequest } from "./core-operation";
 import type { Request, Response } from "express";
 import { Effect } from "effect";
 import { fromNodeHeaders } from "better-auth/node";
@@ -11,7 +13,7 @@ import { currentIdentity, identityLayer, type IdentityReader } from "../core/ide
 import { runCore } from "../core/runtime";
 import { createIncidentSchema } from "../utils/validation";
 import { parseMultipartFormData, validateFile, generateStorageKey } from "../utils/file.helper";
-import { putObject } from "../lib/storage";
+import { putObject, deleteObject } from "../lib/storage";
 import { classifyIncident } from "../lib/llm-client";
 import { query } from "../lib/database";
 import { errorHandler } from "../middleware/error.middleware";
@@ -24,6 +26,7 @@ export function coreCreateHandler(identity: IdentityReader, writes: IncidentWrit
 					Effect.provide(identityLayer(identity)),
 				),
 			);
+			const operation = operationRequest(req);
 			const { fields, files } = await parseMultipartFormData(req);
 			const { userDescription } = createIncidentSchema.parse(fields);
 			const input: NewIncident = {
@@ -45,15 +48,33 @@ export function coreCreateHandler(identity: IdentityReader, writes: IncidentWrit
 				});
 				if (type === "screenshot") {
 					input.userScreenshotPath = key;
-					input.userScreenshotMetadata = { ...file.metadata };
+					input.userScreenshotMetadata = {
+						...file.metadata,
+						contentHash: createHash("sha256")
+							.update(Buffer.from(file.buffer))
+							.digest("hex"),
+					};
 				} else {
 					input.userAttachmentPath = key;
-					input.userAttachmentMetadata = { ...file.metadata };
+					input.userAttachmentMetadata = {
+						...file.metadata,
+						contentHash: createHash("sha256")
+							.update(Buffer.from(file.buffer))
+							.digest("hex"),
+					};
 				}
 			}
 			const incident = await runCore(
-				createIncident(live, input).pipe(Effect.provide(writesLayer(writes))),
+				createIncident(live, input, operation).pipe(Effect.provide(writesLayer(writes))),
 			);
+			if (incident.id !== input.id) {
+				await Promise.allSettled(
+					[input.userScreenshotPath, input.userAttachmentPath]
+						.filter((key): key is string => key !== null)
+						.map((key) => deleteObject(key)),
+				);
+				return res.status(201).json({ success: true, data: incident });
+			}
 			res.status(201).json({ success: true, data: incident });
 			// Compatibility with legacy best-effort classification; durable delivery is phase 4.
 			void classifyIncident(incident.id, userDescription)

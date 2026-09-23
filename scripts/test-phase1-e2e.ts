@@ -51,6 +51,10 @@ Object.assign(env, {
   EMAIL_FROM_NAME: "BastionDesk E2E",
 });
 env.S3_SECRET_KEY = env.MINIO_ROOT_PASSWORD;
+env.MIGRATION_DATABASE_URL = `postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@database:5432/${env.POSTGRES_DB}`;
+env.MIGRATION_TLS_CA = "/certs/ca/ca.crt";
+env.MIGRATION_TLS_CERT = "/certs/migrator/client.crt";
+env.MIGRATION_TLS_KEY = "/certs/migrator/client.key";
 env.DATABASE_URL = `postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@pgbouncer:6432/${env.POSTGRES_DB}`;
 await Bun.write(
   envFile,
@@ -165,6 +169,7 @@ try {
     `${root}/database/migrations/002-better-auth-1.7.3-provider-identity.sql:/migration.sql:ro`,
     `${root}/scripts/fixtures/phase1-account-migration.sql:/migration-fixture.sql:ro`,
   );
+  config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`);
   config.services.backend.depends_on["smtp-test"] = { condition: "service_healthy" };
   config.services.nginx.ports = [`127.0.0.1:${port}:8080`];
   await Bun.write(configFile, JSON.stringify(config, null, 2));
@@ -198,6 +203,7 @@ try {
     "-ec",
     'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /migration-fixture.sql',
   ]);
+  await compose(["exec", "-T", "backend", "bun", "src/migrations/cli.ts", "apply"]);
   const testEnvironment = {
     E2E_BASE_URL: baseUrl,
     E2E_MAILPIT_URL: `http://127.0.0.1:${mailPort}`,

@@ -125,7 +125,7 @@ describe("analyst upload validation", () => {
 		expect(result.body).toHaveProperty("success", true);
 		expect(putObjectCalls).toBe(1);
 		expect(lastStorageKey).toMatch(
-			/^incidents\/00000000-0000-4000-8000-000000000001\/report_[0-9]+_report\.pdf$/,
+			/^incidents\/00000000-0000-4000-8000-000000000001\/report_[0-9]+_[0-9a-f-]{36}_report\.pdf$/,
 		);
 	});
 });

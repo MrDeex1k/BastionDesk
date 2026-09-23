@@ -1,9 +1,13 @@
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { readdir, readFile } from "node:fs/promises";
 import { Client } from "pg";
 import { migrationConfig } from "./config";
 import { migrate } from "./runner";
 
-const directory = new URL("../../../database/versioned/", import.meta.url);
+const directory = process.env.MIGRATION_DIRECTORY
+	? pathToFileURL(`${resolve(process.env.MIGRATION_DIRECTORY)}/`)
+	: new URL("../../../database/versioned/", import.meta.url);
 const mode = process.argv[2];
 if (!["plan", "apply"].includes(mode ?? "") || process.argv.length !== 3) {
 	console.error("Usage: bun backend/src/migrations/cli.ts plan|apply");

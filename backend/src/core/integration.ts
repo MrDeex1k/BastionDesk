@@ -1,6 +1,7 @@
+import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { Pool, type PoolClient } from "pg";
+import { Client, Pool, type PoolClient } from "pg";
 import { createIncidentWrites } from "../adapters/core-incident-writes";
 import { decideIncidentChange } from "./incidents/commands";
 import type { LiveIdentity } from "../identity/contract";
@@ -70,6 +71,35 @@ try {
 		await pool.query(
 			await readFile(new URL(`../../../database/init-sql/${file}`, import.meta.url), "utf8"),
 		);
+	const migrator = new Client({
+		host: "127.0.0.1",
+		port,
+		user: "postgres",
+		password,
+		database: "postgres",
+	});
+	await migrator.connect();
+	const baseline = JSON.parse(
+		await readFile(
+			new URL("../../../database/versioned/baseline-1.0.3.json", import.meta.url),
+			"utf8",
+		),
+	);
+	const migrations = [
+		{
+			id: "0001_core_operations",
+			sql: await readFile(
+				new URL("../../../database/versioned/0001_core_operations.sql", import.meta.url),
+				"utf8",
+			),
+		},
+	];
+	await migrate(migrator, baseline.fingerprint, migrations, "apply");
+	assert.deepEqual(
+		(await migrate(migrator, baseline.fingerprint, migrations, "apply")).pending,
+		[],
+	);
+	await migrator.end();
 	await pool.query(
 		`INSERT INTO "user" (id,email) VALUES ('a','a@example.test'),('b','b@example.test'); INSERT INTO organization (id,name,slug) VALUES ('org','Org','org'),('foreign','Foreign','foreign');`,
 	);
@@ -144,6 +174,115 @@ try {
 		(await pool.query('SELECT "analystNote" FROM incidents WHERE id=$1', [created.id])).rows[0]
 			.analystNote,
 		null,
+	);
+	const request = {
+		idempotencyKey: "persisted-note",
+		commandId: crypto.randomUUID(),
+		correlationId: crypto.randomUUID(),
+	};
+	const note = { type: "note" as const, note: "one committed note" };
+	const update = () =>
+		writes.mutate(
+			actor,
+			created.id,
+			note,
+			"workflow",
+			(row) => decideIncidentChange(actor, row, note, "workflow"),
+			request,
+		);
+	const attempts = await Promise.all([update(), update()]);
+	assert.equal(attempts[0].incident.analystNote, attempts[1].incident.analystNote);
+	assert.equal(
+		(
+			await pool.query(
+				"SELECT count(*)::integer AS n FROM core_command_receipts WHERE idempotency_key='persisted-note'",
+			)
+		).rows[0].n,
+		1,
+	);
+	assert.equal(
+		(
+			await pool.query("SELECT count(*)::integer AS n FROM core_audit WHERE command_id=$1", [
+				request.commandId,
+			])
+		).rows[0].n,
+		1,
+	);
+	await assert.rejects(
+		writes.mutate(
+			actor,
+			created.id,
+			{ type: "note", note: "conflict" },
+			"workflow",
+			(row) =>
+				decideIncidentChange(actor, row, { type: "note", note: "conflict" }, "workflow"),
+			request,
+		),
+		{ code: "IDEMPOTENCY_CONFLICT" },
+	);
+	// A new repository instance and new pool survive application restart.
+	await pool.end();
+	pool = new Pool({
+		host: "127.0.0.1",
+		port,
+		user: "postgres",
+		password,
+		database: "postgres",
+		max: 5,
+	});
+	const restarted = createIncidentWrites(transaction);
+	await restarted.mutate(
+		actor,
+		created.id,
+		note,
+		"workflow",
+		() => {
+			throw new Error("Replay must not execute mutation");
+		},
+		request,
+	);
+	const audit = (
+		await pool.query(
+			"SELECT entry FROM core_audit WHERE command_id=$1 AND entry->>'outcome'='succeeded'",
+			[request.commandId],
+		)
+	).rows[0].entry;
+	assert.deepEqual(audit.changedFields, ["analystNote"]);
+	assert.equal(audit.actor.id, actor.subject);
+	assert.equal(JSON.stringify(audit).includes("one committed note"), false);
+	const createRequest = {
+		idempotencyKey: "same-create",
+		commandId: crypto.randomUUID(),
+		correlationId: crypto.randomUUID(),
+	};
+	const createInput = {
+		id: crypto.randomUUID(),
+		userDescription: "Repeatable creation",
+		userScreenshotPath: null,
+		userScreenshotMetadata: {},
+		userAttachmentPath: null,
+		userAttachmentMetadata: {},
+	};
+	const firstCreate = await writes.create(a, createInput, createRequest);
+	const replayCreate = await writes.create(
+		a,
+		{ ...createInput, id: crypto.randomUUID() },
+		createRequest,
+	);
+	assert.equal(replayCreate.id, firstCreate.id);
+	const otherTenant = await writes.create(
+		{ ...a, organizationId: "foreign" },
+		{ ...createInput, id: crypto.randomUUID() },
+		createRequest,
+	);
+	assert.notEqual(otherTenant.id, firstCreate.id);
+	const denied = await pool.query(
+		"SELECT entry FROM core_audit WHERE entry->>'outcome'='denied'",
+	);
+	assert(denied.rows.length > 0);
+	assert(denied.rows.every((row) => row.entry.changedFields.length === 0));
+	console.log(
+		"PASS migration repeat, concurrent receipt replay, conflict, restart and minimal audit",
 	);
 	console.log(
 		"PASS Core PostgreSQL creation, concurrent assignment, tenant scope and transaction rollback",

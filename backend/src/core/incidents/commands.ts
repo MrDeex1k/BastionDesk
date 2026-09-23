@@ -13,15 +13,40 @@ export class IncidentRuleError extends Error {
 		super(message);
 	}
 }
+export interface OperationRequest {
+	idempotencyKey: string;
+	commandId: string;
+	correlationId: string;
+}
+
 export type CommandMode = "simple" | "workflow" | "admin";
 export type IncidentChange =
 	| { type: "assign" }
 	| { type: "unassign" }
 	| { type: "status"; status: IncidentStatus }
 	| { type: "note"; note: string | null }
-	| { type: "resolve"; resolved: boolean };
+	| { type: "resolve"; resolved: boolean }
+	| {
+			type: "file";
+			kind: "report" | "statement";
+			path: string;
+			metadata: Record<string, unknown>;
+	  };
 export type IncidentPatch = Partial<
-	Pick<Incident, "analystId" | "status" | "analystNote" | "czyRozwiazany" | "dataRozwiazania">
+	Pick<
+		Incident,
+		| "analystId"
+		| "status"
+		| "analystNote"
+		| "czyRozwiazany"
+		| "dataRozwiazania"
+		| "analystReportPath"
+		| "analystReportMetadata"
+		| "analystReportData"
+		| "analystStatementPath"
+		| "analystStatementMetadata"
+		| "analystStatementData"
+	>
 >;
 export type NewIncident = Pick<
 	Incident,
@@ -43,8 +68,13 @@ export interface IncidentWrites {
 		change: IncidentChange,
 		mode: CommandMode,
 		decide: (row: Incident) => IncidentPatch,
+		request?: OperationRequest,
 	): Promise<CommandResult>;
-	create(identity: LiveIdentity, input: NewIncident): Promise<Incident>;
+	create(
+		identity: LiveIdentity,
+		input: NewIncident,
+		request?: OperationRequest,
+	): Promise<Incident>;
 }
 export class Writes extends Context.Tag("incidents/Writes")<Writes, IncidentWrites>() {}
 export const writesLayer = (port: IncidentWrites) => Layer.succeed(Writes, port);
@@ -110,6 +140,27 @@ export function decideIncidentChange(
 			...(mode === "workflow" ? { status: "Zgłoszony" as const } : {}),
 		};
 	}
+	if (change.type === "file") {
+		if (!owns && !admin)
+			throw new IncidentRuleError(
+				change.kind === "report" ? "CANNOT_UPLOAD_REPORT" : "CANNOT_UPLOAD_STATEMENT",
+				"Brak uprawnień do uploadu dokumentu dla tego zgłoszenia",
+				"denied",
+			);
+		if (change.kind === "report")
+			return {
+				analystReportPath: change.path,
+				analystReportMetadata: change.metadata,
+				analystReportData: new Date(),
+				...(mode === "workflow" ? { status: "Raport złożony" as const } : {}),
+			};
+		return {
+			analystStatementPath: change.path,
+			analystStatementMetadata: change.metadata,
+			analystStatementData: new Date(),
+			...(mode === "workflow" ? { status: "Sprawozdanie złożone" as const } : {}),
+		};
+	}
 	if (!owns && !admin) {
 		const details = {
 			status: ["CANNOT_MODIFY_STATUS", "Brak uprawnień do zmiany statusu tego zgłoszenia"],
@@ -158,6 +209,7 @@ export function changeIncident(
 	id: string,
 	change: IncidentChange,
 	mode: CommandMode,
+	request?: OperationRequest,
 ) {
 	return Effect.gen(function* () {
 		if (identity.role === "pracownik" || (mode === "admin" && identity.role !== "admin"))
@@ -165,18 +217,27 @@ export function changeIncident(
 		const port = yield* Writes;
 		return yield* Effect.tryPromise({
 			try: () =>
-				port.mutate(identity, id, change, mode, (row) =>
-					decideIncidentChange(identity, row, change, mode),
+				port.mutate(
+					identity,
+					id,
+					change,
+					mode,
+					(row) => decideIncidentChange(identity, row, change, mode),
+					request,
 				),
 			catch: writeError,
 		});
 	});
 }
-export function createIncident(identity: LiveIdentity, input: NewIncident) {
+export function createIncident(
+	identity: LiveIdentity,
+	input: NewIncident,
+	request?: OperationRequest,
+) {
 	return Effect.gen(function* () {
 		const port = yield* Writes;
 		return yield* Effect.tryPromise({
-			try: () => port.create(identity, input),
+			try: () => port.create(identity, input, request),
 			catch: writeError,
 		});
 	});

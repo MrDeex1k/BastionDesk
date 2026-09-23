@@ -42,6 +42,12 @@ test("ORG-E2E-02 active organization change isolates visible incidents", async (
       role: "pracownik",
     });
     await login(page, scenario.employee);
+    await expect(page.getByRole("heading", { name: "Panel Pracownika" })).toBeVisible();
+    // Both memberships already exist; automatic first-organization order is unspecified.
+    await api(page.request, "/api/auth/organization/set-active", {
+      organizationId: scenario.organizationId,
+    });
+    await page.reload();
     await page.getByLabel(/Opis problemu/).fill(`Tylko pierwsza organizacja ${scenario.id}`);
     await page.getByRole("button", { name: "WYŚLIJ ZGŁOSZENIE" }).click();
     await expect(page.getByText("Sukces!", { exact: true })).toBeVisible();

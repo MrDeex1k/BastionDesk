@@ -1,3 +1,4 @@
+import { operationRequest } from "./core-operation";
 import type { Request, Response } from "express";
 import { Effect } from "effect";
 import { fromNodeHeaders } from "better-auth/node";
@@ -62,7 +63,7 @@ export function coreCommandHandler(identity: IdentityReader, writes: IncidentWri
 			if (live.role === "pracownik" || (mode === "admin" && live.role !== "admin"))
 				throw new DomainError("FORBIDDEN");
 			const id = uuidSchema.parse(parts.at(-2));
-			let change: IncidentChange;
+			let change: Exclude<IncidentChange, { type: "file" }>;
 			if (action === "status") {
 				const status = incidentStatusSchema.safeParse(req.body.status);
 				if (!status.success && mode === "workflow")
@@ -109,7 +110,9 @@ export function coreCommandHandler(identity: IdentityReader, writes: IncidentWri
 			else if (action === "assign" || action === "unassign") change = { type: action };
 			else throw new DomainError("NOT_FOUND");
 			const { before, incident } = await runCore(
-				changeIncident(live, id, change, mode).pipe(Effect.provide(writesLayer(writes))),
+				changeIncident(live, id, change, mode, operationRequest(req)).pipe(
+					Effect.provide(writesLayer(writes)),
+				),
 			);
 			if (mode !== "workflow") return res.json({ success: true, data: incident });
 			const replies = {

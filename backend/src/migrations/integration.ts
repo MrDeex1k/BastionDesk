@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { Client } from "pg";
 import { migrate } from "./runner";
 import { schemaFingerprint } from "./schema";
@@ -9,6 +9,8 @@ const root = new URL("../../../", import.meta.url);
 const name = `bastiondesk-migrations-${randomUUID()}`;
 const password = randomUUID();
 const clients: Client[] = [];
+const fixtureDirectory = await mkdtemp("/tmp/bastiondesk-migration-manifest-");
+
 let started = false;
 async function docker(args: string[], input?: string): Promise<string> {
 	const process = Bun.spawn(["docker", ...args], {
@@ -27,6 +29,7 @@ async function docker(args: string[], input?: string): Promise<string> {
 }
 async function cleanup() {
 	await Promise.allSettled(clients.map((client) => client.end()));
+	await rm(fixtureDirectory, { recursive: true, force: true });
 	if (started) {
 		await docker(["rm", "-f", name]);
 		started = false;
@@ -92,6 +95,7 @@ try {
 		);
 	}
 	const baseline = JSON.parse(await readFile(baselinePath, "utf8")).fingerprint as string;
+	await writeFile(`${fixtureDirectory}/baseline-1.0.3.json`, await readFile(baselinePath));
 	assert.equal(actual, baseline, "Fresh install differs from frozen baseline");
 	await db.query(`
 		INSERT INTO "user" (id,email) VALUES ('user-a','a@example.test'),('user-b','b@example.test');
@@ -158,6 +162,7 @@ try {
 			{
 				env: {
 					...Bun.env,
+					MIGRATION_DIRECTORY: fixtureDirectory,
 					MIGRATION_DATABASE_URL: `postgresql://postgres:${password}@127.0.0.1:${port}/restored`,
 					MIGRATION_ALLOW_LOCAL_PLAINTEXT: "true",
 					MIGRATION_TLS_CA: "",

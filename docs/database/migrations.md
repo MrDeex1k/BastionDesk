@@ -100,3 +100,29 @@ plikiem SQL. Test zachowuje metadane/klucze plików; nie kopiuje bajtów S3.
 Pełne E2E osobno sprawdza upload i pobieranie plików. Kontener jest usuwany
 w `finally` oraz po SIGINT/SIGTERM; po SIGKILL może wymagać ręcznego sprzątnięcia
 kontenera z prefiksem `bastiondesk-migrations-`.
+
+## Rozszerzenie fazy 3
+
+`0001_core_operations.sql` dodaje `core_command_receipts` i `core_audit` bez
+zmiany danych incydentów lub tabel auth. Należy wykonać `plan` i `apply`
+**przed udostępnieniem zapisów nowego Core**, również po świeżej inicjalizacji
+bazy 1.0.3. Migrator i pliki SQL są dostępne w obrazie backendu; uruchomienie
+migratora jest osobnym krokiem operatora, nie automatyczną migracją przy starcie.
+
+`MIGRATION_DIRECTORY` może wskazać zaufany katalog operatora z manifestem
+baseline i plikami SQL; domyślny pozostaje `database/versioned`. Testy bazowego
+runnera używają własnego manifestu, a integracja Core testuje rzeczywistą
+migrację 0001 i jej bezpieczne powtórzenie.
+
+Potwierdzenia komend są rozdzielone przez organizację, aktora, operację i klucz.
+Bez nagłówka `Idempotency-Key` każde żądanie otrzymuje nowy klucz. Powtórzenie
+tego samego klucza/payloadu zwraca zapisany rezultat; zmieniony payload daje
+409. Nie ma automatycznego wygaszania: usunięcie receipt umożliwi ponowne
+wykonanie starego klucza, więc retencja wymaga jawnej decyzji operatora.
+
+Audyt sukcesu oraz receipt powstają atomowo ze zmianą incydentu. Odrzucenie
+przez politykę komendy jest zapisywane po rollbacku w osobnej transakcji;
+awaria samego audytu nie zmienia pierwotnego błędu. Błędy przed wejściem do
+repozytorium (np. brak sesji, niepoprawne HTTP) pozostają logami warstwy wejścia.
+Audyt przechowuje metadane, bez treści dokumentów i notatek; nie jest jeszcze
+zewnętrznym, odpornym na działania administratora archiwum.

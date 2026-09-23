@@ -149,6 +149,7 @@ import apiRoutes from "./routes/index";
 
 const { coreIncidentWrites } = await import("./adapters/core-incident-writes");
 const { coreWriteRoutes, coreCommandHandler } = await import("./adapters/core-command-http");
+const { coreFileRoutes, coreFileHandler } = await import("./adapters/core-file-http");
 const { coreCreateHandler } = await import("./adapters/core-create-http");
 const { coreIdentity } = await import("./adapters/core-identity");
 const { coreIncidentReads } = await import("./adapters/core-incident-reads");
@@ -157,6 +158,10 @@ const core = await (
 	await import("./core/application")
 ).createCoreApplication([
 	{ paths: coreReadPaths, handle: coreReadHandler(coreIdentity, coreIncidentReads) },
+	...coreFileRoutes.map((route) => ({
+		...route,
+		handle: coreFileHandler(coreIdentity, coreIncidentReads, coreIncidentWrites),
+	})),
 	...coreWriteRoutes.map((route) => ({
 		...route,
 		handle: coreCommandHandler(coreIdentity, coreIncidentWrites),
@@ -175,6 +180,8 @@ app.get(coreReadPaths, requireCsrf, apiRateLimiter, (req, res, next) => {
 	return core.http(req, res, next);
 });
 
+for (const route of coreFileRoutes)
+	app[route.method](route.paths, requireCsrf, apiRateLimiter, core.http);
 for (const route of coreWriteRoutes)
 	app[route.method](route.paths, requireCsrf, apiRateLimiter, core.http);
 app.post("/api/incidents", requireCsrf, apiRateLimiter, core.http);

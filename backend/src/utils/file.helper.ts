@@ -280,7 +280,7 @@ export function generateStorageKey(
 	const _extension = originalName.split(".").pop() || "bin";
 	const sanitizedName = originalName.replace(/[^a-zA-Z0-9.-]/g, "_").substring(0, 50);
 
-	return `incidents/${incidentId}/${fileType}_${timestamp}_${sanitizedName}`;
+	return `incidents/${incidentId}/${fileType}_${timestamp}_${crypto.randomUUID()}_${sanitizedName}`;
 }
 
 /**
