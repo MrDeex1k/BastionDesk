@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { apiInfo } from "../contracts/api-info";
 import { Elysia } from "elysia";
 
@@ -58,8 +59,11 @@ export function createAuthApplication(ports: AuthGatewayPorts) {
 			else if (path === "/api" || path.startsWith("/api/"))
 				response = await ports.proxy(request);
 			else response = failure(404, "NOT_FOUND");
-		} catch {
-			response = failure(503, "SERVICE_UNAVAILABLE");
+		} catch (error) {
+			response =
+				error instanceof APIError
+					? Response.json(error.body ?? { success: false }, { status: error.statusCode })
+					: failure(503, "SERVICE_UNAVAILABLE");
 		}
 		const headers = new Headers(response.headers);
 		headers.set("cache-control", "no-store");

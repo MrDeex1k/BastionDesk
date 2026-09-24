@@ -354,10 +354,16 @@ Konfiguracja runtime znajduje się w
 - HaveIBeenPwned;
 - organizacje z rolami `admin`, `analityk`, `pracownik`, limitem 5 organizacji
   na użytkownika i weryfikacją emaila przy zaproszeniach;
-- pomocniczy plugin organizacji.
+- pomocniczy plugin organizacji;
+- `coreJwtPlugin`: JWT/JWKS z Ed25519, rotacją kluczy co 24 godziny i tabelą
+  `jwks` dodaną przez migrację `0003_auth_jwks.sql`.
+
+`disabledPaths: ["/token"]` blokuje publiczną emisję tokenu Core. Token powstaje
+po stronie gatewaya; szczegóły komunikacji i rotacji opisuje
+[runbook fazy 5](../backend/phase-5-identity.md).
 
 W obecnym kodzie nie ma jeszcze konfiguracji social loginów Google/Apple/Microsoft
-ani osobnego JWT/JWKS gatewaya.
+— ich integracja pozostaje poza zakresem fazy 5.
 
 ## Uruchomienie
 

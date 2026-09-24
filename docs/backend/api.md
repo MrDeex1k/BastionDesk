@@ -98,40 +98,17 @@ BastionDesk API jest podzielone na kilka głównych modułów:
 
 ### `GET /health`
 
-**Opis:** Sprawdza połączenia z bazą danych i serwerem SMTP. Endpoint zwraca
-HTTP `200` tylko wtedy, gdy oba połączenia działają; w przeciwnym razie zwraca
-HTTP `503`.
+**Opis:** Lokalna sonda Core na `127.0.0.1:3335` sprawdza wyłącznie bazę
+ danych. Zwraca HTTP `200`, gdy baza odpowiada, lub `503` przy błędzie.
+W obu przypadkach body jest puste; sonda nie sprawdza SMTP. Endpoint nie jest
+udostępniany przez publiczny reverse proxy.
 
-**Przykład curl:**
+**Przykład:**
 ```bash
-docker compose exec backend wget -qO- http://127.0.0.1:3335/health
+docker compose exec backend wget -S -O- http://127.0.0.1:3335/health
 ```
 
-**Response (Success):**
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-08-29T12:00:00.000Z",
-  "service": "bastiondesk-backend",
-  "checks": {
-    "database": "connected",
-    "email": "connected"
-  }
-}
-```
-
-**Response (Error):**
-```json
-{
-  "status": "degraded",
-  "timestamp": "2026-08-29T12:00:00.000Z",
-  "service": "bastiondesk-backend",
-  "checks": {
-    "database": "connected",
-    "email": "disconnected"
-  }
-}
-```
+Odpowiedź: `200 OK` lub `503 Service Unavailable`, bez JSON i bez body.
 
 ## CSRF dla endpointów aplikacyjnych
 

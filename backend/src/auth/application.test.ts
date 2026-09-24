@@ -66,3 +66,63 @@ test("gateway rate limiting rejects bursts before running auth or Core", async (
 		).toBe(expected);
 	expect(calls).toBe(2);
 });
+
+test("signup preserves Better Auth errors and hides unexpected failures", async () => {
+	const { APIError } = await import("better-auth/api");
+	for (const [error, status, body] of [
+		[
+			new APIError("CONFLICT", {
+				code: "USER_ALREADY_EXISTS",
+				message: "Email already exists",
+			}),
+			409,
+			{ code: "USER_ALREADY_EXISTS", message: "Email already exists" },
+		],
+		[
+			new APIError("BAD_REQUEST", {
+				code: "PASSWORD_COMPROMISED",
+				message: "Choose another password",
+			}),
+			400,
+			{ code: "PASSWORD_COMPROMISED", message: "Choose another password" },
+		],
+		[
+			new APIError("FORBIDDEN", {
+				code: "ORGANIZATION_LIMIT",
+				message: "Organization limit reached",
+			}),
+			403,
+			{ code: "ORGANIZATION_LIMIT", message: "Organization limit reached" },
+		],
+		[
+			new Error("database password secret"),
+			503,
+			{
+				success: false,
+				error: { code: "SERVICE_UNAVAILABLE", message: "SERVICE_UNAVAILABLE" },
+			},
+		],
+	] as const) {
+		const handle = async () => new Response();
+		const app = createAuthApplication({
+			origins: ["https://desk.test"],
+			health: async () => true,
+			auth: handle,
+			csrf: handle,
+			proxy: handle,
+			signup: async () => {
+				throw error;
+			},
+		});
+		const response = await app.handle(
+			new Request("https://desk.test/api/auth/sign-up-with-organization/email", {
+				method: "POST",
+				headers: { origin: "https://desk.test" },
+			}),
+		);
+		expect(response.status).toBe(status);
+		expect(await response.json()).toEqual(body);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("access-control-allow-origin")).toBe("https://desk.test");
+	}
+});

@@ -166,21 +166,9 @@ modelu CSRF i służy do przekazywania walidowanych zapytań administratora w JS
 
 ## Healthcheck i metadane API
 
-`GET /health` sprawdza bazę danych i SMTP. Zwraca HTTP `200` tylko wtedy, gdy
-oba połączenia działają; w przeciwnym razie zwraca HTTP `503` i
-`status: "degraded"`.
-
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-08-29T12:00:00.000Z",
-  "service": "bastiondesk-backend",
-  "checks": {
-    "database": "connected",
-    "email": "connected"
-  }
-}
-```
+Lokalna sonda Core `GET http://127.0.0.1:3335/health` sprawdza wyłącznie bazę
+ danych. Zwraca HTTP `200` albo `503` z pustym body; nie sprawdza SMTP i nie
+zwraca obiektu JSON `checks`.
 
 `GET /api` zwraca nazwę API, wersję `1.0.3` i podstawowe grupy endpointów.
 Endpoint `/health` nie jest przekazywany przez publiczny reverse proxy w
