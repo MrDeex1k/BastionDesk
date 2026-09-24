@@ -1,13 +1,11 @@
+import { csrfSecret } from "../auth/secrets";
 import crypto from "node:crypto";
-import type { Response } from "express";
 import { env } from "./env";
 
 export const CSRF_HEADER_NAME = "x-csrf-token";
 export const CSRF_TOKEN_COOKIE = "bd_csrf";
 export const CSRF_ANON_COOKIE = "bd_csrf_seed";
 export const CSRF_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
-
-const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function parseCookies(cookieHeader: string | string[] | undefined): Record<string, string> {
 	const rawHeader = Array.isArray(cookieHeader) ? cookieHeader.join(";") : cookieHeader;
@@ -44,45 +42,12 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
 	return getAllowedOrigins().includes(origin);
 }
 
-export function getOrCreateAnonymousCsrfSeed(
-	cookies: Record<string, string>,
-	res?: Response,
-): string {
-	const existingSeed = cookies[CSRF_ANON_COOKIE];
-	if (existingSeed) {
-		return existingSeed;
-	}
-
-	const nextSeed = crypto.randomBytes(32).toString("base64url");
-	if (res) {
-		res.cookie(CSRF_ANON_COOKIE, nextSeed, {
-			httpOnly: true,
-			sameSite: "strict",
-			secure: env.NODE_ENV === "production",
-			path: "/",
-			maxAge: COOKIE_MAX_AGE_MS,
-		});
-	}
-
-	return nextSeed;
-}
-
 export function generateCsrfToken(subject: string): string {
 	const nonce = crypto.randomBytes(32).toString("base64url");
 	const expiresAt = Date.now() + CSRF_TOKEN_TTL_MS;
 	const signature = signCsrfPayload(subject, nonce, expiresAt.toString());
 
 	return `${nonce}.${expiresAt.toString()}.${signature}`;
-}
-
-export function setCsrfTokenCookie(res: Response, token: string): void {
-	res.cookie(CSRF_TOKEN_COOKIE, token, {
-		httpOnly: true,
-		sameSite: "strict",
-		secure: env.NODE_ENV === "production",
-		path: "/",
-		maxAge: CSRF_TOKEN_TTL_MS,
-	});
 }
 
 export function verifyCsrfToken(token: string, subject: string): boolean {
@@ -102,7 +67,7 @@ export function verifyCsrfToken(token: string, subject: string): boolean {
 
 function signCsrfPayload(subject: string, nonce: string, expiresAt: string): string {
 	return crypto
-		.createHmac("sha256", env.CSRF_SECRET)
+		.createHmac("sha256", csrfSecret)
 		.update(`${subject}:${nonce}:${expiresAt}`)
 		.digest("base64url");
 }

@@ -132,3 +132,9 @@ Najważniejsze założenia release:
 - wspierany jest self-hosted Docker Compose,
 - model wdrożenia to `fresh install only`,
 - główny punkt wejścia do aplikacji to `http://localhost:4567`.
+
+### Auth i gateway (faza 5)
+
+Elysia 2 + Better Auth działa w osobnym `auth-service`; Core przyjmuje JWT przez
+mTLS. Wymagane są migracja `0003_auth_jwks` i certyfikaty identity przed
+przełączeniem ruchu. [Konfiguracja, upgrade, rollback i testy](docs/backend/phase-5-identity.md).

@@ -31,3 +31,17 @@ services:
     depends_on:
       smtp-test:
         condition: service_healthy
+
+  auth-service:
+    environment:
+      AUTH_PASSWORD_BREACH_CHECK_ENABLED: "false"
+      SMTP_HOST: smtp-test
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_USER: phase0
+      SMTP_APP_PASSWORD: phase0
+      EMAIL_FROM_NAME: BastionDesk Phase 0
+      EMAIL_FROM_ADDRESS: phase0@bastiondesk.invalid
+    depends_on:
+      smtp-test:
+        condition: service_healthy

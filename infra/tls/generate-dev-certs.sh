@@ -75,6 +75,19 @@ generate_cert "backend" "backend" "DNS:backend,DNS:localhost"
 mv "${OUT_DIR}/backend/tls.crt" "${OUT_DIR}/backend/client.crt"
 mv "${OUT_DIR}/backend/tls.key" "${OUT_DIR}/backend/client.key"
 
+# Separate, pinned identities: database/LLM certificates cannot enter Core or auth RPC.
+mkdir -p "${OUT_DIR}/identity/trust"
+for identity in backend auth-service; do
+ mkdir -p "${OUT_DIR}/identity/${identity}"
+ openssl req -x509 -newkey rsa:3072 -nodes -days 365 -sha256 \
+  -subj "/CN=${identity}" -addext "subjectAltName=DNS:${identity},DNS:localhost" \
+  -addext "extendedKeyUsage=serverAuth,clientAuth" \
+  -keyout "${OUT_DIR}/identity/${identity}/client.key" \
+  -out "${OUT_DIR}/identity/${identity}/client.crt"
+ chmod 600 "${OUT_DIR}/identity/${identity}/client.key"
+ cp "${OUT_DIR}/identity/${identity}/client.crt" "${OUT_DIR}/identity/trust/${identity}.crt"
+done
+
 generate_cert "llm_service" "llm_service" "DNS:llm_service,DNS:localhost"
 mv "${OUT_DIR}/llm_service/tls.crt" "${OUT_DIR}/llm_service/server.crt"
 mv "${OUT_DIR}/llm_service/tls.key" "${OUT_DIR}/llm_service/server.key"

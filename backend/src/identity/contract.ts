@@ -41,6 +41,7 @@ export type LiveIdentity = z.infer<typeof liveIdentitySchema>;
 export type ReadCurrentIdentity = (
 	claims: AccessClaims,
 	signal: AbortSignal,
+	token?: string,
 ) => Promise<LiveIdentity | null>;
 
 export function validateIssuer(issuer: string): string {

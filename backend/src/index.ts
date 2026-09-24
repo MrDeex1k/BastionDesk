@@ -1,26 +1,14 @@
+import { apiInfo } from "./contracts/api-info";
 import { startTelemetry, httpTelemetry } from "./messaging/telemetry";
-/**
- * BastionDesk Backend
- *
- * Serwer Express z Better-Auth dla autoryzacji i autentykacji
- */
-
-import { toNodeHandler } from "better-auth/node";
+import { createServer } from "node:http";
+import { mtlsServer } from "./identity/transport";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import { auth } from "./lib/auth";
 import { checkDatabaseConnection, closeDatabase } from "./lib/database";
 import { testEmailConnection } from "./lib/email";
 import { env } from "./lib/env";
-import {
-	apiRateLimiter,
-	errorHandler,
-	issueCsrfToken,
-	notFoundHandler,
-	requireCsrf,
-} from "./middleware";
-import signUpWithOrganizationRouter from "./routes/auth/sign-up-with-organization";
+import { apiRateLimiter, errorHandler, notFoundHandler } from "./middleware";
 
 const telemetry = startTelemetry("bastiondesk-backend");
 const app = express();
@@ -89,17 +77,6 @@ app.use(
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// CSRF token bootstrap for same-origin frontend requests
-app.get("/api/csrf", (req, res, next) => {
-	void issueCsrfToken(req, res).catch(next);
-});
-
-// Custom auth routes
-app.use("/api/auth", signUpWithOrganizationRouter);
-
-// Better-Auth Handler
-app.all("/api/auth/*splat", toNodeHandler(auth));
-
 // Root route - przekierowanie do frontendu
 app.get("/", (_req, res) => {
 	res.redirect(302, env.FRONTEND_URL);
@@ -140,18 +117,7 @@ app.get("/api/email/health", async (_req, res) => {
 
 // API Info
 app.get("/api", (_req, res) => {
-	res.json({
-		message: "BastionDesk API",
-		version: "1.0.3",
-		endpoints: {
-			auth: "/api/auth/*",
-			incidents: "/api/incidents",
-			analyst: "/api/analyst/*",
-			admin: "/api/admin/*",
-			health: "/health",
-			emailHealth: "/api/email/health",
-		},
-	});
+	res.json(apiInfo);
 });
 
 import apiRoutes from "./routes/index";
@@ -198,25 +164,23 @@ app.get("/api/core/health", core.http);
 for (const route of coreAdminRoutes) {
 	if (route.method === "query") {
 		if (!app.query) throw new Error("This runtime must support HTTP QUERY");
-		app.query(route.paths, requireCsrf, apiRateLimiter, core.http);
-	} else app.get(route.paths, requireCsrf, apiRateLimiter, core.http);
+		app.query(route.paths, apiRateLimiter, core.http);
+	} else app.get(route.paths, apiRateLimiter, core.http);
 }
-app.get(coreReadPaths, requireCsrf, apiRateLimiter, core.http);
+app.get(coreReadPaths, apiRateLimiter, core.http);
 
-for (const route of coreFileRoutes)
-	app.route(route.paths)[route.method](requireCsrf, apiRateLimiter, core.http);
+for (const route of coreFileRoutes) app.route(route.paths)[route.method](apiRateLimiter, core.http);
 for (const route of coreWriteRoutes)
-	app.route(route.paths)[route.method](requireCsrf, apiRateLimiter, core.http);
-app.post("/api/incidents", requireCsrf, apiRateLimiter, core.http);
+	app.route(route.paths)[route.method](apiRateLimiter, core.http);
+app.post("/api/incidents", apiRateLimiter, core.http);
 
 // Rate Limiting dla własnych endpointów (zgodnie z Better-Auth: 100 req/10s)
-app.use("/api/admin", requireCsrf, apiRateLimiter);
-app.use("/api/analyst", requireCsrf, apiRateLimiter);
+app.use("/api/admin", apiRateLimiter);
+app.use("/api/analyst", apiRateLimiter);
 const { requireAuth, requireRole } = await import("./middleware/auth.middleware");
 const { rejectUnsupportedQueryMethod } = await import("./routes/admin/query-schemas");
 app.all(
 	"/api/admin/incidents",
-	requireCsrf,
 	apiRateLimiter,
 	requireAuth,
 	requireRole(["admin"]),
@@ -228,23 +192,23 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start Server
-const server = app.listen(env.PORT, () => {
-	console.log(`
-	Server running on port ${env.PORT.toString().padEnd(32)}
-	Environment: ${env.NODE_ENV.padEnd(42)}
-	Auth URL: ${env.BETTER_AUTH_URL.padEnd(45)}
-	
-	Available endpoints:
-	/api/auth/* - Better-Auth endpoints
-	/api/incidents - Incidents API
-	/health - Health check
-  `);
+const server = mtlsServer("backend", app).listen(env.PORT, () => {
+	console.log(`Core listening with mTLS on ${env.PORT}`);
 });
+
+const healthServer = createServer((_req, res) => {
+	void checkDatabaseConnection()
+		.then((healthy) => {
+			res.writeHead(healthy ? 200 : 503).end();
+		})
+		.catch(() => res.writeHead(503).end());
+}).listen(3335, "127.0.0.1");
 
 // Graceful Shutdown
 async function gracefulShutdown(signal: string) {
 	console.log(`\n${signal} received, shutting down gracefully...`);
 
+	healthServer.close();
 	server.close(async () => {
 		console.log("HTTP server closed");
 

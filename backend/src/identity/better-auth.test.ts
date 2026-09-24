@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import { resolve } from "node:path";
+import { Elysia } from "elysia";
 import { betterAuth } from "better-auth";
 import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins";
@@ -41,20 +40,8 @@ test("Better Auth sessions exchange server-side JWTs without browser token expos
 			coreJwtPlugin(issuer),
 		],
 	});
-	// Optional compatibility run: use the same security assertions through Elysia.
-	let handle = (request: Request) => auth.handler(request);
-	if (process.env.ELYSIA_SPIKE_DIR) {
-		const external = createRequire(resolve(process.env.ELYSIA_SPIKE_DIR, "package.json"));
-		const version = external("elysia/package.json") as { version: string };
-		assert.equal(version.version, "2.0.0-beta.14");
-		const { Elysia } = external("elysia") as {
-			Elysia: new () => {
-				mount(handler: typeof handle): { handle: typeof handle };
-			};
-		};
-		const app = new Elysia().mount(auth.handler);
-		handle = (request) => app.handle(request);
-	}
+	const app = new Elysia().mount(auth.handler);
+	const handle = (request: Request) => app.handle(request);
 	const signup = await handle(
 		new Request(`${issuer}/sign-up/email`, {
 			method: "POST",

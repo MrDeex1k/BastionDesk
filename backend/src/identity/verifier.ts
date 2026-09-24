@@ -65,7 +65,7 @@ export function createCoreVerifier(options: {
 			let timeout: ReturnType<typeof setTimeout> | undefined;
 			try {
 				const live = await Promise.race([
-					options.readCurrent(claims, controller.signal),
+					options.readCurrent(claims, controller.signal, token),
 					new Promise<never>((_, reject) => {
 						timeout = setTimeout(() => {
 							controller.abort();
@@ -90,6 +90,7 @@ export function createCoreVerifier(options: {
 					role: current.role,
 					sessionId: current.sessionId,
 					tokenId: claims.jti,
+					sessionExpiresAt: current.sessionExpiresAt,
 				};
 			} catch (error) {
 				if (error instanceof DomainError) throw error;

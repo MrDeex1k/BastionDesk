@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { Effect } from "effect";
-import { fromNodeHeaders } from "better-auth/node";
+import { fromNodeHeaders } from "../identity/transport";
 import { incidentStatusSchema } from "../contracts";
 import { DomainError } from "../contracts/errors";
 import { currentIdentity, identityLayer, type IdentityReader } from "../core/identity";

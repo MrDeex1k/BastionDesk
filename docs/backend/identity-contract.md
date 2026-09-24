@@ -1,8 +1,8 @@
 # Kontrakt tożsamości — faza 2.4
 
-Wdrożono moduły `backend/src/identity/` i izolowane prototypy. Nie są jeszcze
-podłączone do publicznych tras działającej aplikacji. Decyzja:
-[ADR-0003](../adr/0003-identity-bridge.md).
+Kontrakt z fazy 2 jest podłączony produkcyjnie w fazie 5 przez Elysia gateway
+oraz mTLS. Konfigurację, upgrade, rollback i rotację opisuje
+[faza 5](phase-5-identity.md); decyzja: [ADR-0006](../adr/0006-auth-gateway.md).
 
 ## Przepływ
 
@@ -19,13 +19,10 @@ podłączone do publicznych tras działającej aplikacji. Decyzja:
 6. Moduł domenowy sprawdza RBAC i tenant zasobu. Dla ryzykownej operacji ponawia
    sprawdzenie polityki tuż przed efektem.
 
-`createBrowserIdentityBridge` zwraca nagłówki **wewnętrznego wywołania**, nie
-Response dla przeglądarki. Callback `validateCsrf` musi wykorzystywać istniejący
-walidator związany z sesją; test używa kontrolowanej fixture tego callbacku.
-GET/HEAD/OPTIONS/QUERY nie mogą mieć skutków ubocznych. Forwardowanie jest
-do stałego upstreamu, nie URL z żądania. Docelowy adapter przekazuje tylko
-allowlistę nagłówków treści i śledzenia. JWT, cookies i klucze są wyłączone
-z logów, trace i publicznych odpowiedzi.
+Gateway `auth/gateway.ts` implementuje kontrolę CSRF związaną z bieżącą sesją.
+GET/HEAD/OPTIONS/QUERY nie mogą mieć skutków ubocznych. Forwardowanie prowadzi
+do stałego upstreamu, z allowlistą nagłówków treści, idempotencji i śledzenia.
+JWT, cookies i klucze nie trafiają do logów, trace ani publicznych odpowiedzi.
 
 ## Profil JWT v1
 
@@ -33,7 +30,7 @@ z logów, trace i publicznych odpowiedzi.
 | --- | --- |
 | JOSE `alg` | Wyłącznie `EdDSA`, klucze Ed25519 |
 | JOSE `kid` | Wymagany; identyfikator klucza Better Auth |
-| `iss` | Stały publiczny HTTPS issuer instalacji: `https://<host>/api/auth`, bez końcowego slash |
+| `iss` | Stały wewnętrzny HTTPS issuer instalacji: `https://auth-service:3443/api/auth`, bez końcowego slash |
 | JWKS | Dokładnie `<issuer>/jwks`; URL nie pochodzi z tokenu |
 | `aud` | Jeden string `bastiondesk-core`; tablice i inne audience odrzucane |
 | `sub`, `sid`, `org_id` | ID użytkownika, ID rekordu sesji (nie sekret cookie), aktywna organizacja |
@@ -60,21 +57,19 @@ Sesja nie może być usunięta ani wygasła, użytkownik musi być aktywny i mie
 zweryfikowany email, członkostwo musi istnieć. Nieznana rola jest błędem,
 nie rolą domyślną. Bieżący snapshot nie jest cache'owany w Core.
 
-Docelowy transport `ReadCurrentIdentity`: wewnętrzne POST
-`/internal/identity/resolve`, dostępne wyłącznie dla certyfikatu Core przez mTLS,
-bez publikacji przez publiczny NGINX. Body jest profilem claims po weryfikacji
-podpisu w Core; odpowiedź ma `{identity: LiveIdentity | null}`, `Cache-Control:
-no-store`. mTLS identyfikuje usługę, JWT użytkownika nie zastępuje tej tożsamości.
-Endpoint i klient mTLS zostaną podłączone przy wydzieleniu usług w fazie 5.
-Faza 3 używa rzeczywistego portu świeżej tożsamości w jednym procesie
-([ADR-0004](../adr/0004-core-in-process.md)); nie ma jeszcze sieciowego hopu JWT/mTLS.
+Transport `ReadCurrentIdentity`: wewnętrzny GET `/internal/identity/resolve`,
+dostępny wyłącznie przez mTLS z przypiętym certyfikatem Core. Nagłówek Authorization
+zawiera JWT wcześniej zweryfikowany przez Core; auth weryfikuje go ponownie i
+zwraca bezpośrednio `LiveIdentity` albo HTTP 401/503. Publiczny router nie montuje
+tego endpointu. Kanoniczny JWKS to dokładnie `<issuer>/jwks`, również przez mTLS.
 
 `LiveIdentity`: subject, sessionId, organizationId, role i sessionExpiresAt.
 Przy zmianie roli następny odczyt widzi nową rolę. Zmiana organizacji, usunięcie
 członkostwa, wyłączenie konta lub wylogowanie powoduje odmowę dla starego JWT.
 To gwarancja na moment odczytu, nie przerwanie już rozpoczętego żądania.
 Brak dostępu do tabel auth po stronie Core; implementacja portu pozostaje
-w serwisie auth lub jego przejściowym module w Expressie.
+wyłącznie w serwisie auth. Wspólna baza nadal używa dotychczasowej roli PostgreSQL;
+Core nie odczytuje sesji ani kluczy w kodzie aplikacji.
 
 Timeout odczytu wynosi 2 s i wysyła AbortSignal. Adapter sieciowy musi go
 honorować; odrzucenie Promise nie zatrzyma samo nieanulowalnego zapytania DB.
@@ -84,10 +79,9 @@ cache daje UNAUTHORIZED. Brak fallback do niezweryfikowanej tożsamości.
 
 ## Klucze i rotacja
 
-Wyłącznie auth posiada prywatne klucze; domyślne szyfrowanie pluginu pozostaje
-włączone. Docelowa tabela `jwks` musi odpowiadać schematowi zainstalowanego
-pluginu (id, publicKey, privateKey, createdAt, expiresAt, alg, crv). Jej migrację
-trzeba dołączyć przed włączeniem pluginu; prototyp korzysta z adaptera pamięciowego.
+Wyłącznie proces auth posiada odszyfrowane klucze prywatne; domyślne szyfrowanie
+pluginu pozostaje włączone. Tabelę `jwks` (id, publicKey, privateKey, createdAt,
+expiresAt, alg, crv) dodaje migracja `0003_auth_jwks.sql`.
 Backup musi obejmować klucze oraz używany do ich szyfrowania sekret Better Auth.
 Nie obracać tego sekretu przez przypadkowe nadpisanie — wymaga migracji szyfrowania.
 
@@ -115,34 +109,8 @@ Better Auth 1.7.5, memory adaptera, sesji/cookies, organizacji, pluginu JWT
 i podpisów: emisja, szyfrowanie privateKey, rotacja, świeża rola, wyłączenie
 konta, usunięcie członkostwa, zmiana organizacji i logout.
 
-`scripts/spikes/phase2-elysia.mjs` sprawdza rzeczywiste `.mount(auth.handler)`
-na **Elysia 2.0.0-beta.14**, Better Auth 1.7.5, jose 6.2.12 i Bun 1.4.2.
-Smoke sprawdza cookies Secure/HttpOnly, brak `/token`, brak JWT w nagłówku
-sesji i odrzucenie obcego originu. Następnie uruchamia pełny scenariusz
-`better-auth.test.ts` z żądaniami przeglądarkowymi i JWKS obsługiwanymi przez
-Elysia: minimalne claims, podpisy, rotacja, zmiana roli/organizacji, wyłączenie
-konta, usunięcie członkostwa oraz logout unieważniający również wcześniej
-wydany JWT. Podpisywanie pozostaje serwerowym API Better Auth.
-
-Elysia 2 jest docelowa; beta została wybrana świadomie przed odbiorem 2.5.
-Manifest i lockfile w `scripts/spikes/elysia2/` przypinają wydanie oraz jego
-zależności, w tym zgodny peer `exact-mirror@1.2.6`. Nie są zależnościami
-produkcyjnego backendu. Do odtworzenia z katalogu głównego repozytorium:
-
-```sh
-spike_dir=$(mktemp -d /tmp/bastiondesk-elysia2.XXXXXX)
-cp scripts/spikes/elysia2/package.json scripts/spikes/elysia2/bun.lock "$spike_dir/"
-./node_modules/.bin/sfw bun install --cwd "$spike_dir" --frozen-lockfile --minimum-release-age 86400
-ELYSIA_SPIKE_DIR="$spike_dir" bun scripts/spikes/phase2-elysia.mjs
-```
-
-Skrypt odrzuca inną wersję Elysia, żeby przypadkowy upgrade nie zmienił zakresu
-potwierdzonej zgodności. Zwykłe `bun run test` zachowuje niezależny test Better
-Auth bez Elysia; powyższy probe jest dodatkową bramką zgodności frameworka.
-
-Przed fazą 5 ponownie oceniamy aktualne wydanie 2.x. Testy używają
-Request/Response w procesie i pamięciowego adaptera; nie zastępują testu
-przeglądarki, TLS/mTLS, reverse proxy, trwałego key store ani restartu.
-Pełne E2E fazy 3 weryfikuje Core z adapterem świeżej sesji w procesie.
-Sieciowy JWT/JWKS pozostaje prototypem do wdrożenia w fazie 5. Nie dodano
-social loginu ani OIDC.
+Test Better Auth jest uruchamiany zawsze przez Elysia `2.0.0-beta.16`.
+Probe w `scripts/spikes/elysia2/` pozostaje historycznym dowodem decyzji z fazy 2.
+Testy sieciowe i przeglądarkowe fazy 5 sprawdzają trwały magazyn PostgreSQL,
+restart, mTLS, reverse proxy, sesje, role oraz PassKeys; zakres i polecenia znajdują
+się w [runbooku fazy 5](phase-5-identity.md). Nie dodano social loginu ani OIDC.

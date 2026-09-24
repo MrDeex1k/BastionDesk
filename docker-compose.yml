@@ -113,6 +113,8 @@ services:
     environment:
       - NODE_EXTRA_CA_CERTS=/certs/ca/ca.crt
       - SSL_CERT_FILE=/certs/ca/ca.crt
+      - BETTER_AUTH_SECRET=
+      - CSRF_SECRET=
     depends_on:
       llm_service:
         condition: service_healthy
@@ -125,8 +127,38 @@ services:
     volumes:
       - ./infra/tls/dev/ca:/certs/ca:ro
       - ./infra/tls/dev/backend:/certs/backend:ro
+      - ./infra/tls/dev/identity/backend:/certs/identity/backend:ro
+      - ./infra/tls/dev/identity/trust/auth-service.crt:/certs/identity/trust/auth-service.crt:ro
     networks:
       - bastiondesk-net-internal
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["bun", "src/auth/main.ts"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_EXTRA_CA_CERTS=/certs/ca/ca.crt
+      - SSL_CERT_FILE=/certs/ca/ca.crt
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    volumes:
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/backend:/certs/backend:ro
+      - ./infra/tls/dev/identity/auth-service:/certs/identity/auth-service:ro
+      - ./infra/tls/dev/identity/trust/backend.crt:/certs/identity/trust/backend.crt:ro
+    networks:
+      - bastiondesk-net-internal
+
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3340/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   rabbitmq:
     image: rabbitmq:4.2.5-management-alpine
@@ -161,6 +193,8 @@ services:
     env_file:
       - .env
     environment:
+      BETTER_AUTH_SECRET: ""
+      CSRF_SECRET: ""
       RABBITMQ_URL: amqps://${RABBITMQ_USER:-bastiondesk}:${RABBITMQ_PASSWORD}@rabbitmq:5671
       RABBITMQ_TLS_CA: /certs/ca/ca.crt
     volumes:
@@ -200,6 +234,8 @@ services:
       - "4567:8080"
     depends_on:
       backend:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
       frontend:
         condition: service_healthy

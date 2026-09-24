@@ -8,19 +8,22 @@
  * - Organization (multi-tenancy z rolami)
  */
 
+import { authSecret } from "./secrets";
 import fs from "node:fs";
+import { coreJwtPlugin } from "../identity/auth-bridge";
+import { authIssuer } from "../identity/network-config";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { haveIBeenPwned, organization } from "better-auth/plugins";
 import { Pool } from "pg";
-import { sendResetPasswordEmail, sendVerificationEmail } from "./email";
-import { env } from "./env";
-import { organizationHelpersPlugin } from "./organization-helpers-plugin";
-import { passkeyCheckPlugin } from "./passkey-check-plugin";
-import { ac, admin, analityk, pracownik } from "./permissions";
+import { sendResetPasswordEmail, sendVerificationEmail } from "../lib/email";
+import { env } from "../lib/env";
+import { organizationHelpersPlugin } from "../lib/organization-helpers-plugin";
+import { passkeyCheckPlugin } from "../lib/passkey-check-plugin";
+import { ac, admin, analityk, pracownik } from "../lib/permissions";
 
 // Database Pool Configuration
-const pool = new Pool({
+export const authPool = new Pool({
 	connectionString: env.DATABASE_URL,
 	ssl: {
 		rejectUnauthorized: true,
@@ -31,6 +34,7 @@ const pool = new Pool({
 	max: 20,
 	idleTimeoutMillis: 30000,
 	connectionTimeoutMillis: 2000,
+	query_timeout: 2000,
 });
 
 // Better-Auth Instance
@@ -45,9 +49,10 @@ const passwordBreachPlugins = env.AUTH_PASSWORD_BREACH_CHECK_ENABLED
 
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
-	secret: env.BETTER_AUTH_SECRET,
+	secret: authSecret,
 	trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGIN_LIST,
-	database: pool,
+	database: authPool,
+	disabledPaths: ["/token"],
 
 	// Email and Password Authentication
 	emailAndPassword: {
@@ -84,6 +89,7 @@ export const auth = betterAuth({
 
 	// Plugins
 	plugins: [
+		coreJwtPlugin(authIssuer),
 		// PassKey (WebAuthn/U2F) - klucze sprzętowe
 		passkey({
 			rpID: env.WEBAUTHN_RP_ID,

@@ -31,7 +31,7 @@ Konfiguracja znajduje się w:
 Aktualne trasy:
 
 - `/` -> `frontend:8080`
-- `/api/` -> `backend:3333`
+- `/api/` -> `auth-service:3340`
 
 Frontend jest osobnym kontenerem NGINX, który serwuje statyczny build Vite i obsługuje SPA fallback przez `index.html`.
 
@@ -110,5 +110,5 @@ Sprawdź:
 Sprawdź:
 
 - czy `backend` ma status `healthy`,
-- czy w [`nginx/nginx.conf`](../../nginx/nginx.conf) trasa `/api/` wskazuje na `backend:3333`,
+- czy w [`nginx/nginx.conf`](../../nginx/nginx.conf) trasa `/api/` wskazuje na `auth-service:3340`,
 - logi kontenera `nginx`.

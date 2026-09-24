@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { Effect } from "effect";
-import { fromNodeHeaders } from "better-auth/node";
+import { fromNodeHeaders } from "../identity/transport";
 import { currentIdentity, identityLayer, type IdentityReader } from "../core/identity";
 import { readAdmin, adminReadsLayer, type AdminProjection } from "../core/incidents/admin-reads";
 import { runCore } from "../core/runtime";

@@ -43,6 +43,7 @@ Object.assign(env, {
   RABBITMQ_PASSWORD: crypto.randomUUID(),
   MINIO_ROOT_PASSWORD: crypto.randomUUID(),
   AUTH_PASSWORD_BREACH_CHECK_ENABLED: "false",
+  AUTH_GATEWAY_RATE_LIMIT: "10000",
   SMTP_HOST: "smtp-test",
   SMTP_PORT: "1025",
   SMTP_SECURE: "false",
@@ -172,6 +173,8 @@ try {
   );
   config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`, `${root}/scripts/fixtures/phase4-probe.ts:/app/backend/phase4-probe.ts:ro`);
   config.services.backend.depends_on["smtp-test"] = { condition: "service_healthy" };
+  config.services["auth-service"].volumes.push(`${root}/scripts/fixtures/phase5-probe.ts:/app/backend/phase5-probe.ts:ro`);
+  config.services["auth-service"].depends_on["smtp-test"] = { condition: "service_healthy" };
   config.services.nginx.ports = [`127.0.0.1:${port}:8080`];
   await Bun.write(configFile, JSON.stringify(config, null, 2));
   console.log(`[phase1] Isolated project ${project}, application ${baseUrl}`);
@@ -192,7 +195,7 @@ try {
       `${tlsDirectory}:/phase1-certs`,
       "backend",
       "-ec",
-      "chown 1000:1000 /phase1-certs/backend/client.key /phase1-certs/llm_service/server.key; chown 999:999 /phase1-certs/database/server.key; chown 70:70 /phase1-certs/pgbouncer/server.key /phase1-certs/pgbouncer/client.key; chown 0:0 /phase1-certs/storage-*/private.key",
+      "chown 1000:1000 /phase1-certs/backend/client.key /phase1-certs/identity/backend/client.key /phase1-certs/identity/auth-service/client.key /phase1-certs/llm_service/server.key; chown 999:999 /phase1-certs/database/server.key; chown 70:70 /phase1-certs/pgbouncer/server.key /phase1-certs/pgbouncer/client.key; chown 0:0 /phase1-certs/storage-*/private.key",
     ]);
   }
   await compose(["up", "-d", "--wait", "--wait-timeout", "240", "database"]);
@@ -206,6 +209,10 @@ try {
   ]);
   await compose(["run", "--rm", "--no-deps", "--user", "0:0", "backend", "bun", "src/migrations/cli.ts", "apply"]);
   await compose(["up", "-d", "--wait", "--wait-timeout", "240"]);
+  await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "seed"]);
+  await compose(["restart", "auth-service"]);
+  await compose(["up", "-d", "--wait", "--wait-timeout", "30", "auth-service"]);
+  await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "resume"]);
   const testEnvironment = {
     E2E_BASE_URL: baseUrl,
     E2E_MAILPIT_URL: `http://127.0.0.1:${mailPort}`,

@@ -1,25 +1,41 @@
-import { auth } from "../lib/auth";
-import { queryOne } from "../lib/database";
 import type { IdentityReader } from "../core/identity";
+import { DomainError } from "../contracts/errors";
 import { liveIdentitySchema } from "../identity/contract";
+import { authIssuer } from "../identity/network-config";
+import { internalFetch } from "../identity/transport";
+import { createCoreVerifier } from "../identity/verifier";
 
-/** Auth-owned in-process adapter. Replace this port with mTLS in phase 5. */
+let reader: IdentityReader | undefined;
+function createReader(): IdentityReader {
+	const origin = new URL(authIssuer).origin;
+	const transport = internalFetch("backend", origin);
+	const verifier = createCoreVerifier({
+		issuer: authIssuer,
+		transport,
+		readCurrent: async (_claims, signal, token) => {
+			const response = await transport(`${origin}/internal/identity/resolve`, {
+				signal,
+				headers: { authorization: `Bearer ${token}` },
+			});
+			if (response.status === 401) return null;
+			if (!response.ok) throw new DomainError("SERVICE_UNAVAILABLE");
+			return liveIdentitySchema.parse(await response.json());
+		},
+	});
+	return {
+		async read(headers) {
+			const authorization = headers.get("authorization");
+			if (!authorization?.startsWith("Bearer ")) return null;
+			try {
+				const { tokenId: _, ...identity } = await verifier.verify(authorization.slice(7));
+				return liveIdentitySchema.parse(identity);
+			} catch (error) {
+				if (error instanceof DomainError && error.code === "UNAUTHORIZED") return null;
+				throw error;
+			}
+		},
+	};
+}
 export const coreIdentity: IdentityReader = {
-	async read(headers) {
-		const current = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
-		if (!current) return null;
-		// One fresh snapshot, independent of Better Auth's browser cookie cache.
-		const row = await queryOne(
-			`
-			SELECT s."userId" AS subject, s.id AS "sessionId",
-			       s."activeOrganizationId" AS "organizationId", m.role,
-			       floor(extract(epoch FROM s."expiresAt"))::integer AS "sessionExpiresAt"
-			FROM session s JOIN "user" u ON u.id = s."userId"
-			JOIN member m ON m."userId" = s."userId" AND m."organizationId" = s."activeOrganizationId"
-			WHERE s.id = $1 AND s."expiresAt" > now() AND u."isActive" = true AND u."emailVerified" = true
-		`,
-			[current.session.id],
-		);
-		return row ? liveIdentitySchema.parse(row) : null;
-	},
+	read: (headers) => (reader ??= createReader()).read(headers),
 };

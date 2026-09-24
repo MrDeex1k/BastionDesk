@@ -55,6 +55,7 @@ test("INC-E2E-01 employee report → analyst notes and documents → employee do
     .getByRole("textbox", { name: "Notatki analityka" })
     .fill("Potwierdzono próbę phishingu.");
   await page.getByRole("button", { name: /Zapisz notat/ }).click();
+  await expect(page.getByText("Notatka została zapisana", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Zapisz notat/ })).toBeDisabled();
   await page.reload();
   await page.getByRole("button").filter({ hasText: description }).click();
