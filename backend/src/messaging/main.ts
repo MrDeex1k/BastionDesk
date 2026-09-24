@@ -1,3 +1,4 @@
+import { safeWorkerError } from "./diagnostics";
 import { startTelemetry, queueMetrics } from "./telemetry";
 import { Effect } from "effect";
 import { openBroker, publishConfirmed } from "./broker";
@@ -52,7 +53,8 @@ try {
 				);
 				active.add(task);
 				try {
-					await task;
+					const outcome = await task;
+					console.info(`[MESSAGING] Delivery handled ${jobId} ${outcome}`);
 				} finally {
 					active.delete(task);
 				}
@@ -73,9 +75,12 @@ try {
 				lastRelay = Date.now();
 				await Bun.sleep(1000);
 			}
-		} catch {
+		} catch (error) {
 			lastRelay = 0;
-			console.error("[MESSAGING] Worker reconnecting; jobs remain in PostgreSQL");
+			console.error(
+				"[MESSAGING] Worker reconnecting; jobs remain in PostgreSQL",
+				safeWorkerError(error),
+			);
 		} finally {
 			await broker?.connection.close().catch(() => {});
 			broker = undefined;

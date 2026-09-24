@@ -18,7 +18,7 @@ try {
   assert.equal(job.state, "pending"); assert.equal(incident.llmCategory, null);
   await Bun.write("/tmp/phase4-probe.json", JSON.stringify({ jobId: job.id, incidentId: incident.id }));
   console.log("PASS incident and outbox accepted while broker/worker stopped");
- } else {
+ } else if (process.argv[2] === "duplicates") {
   const saved = await Bun.file("/tmp/phase4-probe.json").json();
   let completed = false;
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -34,8 +34,9 @@ try {
   try {
    await publishConfirmed(broker.publisher, saved.jobId);
    await publishConfirmed(broker.publisher, saved.jobId);
-   await Bun.sleep(2000);
   } finally { await broker.connection.close(); }
+ } else {
+  const saved = await Bun.file("/tmp/phase4-probe.json").json();
   assert.equal((await pool.query('SELECT "llmCategory" FROM incidents WHERE id=$1', [saved.incidentId])).rows[0].llmCategory, "Żółty");
   assert.equal((await pool.query("SELECT * FROM core_audit WHERE command_id=$1", [saved.jobId])).rowCount, 1);
   console.log("PASS stopped-broker recovery and duplicate delivery produce one audited classification");

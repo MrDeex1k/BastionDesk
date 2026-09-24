@@ -175,7 +175,7 @@ export function jobStore(pool: Pool) {
 			);
 		},
 
-		async replay(id: string, organizationId: string, operator = "operator") {
+		async replay(id: string, organizationId: string) {
 			return transaction(async (client) => {
 				const result = await client.query<Job>(
 					`UPDATE core_jobs SET state='pending', attempts=0, last_error=NULL,
@@ -189,7 +189,7 @@ export function jobStore(pool: Pool) {
 				const entry = createAuditEntry(
 					{
 						organizationId,
-						actor: { kind: "service", id: operator },
+						actor: { kind: "service", id: "job-operator" },
 						correlationId: job.correlation_id,
 						causationId: job.id,
 					},
