@@ -721,7 +721,8 @@ jest widoczny wraz z surowym oraz znormalizowanym źródłem.
 
 ### Dokumentacja
 
-- karta integracji Wazuh;
+- [karta discovery Wazuh](integrations/wazuh-discovery.md) — analiza dokumentacji,
+  wymagania VM i plan spike'u; pełne discovery czeka na weryfikację połączenia;
 - schema mapping i retencja;
 - runbook utraty połączenia i replay.
 
