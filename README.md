@@ -17,7 +17,8 @@ BastionDesk Community Edition jest udostępniany jako open source na licencji GN
 
 Dla organizacji, które potrzebują użycia komercyjnego niezgodnego z obowiązkami AGPLv3, prywatnych forków, osadzania w produkcie własnym lub dystrybucji/SaaS bez obowiązków AGPLv3, może być dostępna osobna licencja komercyjna po indywidualnym uzgodnieniu.
 
-Zasady przyjmowania wkładu zewnętrznego opisuje `CONTRIBUTING.md`.
+Zasady współpracy opisuje [CONTRIBUTING.md](CONTRIBUTING.md), w tym
+[nazwy branchy i squash & merge](CONTRIBUTING.md#branche-i-squash--merge).
 
 ## TechStack
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white) ![Oxc](https://img.shields.io/badge/oxc-%233451b2.svg?style=for-the-badge&logo=oxc&logoColor=white&logoSize=auto) ![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white) ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB) ![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white) ![TanStack Router](https://img.shields.io/badge/TanStack_Router-FF4154?style=for-the-badge&logo=react-router&logoColor=white) ![React Query](https://img.shields.io/badge/-React%20Query-FF4154?style=for-the-badge&logo=react%20query&logoColor=white) ![Express.js](https://img.shields.io/badge/express.js-%23404d59.svg?style=for-the-badge&logo=express&logoColor=%2361DAFB) ![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)
