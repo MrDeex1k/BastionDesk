@@ -76,7 +76,7 @@ export interface IncidentWrites {
 		request?: OperationRequest,
 	): Promise<Incident>;
 }
-export class Writes extends Context.Tag("incidents/Writes")<Writes, IncidentWrites>() {}
+export class Writes extends Context.Service<Writes, IncidentWrites>()("incidents/Writes") {}
 export const writesLayer = (port: IncidentWrites) => Layer.succeed(Writes, port);
 const transitions: Record<IncidentStatus, readonly IncidentStatus[]> = {
 	Zgłoszony: ["Raport w trakcie", "Odrzucone"],
