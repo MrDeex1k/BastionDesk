@@ -17,7 +17,11 @@
       "outputs": []
     },
     "lint": {
-      "outputs": []
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/tools/oxlint/anti-slop/**"
+      ]
     },
     "test": {
       "outputs": []

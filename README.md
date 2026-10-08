@@ -84,7 +84,7 @@ bun install
 Najważniejsze polecenia:
 
 ```bash
-bun run check      # lint, typecheck i sprawdzenie formatowania
+bun run check      # testy reguł lint, lint, typecheck i sprawdzenie formatowania
 bun run build      # build wszystkich pakietów, które go definiują
 bun run test       # testy backendu i komponentów React
 bun run test:components # formularze, uprawnienia i stan UI
@@ -98,6 +98,10 @@ bun run test:migrations # izolowany PostgreSQL: baseline, historia, rollback i r
 bun run dev        # frontend i backend równolegle
 bun run changelog:generate # generowanie ostatniej sekcji CHANGELOG z Conventional Commits
 ```
+
+Wybrane reguły anti-slop działają jako ostrzeżenia w obu workspace’ach.
+[Zakres, testy i aktualizacje](docs/development/anti-slop.md). Testy reguł wymagają
+Node.js 22.18+ lub 24+ obok Bun.
 
 Husky instaluje hooki Git po `bun install`. Hook `pre-commit` uruchamia `bun run check`, a hook
 `commit-msg` wymusza format [Conventional Commits](https://www.conventionalcommits.org/), np.
@@ -119,7 +123,9 @@ osobnego połączenia migratora. Zakres baseline i procedurę opisuje
 
 Instalację przeglądarek, macierz scenariuszy i CI opisuje
 [kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).
-Aktualne wersje zależności określają manifesty i pliki lockfile. Uwagi do
+Aktualne wersje zależności określają manifesty i pliki lockfile.
+[Odświeżenie zależności z 8 października 2026](docs/development/2026-10-08-dependency-refresh.md)
+opisuje migrację Effect 4, obrazy i wyniki weryfikacji. Uwagi do
 schematu Better Auth opisuje [dokumentacja bazy](docs/database/database.md).
 
 ## Deployment

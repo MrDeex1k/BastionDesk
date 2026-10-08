@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/dmmulroy/anti-slop",
+  "revision": "c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b",
+  "retrievedAt": "2026-10-08",
+  "sourceDirectory": "src",
+  "localChanges": [
+    "index.ts registers only the three selected generic rules",
+    "package.json marks vendored TypeScript as ES modules for Node RuleTester"
+  ],
+  "upstreamFileSha256": {
+    "rules/no-chained-type-assertions.test.ts": "53d18a7bde98b2d9c093cce3f4fc45b10b385cf5723202ed6a32ba877cc928bf",
+    "rules/no-chained-type-assertions.ts": "72f8e981520f94adac0ffbdab8f8e84e5f2a4595f14e4a6471be917a85a20a15",
+    "rules/no-reduce-accumulator-copy.test.ts": "5570fe8512bb71dbd5b446454297ec9e234fb1cb06ded87590593a37c4cccccf",
+    "rules/no-reduce-accumulator-copy.ts": "dce4b08ee7ac4bbedfe743f6fa4a3d423cde50b37691130b899cc4573c05d2ae",
+    "rules/no-widen-then-assert.test.ts": "02de3e9fffc63e32a742420e9e614a6808f68fdf7f76828474107b4d90033bc5",
+    "rules/no-widen-then-assert.ts": "63f2c07cc42b8ad60a7e868efbd7b29e462b9ba960fbd07bbc8f590ef9e3f879",
+    "shared/array-method.ts": "e360557253c56ab7c256623f3338415743e5027e9d999f801fb79d98240d217b"
+  }
+}
