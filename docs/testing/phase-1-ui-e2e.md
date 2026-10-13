@@ -22,7 +22,7 @@ bun run test:e2e:all      # ten sam kontrakt w Chromium, Firefox i WebKit
 
 Linux wymaga bibliotek systemowych przeglądarek; instalacja w CI używa
 `playwright install --with-deps chromium firefox webkit`. Docker Compose,
-OpenSSL, Bun 1.4.2 i Node.js dla runnera Playwright muszą być dostępne.
+OpenSSL, Bun 1.4.3 i Node.js dla runnera Playwright muszą być dostępne.
 Nie są potrzebne produkcyjne sekrety, token Hugging Face ani zewnętrzny SMTP.
 
 Do porównania ze ścieżką migracyjną uruchom osobną, jednorazową instalację:

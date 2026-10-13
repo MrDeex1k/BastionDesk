@@ -124,8 +124,9 @@ osobnego połączenia migratora. Zakres baseline i procedurę opisuje
 Instalację przeglądarek, macierz scenariuszy i CI opisuje
 [kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).
 Aktualne wersje zależności określają manifesty i pliki lockfile.
-[Odświeżenie zależności z 8 października 2026](docs/development/2026-10-08-dependency-refresh.md)
-opisuje migrację Effect 4, obrazy i wyniki weryfikacji. Uwagi do
+[Odświeżenie zależności z 13 października 2026](docs/development/2026-10-13-dependency-refresh.md)
+opisuje aktualne wersje i wyniki weryfikacji. Poprzednią migrację Effect 4
+opisuje [aktualizacja z 8 października](docs/development/2026-10-08-dependency-refresh.md). Uwagi do
 schematu Better Auth opisuje [dokumentacja bazy](docs/database/database.md).
 
 ## Deployment
