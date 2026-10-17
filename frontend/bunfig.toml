@@ -1,5 +1,5 @@
 [install]
-minimumReleaseAge = 86400
+minimumReleaseAge = 21600
 
 [test]
 root = "./tests"

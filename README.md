@@ -66,7 +66,7 @@ bun run deps:update
 Skrypty uruchamiają odpowiednio `sfw bun install` i `sfw bun update` z katalogu głównego.
 Przy pracy tylko nad jednym pakietem użyj rootowego lockfile’a, np. `bun install --cwd frontend`
 albo `bun install --cwd backend`. Konfiguracja Bun wymaga, aby wydanie pakietu miało co najmniej
-24 godziny (`86400` sekund).
+6 godzin (`21600` sekund).
 Bezpośrednie użycie `bun install` lub `bun update` zachowuje karencję z `bunfig.toml`, ale omija
 ochronę SFW.
 
@@ -124,7 +124,7 @@ osobnego połączenia migratora. Zakres baseline i procedurę opisuje
 Instalację przeglądarek, macierz scenariuszy i CI opisuje
 [kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).
 Aktualne wersje zależności określają manifesty i pliki lockfile.
-[Odświeżenie zależności z 13 października 2026](docs/development/2026-10-13-dependency-refresh.md)
+[Odświeżenie zależności z 17 października 2026](docs/development/2026-10-17-dependency-refresh.md)
 opisuje aktualne wersje i wyniki weryfikacji. Poprzednią migrację Effect 4
 opisuje [aktualizacja z 8 października](docs/development/2026-10-08-dependency-refresh.md). Uwagi do
 schematu Better Auth opisuje [dokumentacja bazy](docs/database/database.md).

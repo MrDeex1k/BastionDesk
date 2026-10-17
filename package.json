@@ -21,8 +21,8 @@
     "check": "bun run test:lint-rules && turbo run lint typecheck format",
     "changelog:generate": "conventional-changelog -n changelog.config.mjs -i CHANGELOG.md -s -r 1",
     "commitlint": "commitlint",
-    "deps:install": "sfw bun install --minimum-release-age 86400",
-    "deps:update": "sfw bun update --recursive --latest --minimum-release-age 86400",
+    "deps:install": "sfw bun install --minimum-release-age 21600",
+    "deps:update": "sfw bun update --recursive --latest --minimum-release-age 21600",
     "dev": "turbo run dev --parallel",
     "format": "turbo run format",
     "lint": "turbo run lint",
@@ -49,12 +49,12 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
-    "@oxlint/plugins": "1.87.0",
+    "@oxlint/plugins": "1.88.0",
     "conventional-changelog-cli": "5.0.0",
     "conventional-changelog-conventionalcommits": "10.4.1",
     "husky": "9.1.7",
     "sfw": "2.0.6",
-    "turbo": "2.11.7",
-    "oxlint": "1.87.0"
+    "turbo": "2.11.9",
+    "oxlint": "1.88.0"
   }
 }
