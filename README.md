@@ -66,9 +66,12 @@ bun run deps:update
 Skrypty uruchamiają odpowiednio `sfw bun install` i `sfw bun update` z katalogu głównego.
 Przy pracy tylko nad jednym pakietem użyj rootowego lockfile’a, np. `bun install --cwd frontend`
 albo `bun install --cwd backend`. Konfiguracja Bun wymaga, aby wydanie pakietu miało co najmniej
-6 godzin (`21600` sekund).
+3 godziny (`10800` sekund).
 Bezpośrednie użycie `bun install` lub `bun update` zachowuje karencję z `bunfig.toml`, ale omija
 ochronę SFW.
+
+Zależności Pythona w `llm_service` mają tę samą karencję: `exclude-newer = "3 hours"`
+w `pyproject.toml` dla `uv`. Wersje obrazów Docker aktualizujemy bez karencji.
 
 Instalacje wykonywane podczas budowania obrazów Docker nie korzystają obecnie z SFW.
 

@@ -59,7 +59,7 @@ docker compose exec llm_service \
 
 Projekt używa `uv`. Zależności bezpośrednie są przypięte do dokładnych wersji w
 `pyproject.toml`, a `uv.lock` utrwala pełne rozwiązanie. Resolver pomija wydania
-młodsze niż 6 godzin przez `exclude-newer = "6 hours"`. Torch pochodzi z
+młodsze niż 3 godziny przez `exclude-newer = "3 hours"`. Torch pochodzi z
 oficjalnego indeksu PyTorch CPU, ponieważ obecny serwis Compose nie deklaruje
 dostępu do GPU; dzięki temu obraz nie zawiera niewykorzystywanych bibliotek
 CUDA.

@@ -3,7 +3,7 @@
   "version": "1.0.3",
   "private": true,
   "license": "AGPL-3.0-only",
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "workspaces": [
     "frontend",
     "backend"
@@ -21,8 +21,8 @@
     "check": "bun run test:lint-rules && turbo run lint typecheck format",
     "changelog:generate": "conventional-changelog -n changelog.config.mjs -i CHANGELOG.md -s -r 1",
     "commitlint": "commitlint",
-    "deps:install": "sfw bun install --minimum-release-age 21600",
-    "deps:update": "sfw bun update --recursive --latest --minimum-release-age 21600",
+    "deps:install": "sfw bun install --minimum-release-age 10800",
+    "deps:update": "sfw bun update --recursive --latest --minimum-release-age 10800",
     "dev": "turbo run dev --parallel",
     "format": "turbo run format",
     "lint": "turbo run lint",
@@ -47,14 +47,14 @@
     "test:lint-rules": "node tools/oxlint/anti-slop/rules/no-chained-type-assertions.test.ts && node tools/oxlint/anti-slop/rules/no-widen-then-assert.test.ts && node tools/oxlint/anti-slop/rules/no-reduce-accumulator-copy.test.ts"
   },
   "devDependencies": {
-    "@commitlint/cli": "21.2.3",
-    "@commitlint/config-conventional": "21.2.3",
-    "@oxlint/plugins": "1.88.0",
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "@oxlint/plugins": "1.89.0",
     "conventional-changelog-cli": "5.0.0",
     "conventional-changelog-conventionalcommits": "10.4.1",
     "husky": "9.1.7",
     "sfw": "2.0.6",
-    "turbo": "2.11.9",
-    "oxlint": "1.88.0"
+    "turbo": "2.11.10",
+    "oxlint": "1.89.0"
   }
 }

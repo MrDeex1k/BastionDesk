@@ -5,17 +5,17 @@ description = "Serwer LLM, do analizy incydentów"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "fastapi==0.143.3",
-    "grpcio==1.84.0",
-    "grpcio-tools==1.84.0",
+    "fastapi==0.161.0",
+    "grpcio==1.84.1",
+    "grpcio-tools==1.84.1",
     "huggingface-hub==2.2.0",
     "torch==2.14.1",
-    "transformers==5.20.1",
+    "transformers==5.20.2",
     "uvicorn==0.54.0",
 ]
 
 [tool.uv]
-exclude-newer = "6 hours"
+exclude-newer = "3 hours"
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
