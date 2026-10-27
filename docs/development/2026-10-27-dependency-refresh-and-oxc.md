@@ -94,6 +94,10 @@ Nie dodano `tsrs` do manifestów i nie zmieniono komend typecheck/build.
 
 ## Ocena oxlint-flat-config
 
+Poniższa ocena poprzedza decyzję użytkownika o wdrożeniu. W kolejnym, osobnym
+commicie przeprowadzono migrację do konfiguracji TypeScript ze wspólną bazą
+i `oxlint-flat-config`; aktualny układ opisuje [konfiguracja lintera](anti-slop.md#konfiguracja-lintera).
+
 Stan NPM: `0.4.0`, repozytorium `liangmiQwQ/oxlint-flat-config`. To dodatkowa
 biblioteka przekształcająca uporządkowane tablice konfiguracji w obiekt Oxlint.
 Ułatwia składanie presetów, warunki i nadpisania; sama nie dodaje silnika

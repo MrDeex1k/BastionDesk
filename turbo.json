@@ -20,7 +20,7 @@
       "outputs": [],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/tools/oxlint/anti-slop/**"
+        "$TURBO_ROOT$/tools/oxlint/**"
       ]
     },
     "test": {

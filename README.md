@@ -102,6 +102,8 @@ bun run dev        # frontend i backend równolegle
 bun run changelog:generate # generowanie ostatniej sekcji CHANGELOG z Conventional Commits
 ```
 
+Konfiguracje `backend/oxlint.config.ts` i `frontend/oxlint.config.ts` współdzielą
+bazę `tools/oxlint/base.mts` i korzystają z `oxlint-flat-config`.
 Wybrane reguły anti-slop działają jako ostrzeżenia w obu workspace’ach.
 [Zakres, testy i aktualizacje](docs/development/anti-slop.md). Testy reguł wymagają
 Node.js 22.18+ lub 24+ obok Bun.
