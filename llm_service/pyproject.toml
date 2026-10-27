@@ -5,12 +5,12 @@ description = "Serwer LLM, do analizy incydentów"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "fastapi==0.161.0",
-    "grpcio==1.84.1",
-    "grpcio-tools==1.84.1",
-    "huggingface-hub==2.2.0",
+    "fastapi==0.162.0",
+    "grpcio==1.85.0",
+    "grpcio-tools==1.85.0",
+    "huggingface-hub==2.3.0",
     "torch==2.14.1",
-    "transformers==5.20.2",
+    "transformers==5.21.0",
     "uvicorn==0.54.0",
 ]
 

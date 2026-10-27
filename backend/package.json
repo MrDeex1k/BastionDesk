@@ -22,18 +22,18 @@
 		"start:auth": "bun run src/auth/main.ts"
 	},
 	"devDependencies": {
-		"@types/bun": "1.4.3",
+		"@types/bun": "1.4.4",
 		"@types/cors": "2.8.19",
 		"@types/express": "5.0.6",
 		"@types/helmet": "4.0.0",
 		"@types/pg": "8.23.1",
-		"oxfmt": "0.74.0",
-		"oxlint": "1.89.0",
-		"oxlint-tsgolint": "7.0.2004",
+		"oxfmt": "0.75.0",
+		"oxlint": "1.90.0",
+		"oxlint-tsgolint": "7.0.2005",
 		"typescript": "7.0.2"
 	},
 	"dependencies": {
-		"@better-auth/passkey": "1.7.12",
+		"@better-auth/passkey": "1.7.14",
 		"@grpc/grpc-js": "1.14.6",
 		"@grpc/proto-loader": "0.8.1",
 		"@nestjs/common": "12.2.0",
@@ -44,7 +44,7 @@
 		"@opentelemetry/exporter-trace-otlp-http": "0.300.0",
 		"@opentelemetry/sdk-node": "0.300.0",
 		"amqplib": "2.2.0",
-		"better-auth": "1.7.12",
+		"better-auth": "1.7.14",
 		"cors": "2.8.6",
 		"dotenv": "18.0.9",
 		"effect": "4.0.6",
