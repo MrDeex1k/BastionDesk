@@ -108,6 +108,13 @@ Wybrane reguły anti-slop działają jako ostrzeżenia w obu workspace’ach.
 [Zakres, testy i aktualizacje](docs/development/anti-slop.md). Testy reguł wymagają
 Node.js 22.18+ lub 24+ obok Bun.
 
+Formatowanie zapewnia `bun fmt` z Bun 1.4.4. Ustawienia znajdują się w sekcjach
+`[fmt]` plików `backend/bunfig.toml` i `frontend/bunfig.toml`: backend używa tabulatorów
+o szerokości 4, a frontend dwóch spacji. Polecenie `bun run format` sprawdza formatowanie
+obu workspace’ów bez zapisywania zmian. Aby poprawić pliki, uruchom
+`bun run --cwd backend format:fix` lub `bun run --cwd frontend format:fix`.
+Backend obejmuje katalog `src/`, a frontend pomija `dist/` i generowany `src/routeTree.gen.ts`.
+
 Husky instaluje hooki Git po `bun install`. Hook `pre-commit` uruchamia `bun run check`, a hook
 `commit-msg` wymusza format [Conventional Commits](https://www.conventionalcommits.org/), np.
 `feat(frontend): dodaj filtrowanie incydentów` albo `fix(backend): popraw walidację zapytania`.

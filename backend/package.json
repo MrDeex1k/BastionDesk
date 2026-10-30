@@ -17,8 +17,8 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "oxlint --type-aware src/",
 		"lint:fix": "oxlint --type-aware --fix src/",
-		"format": "oxfmt --check src/",
-		"format:fix": "oxfmt --write src/",
+		"format": "bun fmt --check src/",
+		"format:fix": "bun fmt src/",
 		"start:auth": "bun run src/auth/main.ts"
 	},
 	"devDependencies": {
@@ -27,7 +27,6 @@
 		"@types/express": "5.0.6",
 		"@types/helmet": "4.0.0",
 		"@types/pg": "8.23.1",
-		"oxfmt": "0.75.0",
 		"oxlint": "1.90.0",
 		"oxlint-tsgolint": "7.0.2005",
 		"typescript": "7.0.2"
