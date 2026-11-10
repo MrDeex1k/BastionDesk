@@ -1,6 +1,6 @@
 FROM busybox:1.38.0-musl AS busybox-src
 
-FROM edoburu/pgbouncer:v1.25.2-p0
+FROM edoburu/pgbouncer:v1.26.1-p0
 
 COPY --from=busybox-src /bin/busybox /usr/local/bin/busybox
 

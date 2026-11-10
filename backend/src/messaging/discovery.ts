@@ -38,7 +38,7 @@ try {
 		"RABBITMQ_DEFAULT_PASS",
 		"-p",
 		"127.0.0.1::5672",
-		"rabbitmq:4.2.5-management-alpine",
+		"rabbitmq:4.4.0-management-alpine",
 	]);
 	started = true;
 	let port = (await docker(["port", name, "5672/tcp"])).trim().split(":").at(-1);

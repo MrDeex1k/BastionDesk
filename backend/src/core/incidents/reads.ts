@@ -21,7 +21,7 @@ export interface IncidentReads {
 	list(scope: IncidentScope, input: ListInput): Promise<{ incidents: Incident[]; total: number }>;
 	get(scope: IncidentScope, id: string, names: boolean): Promise<Incident | null>;
 }
-export class Reads extends Context.Tag("incidents/Reads")<Reads, IncidentReads>() {}
+export class Reads extends Context.Service<Reads, IncidentReads>()("incidents/Reads") {}
 export const readsLayer = (port: IncidentReads) => Layer.succeed(Reads, port);
 
 export function readScope(identity: LiveIdentity): IncidentScope {

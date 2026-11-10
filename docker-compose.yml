@@ -161,7 +161,7 @@ services:
       retries: 20
 
   rabbitmq:
-    image: rabbitmq:4.2.5-management-alpine
+    image: rabbitmq:4.4.0-management-alpine
     hostname: rabbitmq
     entrypoint: ["sh", "/etc/rabbitmq/tls-entrypoint.sh"]
     command: ["rabbitmq-server"]
