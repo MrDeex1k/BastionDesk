@@ -4,6 +4,15 @@ Testy chronią zachowanie BastionDesk 1.0.3 podczas przechodzenia na 2.0.
 Scenariusze pozostają wspólne dla legacy i nowego backendu; zmiana frameworka
 nie uzasadnia zmiany oczekiwanego zachowania użytkownika.
 
+## Stan kontroli
+
+Kontrakt został wdrożony, a pierwszy zielony przebieg GitHub Actions jest
+zapisany w sekcji wyników. Workflowy usunięto 22 września 2026; bieżące repo
+nie uruchamia tych kontroli w GitHub Actions. Polecenia i runner Compose
+pozostają lokalne. Rozszerzenia o auth/JWT/mTLS i WebAuthn opisuje
+[faza 5](../backend/phase-5-identity.md); historyczne liczby testów poniżej
+nie oznaczają wyniku dla najnowszych zależności.
+
 ## Uruchomienie
 
 Z katalogu głównego, po `bun run deps:install`:
@@ -20,9 +29,10 @@ bun run test:e2e          # izolowany Compose + Chromium + sprzątanie
 bun run test:e2e:all      # ten sam kontrakt w Chromium, Firefox i WebKit
 ```
 
-Linux wymaga bibliotek systemowych przeglądarek; instalacja w CI używa
+Linux wymaga bibliotek systemowych przeglądarek; można je przygotować przez
 `playwright install --with-deps chromium firefox webkit`. Docker Compose,
-OpenSSL, Bun 1.4.3 i Node.js dla runnera Playwright muszą być dostępne.
+OpenSSL, Bun zgodny z rootowym `packageManager` i Node.js dla runnera
+Playwright muszą być dostępne.
 Nie są potrzebne produkcyjne sekrety, token Hugging Face ani zewnętrzny SMTP.
 
 Do porównania ze ścieżką migracyjną uruchom osobną, jednorazową instalację:
@@ -67,7 +77,7 @@ z kontrolowanymi odpowiedziami HTTP.
 
 Osobne testy infrastruktury sprawdzają, że publiczny raport nie kopiuje
 sekretów z tytułów, błędów, załączników ani konfiguracji i nie akceptuje
-arbitralnego HTML. CI uruchamia też testy frontendu z seedami `42` i `1337`;
+arbitralnego HTML. Polecenie `test:order` uruchamia frontend z seedami `42` i `1337`;
 po zmianie kolejności wszystkie scenariusze nadal muszą przechodzić.
 
 ## Testy przeglądarkowe
@@ -125,6 +135,14 @@ Sprzątanie jest wykonywane również po błędzie i przy SIGINT/SIGTERM.
 Po awaryjnym zabiciu procesu należy usunąć wyłącznie projekt o nazwie
 `bastiondesk-e2e-<RUN_ID>` wskazanej w logu.
 
+### Odbiór Wazuh
+
+Tryb `bun scripts/test-phase1-e2e.ts --wazuh` uruchamia izolowany stos i dwa
+scenariusze Chromium. Pierwszy porównuje rzeczywisty alert agenta `001`
+w panelu analityka i w Indexerze. Drugi sprawdza odświeżanie i odzyskanie
+wyników po kontrolowanym błędzie. Tryb wymaga osobnego konta Indexera tylko
+do odczytu. [Zmienne środowiskowe i uruchomienie](../integrations/wazuh-discovery.md#odbiór-z-rzeczywistym-wazuh).
+
 ## Selektory i diagnostyka
 
 Preferujemy role, etykiety i widoczną treść. Wiersze są zawężane unikalnym
@@ -133,7 +151,9 @@ sztywnych opóźnień ani `data-testid`; wyjątek wymaga uzasadnienia w tym plik
 Asercje czekają na widoczny rezultat, nie na arbitralny czas.
 
 Raport HTML jest w `frontend/playwright-report`, wynik JSON i ślady w
-`frontend/test-results`. Nieudany test zachowuje trace i screenshot.
+`frontend/test-results`. Domyślnie nieudany test zachowuje trace i screenshot.
+Scenariusze Wazuh mają oba zapisy wyłączone. Runner sprawdza logi aplikacji
+pod kątem obecności danych logowania Wazuh.
 Log nieudanego stosu jest w `artifacts/phase1/<RUN_ID>/compose.log`.
 Wszystkie te ścieżki są ignorowane przez Git. Surowe dane mogą zawierać cookies,
 linki i dane jednorazowych kont testowych; służą wyłącznie lokalnej diagnostyce.
@@ -153,7 +173,10 @@ się przez lokalne odtworzenie błędu. Przy udostępnianiu wyników należy
 przekazywać tylko wygenerowane `results.json` i `index.html`.
 
 Retry jest wyłączone: niestabilny test ma zostać naprawiony na podstawie
-trace, nie ukryty przez powtórzenia. Nie stosujemy `skip` dla bramki parity.
+trace, nie ukryty przez powtórzenia. Scenariusze parity nie są pomijane;
+wyjątek dotyczy dodatkowego WebAuthn z wirtualnym authenticatorem CDP,
+wykonywanego tylko w Chromium. Firefox/WebKit pomijają ten scenariusz
+zgodnie z zakresem fazy 5.
 
 ## Weryfikacja i kryterium ukończenia
 
@@ -184,7 +207,7 @@ na commicie `7de36dc` zakończył się powodzeniem: zarówno `checks`, jak i
 z aktywnej sesji `org-b:pracownik` do gościa po odświeżeniu sesji oraz
 wyczyszczenie identyfikatora organizacji i roli.
 
-Po zmianach uruchom lokalnie `bun run check`, `bun run test`,
+Po zmianach implementacji aplikacji uruchom lokalnie `bun run check`, `bun run test`,
 `bun run --cwd frontend test:order` oraz `bun run test:e2e:all`.
 Zmiana implementacji backendu nadal musi przejść ten sam kontrakt.
 

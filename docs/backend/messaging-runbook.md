@@ -13,7 +13,9 @@ obniżeniem uprawnień. Nie wymaga zmiany właściciela plików na hoście.
 
 Przed startem backendu i workera wykonaj `db:migrate:plan` oraz
 `db:migrate:apply` osobnym połączeniem operatora według
-[instrukcji migracji](../database/migrations.md). Bieżący Core wymaga 0001 i 0002.
+[instrukcji migracji](../database/migrations.md). Core i worker wymagają 0001/0002,
+a auth wymaga dodatkowo 0003 (JWKS). Start pełnego stosu po fazie 5 wymaga
+też certyfikatów identity: [runbook auth](phase-5-identity.md).
 Następnie `docker compose up -d --build`. Worker używa tego samego obrazu
 backendu, ale uruchamia `src/messaging/main.ts`; port 3334 jest tylko wewnętrzną
 sondą gotowości. Żaden port RabbitMQ nie jest publikowany na hoście.

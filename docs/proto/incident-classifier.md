@@ -1,6 +1,8 @@
 # Protokół klasyfikatora incydentów
 
-Ten dokument opisuje kontrakt gRPC używany między backendem a usługą LLM.
+Ten dokument opisuje kontrakt gRPC używany przez `classifier-worker` z workspace
+backendu do komunikacji z usługą LLM. Core zleca klasyfikację przez trwały job;
+nie wykonuje inferencji w żądaniu tworzącym incydent.
 
 ## Źródło prawdy
 

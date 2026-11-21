@@ -3,6 +3,19 @@ import { resolve, join } from "node:path";
 import { createServer } from "node:net";
 
 const root = resolve(import.meta.dir, "..");
+const wazuh = process.argv.includes("--wazuh");
+if (wazuh) {
+  for (const name of ["E2E_WAZUH_ORIGIN", "E2E_WAZUH_USER", "E2E_WAZUH_CA_FILE", "E2E_WAZUH_PASSWORD_FILE"]) {
+    if (!process.env[name]) throw new Error(`Set ${name} before running the Wazuh live test.`);
+  }
+}
+const wazuhSecrets = wazuh
+  ? await Bun.file(process.env.E2E_WAZUH_PASSWORD_FILE!).text().then((value) => {
+      const password = value.replace(/\r?\n$/, "");
+      if (!password) throw new Error("The Wazuh test password file is empty.");
+      return [password, Buffer.from(`${process.env.E2E_WAZUH_USER}:${password}`).toString("base64")];
+    })
+  : [];
 const runId = `${Date.now()}-${process.pid}`;
 const project = `bastiondesk-e2e-${runId}`;
 const directory = join(root, "artifacts", "phase1", runId);
@@ -172,6 +185,19 @@ try {
     `${root}/scripts/fixtures/phase1-account-migration.sql:/migration-fixture.sql:ro`,
   );
   config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`, `${root}/scripts/fixtures/phase4-probe.ts:/app/backend/phase4-probe.ts:ro`);
+  if (wazuh) {
+    const sourceKey = join(tlsDirectory, "wazuh-source.key");
+    await Bun.write(sourceKey, Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"));
+    await chmod(sourceKey, 0o644);
+    config.services.backend.volumes.push(`${sourceKey}:/certs/wazuh-source.key:ro`);
+    config.services.backend.environment.push("WAZUH_SOURCE_KEY_FILE=/certs/wazuh-source.key");
+    if (process.env.E2E_WAZUH_TLS_NAME) {
+      config.services.backend.environment.push(
+        `WAZUH_INDEXER_TLS_ORIGIN=${new URL(process.env.E2E_WAZUH_ORIGIN!).origin}`,
+        `WAZUH_INDEXER_TLS_NAME=${process.env.E2E_WAZUH_TLS_NAME}`,
+      );
+    }
+  }
   config.services.backend.depends_on["smtp-test"] = { condition: "service_healthy" };
   config.services["auth-service"].volumes.push(`${root}/scripts/fixtures/phase5-probe.ts:/app/backend/phase5-probe.ts:ro`);
   config.services["auth-service"].depends_on["smtp-test"] = { condition: "service_healthy" };
@@ -209,39 +235,50 @@ try {
   ]);
   await compose(["run", "--rm", "--no-deps", "--user", "0:0", "backend", "bun", "src/migrations/cli.ts", "apply"]);
   await compose(["up", "-d", "--wait", "--wait-timeout", "240"]);
-  await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "seed"]);
-  await compose(["restart", "auth-service"]);
-  await compose(["up", "-d", "--wait", "--wait-timeout", "30", "auth-service"]);
-  await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "resume"]);
   const testEnvironment = {
     E2E_BASE_URL: baseUrl,
     E2E_MAILPIT_URL: `http://127.0.0.1:${mailPort}`,
     E2E_RUN_ID: runId,
   };
-  const task = process.argv.includes("--all") ? "test:e2e:all" : "test:e2e";
-  await command(["bun", "x", "--no-install", "turbo", "run", task], testEnvironment);
-  await compose(["stop", "classifier-worker", "rabbitmq"]);
-  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "seed"]);
-  await compose(["up", "-d", "--wait", "--wait-timeout", "120", "rabbitmq", "classifier-worker"]);
-  const probe = JSON.parse(await compose(["exec", "-T", "backend", "cat", "/tmp/phase4-probe.json"], true));
-  const countHandled = async () => (await compose(["logs", "--no-color", "classifier-worker"], true))
-    .split("\n").filter(line => line.includes(`Delivery handled ${probe.jobId} duplicate`)).length;
-  const beforeDuplicates = await countHandled();
-  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "duplicates"]);
-  let duplicatesHandled = false;
-  for (let attempt = 0; attempt < 60; attempt++) {
-    if (await countHandled() >= beforeDuplicates + 2) { duplicatesHandled = true; break; }
-    await Bun.sleep(1000);
+  if (wazuh) {
+    await command(["bun", "run", "--cwd", "frontend", "test:e2e", "wazuh.spec.ts"], testEnvironment);
+    const logs = await compose(["logs", "--no-color", "backend", "auth-service", "nginx"], true);
+    if (wazuhSecrets.some((value) => logs.includes(value)))
+      throw new Error("Wazuh credentials appeared in an application log.");
+    console.log("[phase1] PASS Wazuh analyst workflow and credential redaction");
+  } else {
+    await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "seed"]);
+    await compose(["restart", "auth-service"]);
+    await compose(["up", "-d", "--wait", "--wait-timeout", "30", "auth-service"]);
+    await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "resume"]);
+    const task = process.argv.includes("--all") ? "test:e2e:all" : "test:e2e";
+    await command(["bun", "x", "--no-install", "turbo", "run", task], testEnvironment);
+    await compose(["stop", "classifier-worker", "rabbitmq"]);
+    await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "seed"]);
+    await compose(["up", "-d", "--wait", "--wait-timeout", "120", "rabbitmq", "classifier-worker"]);
+    const probe = JSON.parse(await compose(["exec", "-T", "backend", "cat", "/tmp/phase4-probe.json"], true));
+    const countHandled = async () => (await compose(["logs", "--no-color", "classifier-worker"], true))
+      .split("\n").filter(line => line.includes(`Delivery handled ${probe.jobId} duplicate`)).length;
+    const beforeDuplicates = await countHandled();
+    await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "duplicates"]);
+    let duplicatesHandled = false;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      if (await countHandled() >= beforeDuplicates + 2) { duplicatesHandled = true; break; }
+      await Bun.sleep(1000);
+    }
+    if (!duplicatesHandled) throw new Error("Worker did not handle both duplicate deliveries");
+    await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "verify"]);
+    console.log(`[phase1] PASS ${task} and durable-worker recovery`);
   }
-  if (!duplicatesHandled) throw new Error("Worker did not handle both duplicate deliveries");
-  await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "verify"]);
-  console.log(`[phase1] PASS ${task} and durable-worker recovery`);
 } catch (error) {
   if (started) {
     try {
       await Bun.write(
         join(directory, "compose.log"),
-        await compose(["logs", "--no-color", "--tail", "100"], true),
+        wazuhSecrets.reduce(
+          (logs, value) => logs.replaceAll(value, "[REDACTED]"),
+          await compose(["logs", "--no-color", "--tail", "100"], true),
+        ),
       );
     } catch {
       console.error("[phase1] Could not collect Compose diagnostics");

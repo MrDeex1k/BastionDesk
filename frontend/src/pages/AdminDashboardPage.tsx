@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { ShieldCheck, Building2, Activity } from "lucide-react";
+import { ShieldCheck, Building2, Activity, ShieldAlert } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 
 const AdminIncidentList = lazy(() =>
@@ -16,6 +16,9 @@ const AdminOrganizationManagement = lazy(() =>
   import("../components/AdminOrganizationManagement").then((module) => ({
     default: module.AdminOrganizationManagement,
   })),
+);
+const WazuhAlerts = lazy(() =>
+  import("../components/WazuhAlerts").then((module) => ({ default: module.WazuhAlerts })),
 );
 
 export function AdminDashboardPage() {
@@ -40,7 +43,7 @@ export function AdminDashboardPage() {
       <div className="w-full max-w-7xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full gap-8">
           <div className="flex justify-center">
-            <TabsList className="grid w-full max-w-md grid-cols-2 border border-zinc-800 bg-zinc-950/80">
+            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-1 border border-zinc-800 bg-zinc-950/80 sm:grid-cols-3">
               <TabsTrigger
                 value="stats"
                 className="text-white/85 data-active:bg-blue-600 data-active:text-white"
@@ -54,6 +57,13 @@ export function AdminDashboardPage() {
               >
                 <Building2 className="mr-2 size-4" />
                 Zarządzanie Organizacją
+              </TabsTrigger>
+              <TabsTrigger
+                value="wazuh"
+                className="text-white/85 data-active:bg-blue-600 data-active:text-white"
+              >
+                <ShieldAlert className="mr-2 size-4" />
+                Alerty Wazuh
               </TabsTrigger>
             </TabsList>
           </div>
@@ -73,6 +83,11 @@ export function AdminDashboardPage() {
           <TabsContent value="organization" className="space-y-8">
             <Suspense fallback={<AdminSectionLoader />}>
               <AdminOrganizationManagement />
+            </Suspense>
+          </TabsContent>
+          <TabsContent value="wazuh">
+            <Suspense fallback={<AdminSectionLoader />}>
+              {activeTab === "wazuh" && <WazuhAlerts />}
             </Suspense>
           </TabsContent>
         </Tabs>

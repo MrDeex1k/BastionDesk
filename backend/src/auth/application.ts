@@ -66,7 +66,8 @@ export function createAuthApplication(ports: AuthGatewayPorts) {
 					: failure(503, "SERVICE_UNAVAILABLE");
 		}
 		const headers = new Headers(response.headers);
-		headers.set("cache-control", "no-store");
+		if (headers.get("cache-control") !== "private, no-store")
+			headers.set("cache-control", "no-store");
 		headers.set("x-content-type-options", "nosniff");
 		headers.set("x-frame-options", "DENY");
 		headers.set("referrer-policy", "strict-origin-when-cross-origin");

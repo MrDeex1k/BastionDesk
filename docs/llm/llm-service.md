@@ -1,8 +1,10 @@
 # Serwis LLM
 
 Serwis klasyfikuje opisy incydentów przy użyciu modelu
-`google/gemma-3-1b-it`. Klasyfikacja jest udostępniana backendowi przez gRPC
-z wzajemnym TLS, a FastAPI udostępnia osobny endpoint diagnostyczny.
+`google/gemma-3-1b-it`. Klasyfikację wywołuje `classifier-worker` przez gRPC
+z wzajemnym TLS; FastAPI udostępnia osobny endpoint diagnostyczny. Core zapisuje
+job razem z incydentem, a żądanie użytkownika nie czeka na inferencję. Retry,
+DLQ i deduplikację skutku opisuje [runbook messagingu](../backend/messaging-runbook.md).
 
 Checkpoint modelu zawiera wagi `BF16` i nie ma konfiguracji kwantyzacji.
 Obecny runtime zachowuje tę precyzję; ewentualna migracja do skwantyzowanego
@@ -114,7 +116,7 @@ nie zacznie zwracać HTTP `200`.
 
 Sprawdź obecność plików w `infra/tls/dev/ca` i
 `infra/tls/dev/llm_service`, wartość `LLM_GRPC_TARGET=llm_service:8443` oraz
-zgodność certyfikatów backendu z lokalnym CA.
+zgodność certyfikatu klienta montowanego do `classifier-worker` z lokalnym CA.
 
 ### Zmienił się plik `.proto`
 

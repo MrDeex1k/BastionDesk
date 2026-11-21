@@ -19,6 +19,32 @@ sposób komunikacji, wersje, ograniczenia i model bezpieczeństwa.
 Dokument jest roadmapą produktu, planem pracy magisterskiej i punktem
 odniesienia dla przyszłych decyzji architektonicznych.
 
+## Stan implementacji — 21 listopada 2026
+
+Stan ustalono przez przegląd kodu i konfiguracji repozytorium. Wyniki testów
+w dokumentach faz są historycznymi zapisami konkretnych przebiegów, nie wynikiem
+ponownego uruchomienia podczas tej aktualizacji. Wersja manifestów nadal wynosi
+`1.0.3`; implementacja faz nie oznacza wydania BastionDesk `2.0`.
+
+| Faza | Stan w repozytorium | Dowód / pozostała praca |
+| --- | --- | --- |
+| 0 — baseline | Zakończona, historyczna bramka GO | [Pomiary i 41 scenariuszy P0](baseline/1.0.3-measurements.md). |
+| 1 — UI i E2E | Zaimplementowana, pierwszy zielony przebieg CI zapisany | [Kontrakt testowy](testing/phase-1-ui-e2e.md); workflowy GitHub Actions usunięto 22 września 2026, kontrole uruchamiamy lokalnie. |
+| 2 — fundamenty | Odebrana 23 września 2026 | [Migracje i kontrakty](backend/phase-2-foundations.md), używane przez Core. |
+| 3 — Core | Zaimplementowana; raport etapu zachowuje status „do odbioru użytkownika” | [Realizacja](backend/phase-3-core.md); aktualizacja dokumentacji nie zastępuje formalnego odbioru. |
+| 4 — messaging | Zaimplementowana; raport zachowuje status „do odbioru” | [Realizacja](backend/phase-4-messaging.md), PostgreSQL outbox/inbox, RabbitMQ, worker LLM, retry/DLQ i OTLP. |
+| 5 — auth/gateway | Zaimplementowana, odbiór techniczny zapisany 23 września 2026 | [Runbook](backend/phase-5-identity.md), osobny auth, JWT/JWKS i mTLS. |
+| 6 — Wazuh | Odczyt alertów z Indexera zaimplementowany i sprawdzony w laboratorium | [Specyfikacja i wyniki](integrations/wazuh-stage-6-spec.md). WAZ-04 zamknięto po teście E2E na istniejącym alercie agenta Ubuntu `001`. |
+| 7–12 — funkcje SOAR i wydanie | Planowane | IOC/TI, korelacja, playbooki, reakcja, rozszerzony LLM i badania. |
+
+Bieżące ograniczenia obejmują brak lokalnego modelu assetów i IOC oraz silnika
+playbooków. Klasyfikator
+zwraca wyłącznie kategorię oraz nazwę modelu, a audyt operacji nie jest jeszcze
+dziennikiem całej analizy. Redis, Prometheus i Grafana nie są częścią podstawowego
+Compose. Retencja receipts/jobów, sprzątanie osieroconych obiektów S3 oraz HA
+pozostają otwarte. Procedury migracji istnieją, ale nie stanowią deklaracji
+obsługi upgrade z dowolnej historycznej instalacji.
+
 ## Cel produktu
 
 BastionDesk ma rozwinąć się z systemu ręcznego zgłaszania i obsługi incydentów
@@ -51,7 +77,11 @@ Alternatywnie:
 > zgłoszenia użytkowników z automatyczną detekcją, wzbogacaniem danych
 > telemetrycznych i kontrolowaną reakcją
 
-## Punkt wyjścia: BastionDesk 1.0.3
+## Historyczny punkt wyjścia: BastionDesk 1.0.3
+
+Ta sekcja opisuje baseline sprzed faz 0–5. Wymienione niżej braki migracji,
+brokera i wydzielenia auth dotyczą tamtego stanu. Bieżący stan znajduje się
+w tabeli realizacji powyżej.
 
 ### Gotowe możliwości produktowe
 
@@ -91,81 +121,41 @@ Alternatywnie:
 - przed nową wersją trzeba zamknąć znane niespójności frontend–backend i
   zabezpieczyć bieżące przepływy testami regresyjnymi.
 
-## Ustalony kierunek architektury backendu
-
-Docelowo backend jest rozdzielony na dwa serwisy o odrębnych
-odpowiedzialnościach:
+## Wdrożona architektura backendu
 
 ```text
-React + NGINX
-      │
-      ├── /api/auth/* ──> Elysia 2 + Better Auth
-      │                    sesje, hasła, PassKeys, organizacje, role,
-      │                    emisja JWT i publikacja JWKS
-      │
-      └── /api/* ────────> NestJS Core
-                           domena SOAR, API, polityki, audyt,
-                           playbooki i publikowanie zdarzeń
-
-EffectTS pozostaje wewnętrzną warstwą orkiestracji NestJS Core i workerów:
-use case'y, adaptery, retry, timeouty, cancellation i kontrolowana
-współbieżność. EffectTS nie jest osobnym serwisem ani zamiennikiem NestJS.
+React -> NGINX :8080 (host :4567)
+            -> /api oraz /api/* -> auth-service :3340 (Elysia 2 + Better Auth)
+                                   ├── auth, sesje, CSRF, organizacje i role
+                                   └── JWT przez mTLS -> backend :3333
+                                                          NestJS Core + Effect
+                                                          w procesie Express
+backend -> mTLS -> auth-service :3443 (JWKS i świeża tożsamość)
+Core -> PostgreSQL: incydent + audyt + receipt + job w jednej transakcji
+classifier-worker -> RabbitMQ / PostgreSQL -> LLM przez gRPC/mTLS
 ```
 
-### Serwis tożsamości — Elysia 2 + Better Auth
+Gateway rozpoznaje sesję HttpOnly i emituje krótki JWT dla Core. Token Core
+pozostaje po stronie serwera; gateway nie przekazuje cookies do Core ani
+wewnętrznego JWT do przeglądarki. Core weryfikuje podpis przez cache JWKS i
+sprawdza aktualną tożsamość w auth. Kontrakt, rotację i zachowanie przy awarii
+opisują [identity-contract](backend/identity-contract.md) i
+[runbook fazy 5](backend/phase-5-identity.md).
 
-Elysia 2 jest docelową warstwą HTTP dla osobnego serwisu auth. Better Auth
-pozostaje właścicielem:
+Better Auth jest właścicielem sesji, haseł, PassKeys, członkostw i kluczy JWT.
+Core nie importuje jego instancji. Usługi nadal współdzielą bazę i uprawnienia
+PostgreSQL; rozdział procesów nie oznacza odrębnych ról bazodanowych.
+OIDC/social login pozostaje planem.
 
-- logowania, haseł, weryfikacji emaila i resetu hasła;
-- sesji, PassKeys/WebAuthn i opcjonalnego OIDC;
-- organizacji, członkostw i ról;
-- endpointów auth oraz kluczy używanych do podpisywania tokenów.
+NestJS obsługuje workflow incydentów i pliki przez adaptery oraz use case'y
+Effect. Express nadal zapewnia host HTTP, middleware i pozostałe trasy
+administracyjne; nie obsługuje już Better Auth. `classifier-worker` jest
+osobnym procesem z tego samego obrazu backendu. Redis nie jest wymagany:
+trwały stan, dzierżawy, deduplikację i retry przechowuje PostgreSQL.
 
-Serwis auth jest jedynym właścicielem klucza prywatnego. Publikuje publiczny
-JWKS, a NestJS nie importuje instancji Better Auth ani nie korzysta bezpośrednio
-z tabel auth.
-
-### Core domenowy — NestJS
-
-NestJS jest docelowym frameworkiem głównego core. Migracja z obecnego Expressa
-odbywa się modułami, z zachowaniem kompatybilności API i danych. Core odpowiada
-za domenę SOAR, a nie za obsługę haseł, sesji ani PassKeys.
-
-NestJS lokalnie weryfikuje JWT wystawione przez auth service na podstawie
-cache’owanego JWKS. JWT i JWKS są jednym kontraktem zaufania, a nie wzajemnie
-alternatywnymi mechanizmami:
-
-- JWT jest krótkoterminowym access tokenem;
-- JWKS dostarcza klucze publiczne do weryfikacji podpisu;
-- obowiązuje jeden issuer auth service i jeden kanoniczny endpoint JWKS;
-- token zawiera co najmniej claims `iss`, `aud`, `sub`, `iat`, `exp`, `jti` oraz
-  nagłówek JOSE `kid`;
-- NestJS akceptuje wyłącznie właściwe `issuer` i `audience`, np.
-  `bastiondesk-core`;
-- klucze są asymetryczne, a rotacja używa `kid` i okresu przejściowego dla
-  poprzedniego klucza;
-- klucz prywatny nigdy nie opuszcza serwisu auth.
-
-Sesja przeglądarkowa pozostaje oparta na HttpOnly cookies. JWT przeznaczone dla
-core nie są przechowywane w `localStorage`. Przy użyciu cookies nadal obowiązują
-CSRF, CORS i walidacja originu. Dokładny mechanizm wymiany lub dołączenia
-krótkoterminowego JWT wymaga osobnego spike'u integracyjnego.
-
-Claims organizacji i uprawnień muszą być minimalne. `org_id` lub scope mogą
-przenosić aktywny kontekst, ale core zawsze egzekwuje tenant scope, a operacje
-wysokiego ryzyka dodatkowo sprawdzają aktualność membershipu i polityk.
-
-### EffectTS w core i workerach
-
-EffectTS jest standardem dla nowego kodu orkiestrującego w NestJS Core oraz
-workerach, nie wymaganiem dla całego repozytorium. Nowe use case’y korzystają z
-modelu `Effect<A, E, R>` oraz portów dostarczanych przez warstwy dla PostgreSQL,
-storage, RabbitMQ, Wazuh, Threat Intelligence i lokalnego LLM.
-
-EffectTS nie zastępuje na starcie Expressa, Elysia, Better Auth, Bun SQL,
-PostgreSQL ani Zod. Kod legacy pozostaje oparty na obecnych kontraktach do czasu
-osiągnięcia parity.
+Nowa domena SOAR będzie rozszerzać istniejące granice. Effect jest standardem
+orkiestracji Core i workerów, nie osobnym serwisem. Aktualne wersje określają
+manifesty i lockfile; datowane raporty faz opisują wersje z czasu ich realizacji.
 
 ## Zasady prowadzenia rozwoju
 
@@ -226,9 +216,9 @@ ukończona bez aktualizacji dokumentacji i właściwej decyzji architektonicznej
 
 ## Standard aktualności dla integracji zewnętrznych
 
-Przed implementacją Wazuh, Ansible, providera Threat Intelligence, lokalnego
-runtime'u AI, OIDC/OAuth, STIX/TAXII lub innego systemu zewnętrznego należy
-wykonać `integration discovery`.
+Przed wdrożeniem lub rozszerzeniem integracji z systemem zewnętrznym wykonaj
+`integration discovery`. Dotyczy to m.in. Wazuh, Ansible, Threat Intelligence,
+lokalnych runtime’ów AI, OIDC/OAuth i STIX/TAXII.
 
 ### Obowiązkowy zakres discovery
 
@@ -263,11 +253,11 @@ Każda integracja dokumentuje:
 
 ### Szczególna zasada dla Wazuh
 
-Dokument nie zamraża dziś jednego endpointu Wazuh. W fazie integracji trzeba
-potwierdzić rekomendowany sposób odbioru alertów i assetów, auth, format i
-wersjonowanie eventów, obsługę wielu organizacji, backpressure oraz
-kompatybilność z wybraną wersją. Adapter nie może narzucać surowego formatu
-Wazuh całej domenie BastionDesk.
+Etap 6 czyta indeksy alertów przez Wazuh Indexer Search API. Każda organizacja
+konfiguruje jedno dedykowane źródło. Adapter zwraca podsumowanie do listy,
+a pełny dokument Wazuh udostępnia w szczegółach na żądanie. Integracje
+assetów i automatycznej reakcji wymagają osobnego discovery.
+[Zakres etapu 6](integrations/wazuh-stage-6-spec.md).
 
 ## Docelowe granice systemu
 
@@ -278,13 +268,13 @@ bezpośrednio z RabbitMQ, Redis, Wazuh, Ansible ani providerami TI.
 
 ### Gateway tożsamości
 
-Osobny serwis auth oparty na Elysia 2 i Better Auth jest docelowym kierunkiem.
+Osobny serwis auth oparty na Elysia 2 i Better Auth jest już wdrożony.
 Elysia obsługuje warstwę HTTP, a Better Auth pozostaje właścicielem procesów
 tożsamości. Serwis odpowiada za:
 
 - logowanie, sesje i PassKeys;
 - organizacje i role;
-- opcjonalne OIDC/social login;
+- opcjonalne OIDC/social login w przyszłym rozszerzeniu;
 - CSRF, origin validation i rate limiting;
 - emisję krótkoterminowych JWT dla core i publikację JWKS;
 - przekazanie zweryfikowanej tożsamości do core.
@@ -296,9 +286,8 @@ tokenów opisuje ADR oraz karta integracji auth.
 
 ### Core domenowy
 
-NestJS jest docelowym frameworkiem modularnego core. Wymaga ADR, spike'u
-integracyjnego i migracji modułami, ale nie jest już alternatywą dla Elysia — oba
-frameworki mają różne granice odpowiedzialności. Core odpowiada za:
+NestJS jest wdrożonym frameworkiem modularnego Core. Obecnie obsługuje
+incydenty, pliki i audyt; kolejne fazy rozszerzą jego odpowiedzialność o:
 
 - incydenty, alerty i zdarzenia bezpieczeństwa;
 - organizacje, assety, IOC i artefakty;
@@ -309,8 +298,9 @@ frameworki mają różne granice odpowiedzialności. Core odpowiada za:
 
 ### Workery
 
-Granice logiczne powstają przed granicami procesów. Początkowo kilka workerów
-może działać w jednym deployable NestJS. Nowe workflow workerów powinny używać
+Granice logiczne powstają przed granicami procesów. Worker klasyfikacji działa
+już poza procesem HTTP. Kolejne workery mogą współdzielić deployable, dopóki
+nie wymagają osobnej izolacji lub skalowania. Nowe workflow workerów powinny używać
 EffectTS, ale ich stan i retry transportowy pozostają odpowiedzialnością
 warstwy jobów/RabbitMQ. Docelowe odpowiedzialności:
 
@@ -326,91 +316,85 @@ warstwy jobów/RabbitMQ. Docelowe odpowiedzialności:
 - PostgreSQL: trwałe źródło prawdy;
 - PgBouncer: stabilizacja połączeń;
 - RabbitMQ: transport asynchronicznych komend i zdarzeń;
-- Redis: cache, locki, deduplikacja i krótkotrwały stan;
+- Redis: opcjonalny odtwarzalny cache po wskazaniu konsumenta; trwała
+  deduplikacja i dzierżawy pozostają w PostgreSQL;
 - S3-compatible storage: artefakty, dowody, raporty i PCAP;
 - OpenTelemetry: wspólny kontekst obserwowalności.
 
 ### Kontrakt komunikacji auth service–core
 
-Auth service i core są osobnymi deployable, ale korzystają z jednego modelu
-zaufania:
-
-```text
-klient / frontend
-  -> NGINX / publiczny entrypoint
-     -> Elysia 2 + Better Auth (/api/auth/*)
-        -> sesja HttpOnly oraz krótkoterminowy access JWT
-
-klient / frontend
-  -> NGINX / publiczny entrypoint
-     -> NestJS Core (/api/*)
-        -> weryfikacja JWT przez cache’owany JWKS auth service
-```
-
-- JWT jest tokenem dostępu, a JWKS jest publicznym katalogiem kluczy do jego
-  weryfikacji;
-- obowiązuje jeden issuer auth service i jeden kanoniczny endpoint JWKS;
-- używane są klucze asymetryczne — NestJS nie otrzymuje klucza prywatnego;
-- access token ma krótkie TTL i audience ograniczone do odbiorcy, np.
-  `bastiondesk-core`;
-- refresh token i operacje sesyjne pozostają wyłącznie po stronie auth service;
-- usługi wewnętrzne nie używają tokenów użytkownika jako własnych poświadczeń;
-  w razie potrzeby korzystają z osobnego audience, mTLS i/lub service tokenu;
-- dokładny mechanizm przekazania JWT z warstwy przeglądarkowej do core musi
-  zostać potwierdzony testem integracyjnym, bez użycia `localStorage`.
-
-Core może posiadać lokalną projekcję organizacji i uprawnień, ale nie staje się
-właścicielem danych Better Auth. Wrażliwe akcje muszą dodatkowo weryfikować
-aktualność membershipu, polityk, approval i blast radius.
+Obowiązuje wdrożony [kontrakt tożsamości](backend/identity-contract.md).
+Dalsze funkcje korzystają z obecnego gateway, JWT/JWKS, mTLS i świeżego
+sprawdzenia membershipu. Akcje SOAR dodadzą do tej granicy własne polityki,
+approval i kontrolę blast radius; LLM nie uzyska uprawnień action runnera.
 
 ## Status decyzji technologicznych
 
 | Status | Elementy | Zasada |
 | --- | --- | --- |
 | Zachować jako baseline | React, TypeScript, Tailwind CSS v4, Base UI, Bun, Oxc, TurboRepo, PostgreSQL, PgBouncer, NGINX, Docker Compose, S3 API, Protobuf/gRPC i mTLS | Nie migrować bez mierzalnego problemu lub wymagania domenowego. |
-| Wprowadzać w fazach rdzenia | wersjonowane migracje, modularny core, RabbitMQ, Redis, OpenTelemetry, Prometheus i Grafana | Najpierw kontrakt, spike i test awarii; potem użycie produkcyjne. |
+| Wdrożone fundamenty | wersjonowane migracje, modularny Core, RabbitMQ i opcjonalny eksport OpenTelemetry | Rozszerzać istniejące kontrakty i testy awarii. |
+| Planowane narzędzia operacyjne | Redis po wskazaniu konsumenta, Prometheus i Grafana | Wprowadzać dla mierzalnego wymagania; obecnie brak w podstawowym Compose. |
 | Wprowadzać domenowo | Wazuh, YARA, Threat Intelligence, SIGMA, playbooki i Ansible/Active Response | Każdy komponent przechodzi integration discovery i dostaje adapter odseparowany od domeny. |
-| Docelowy kierunek backendu | NestJS Core, osobny serwis Elysia 2 + Better Auth, JWT/JWKS oraz EffectTS w core i workerach | Granice są przyjęte kierunkowo; szczegóły kontraktu, wersji i migracji wymagają ADR oraz spike'ów. |
-| Kandydaci wymagający ADR | Drizzle, szczegóły kontraktu JWT/JWKS, Docker Model Runner, llama.cpp i wybrany model lokalny | Kandydatura dotyczy szczegółów implementacyjnych, a nie zmiany ustalonego podziału core/auth. |
+| Wdrożone granice backendu | NestJS Core, Elysia 2 + Better Auth, JWT/JWKS oraz Effect w Core i workerze | Utrzymywać parity API i izolację organizacji. |
+| Kandydaci wymagający ADR | Docker Model Runner, llama.cpp i zmiana modelu lokalnego | Benchmark jakości, zasobów i licencji przed wyborem; warstwa SQL pozostaje Bun SQL/pg. |
 | Opcjonalne po stabilizacji | OIDC Google/Apple/Microsoft, STIX/TAXII, Defender i kolejni providerzy TI | Dodawać pojedynczo, gdy istnieje konkretny scenariusz produktowy. |
 | Odłożone | RustFS, Astro/portal docs, Docker Stack, K3s/MicroK8s, Pulumi, Sentry/Axiom i dodatkowy WAF | Nie mogą blokować rdzenia SOAR ani pracy magisterskiej. |
 
 Obecny SMTP i Nodemailer pozostają wystarczające dla bieżącego produktu.
-Notification worker powinien przejąć wysyłkę dopiero po powstaniu niezawodnej
-kolejki. Osobne API mailowe ma sens tylko wtedy, gdy pojawią się webhooki lub
+Kolejka już istnieje; wydzielenie notification workera pozostaje osobnym
+rozszerzeniem, jeśli wysyłka będzie wymagała trwałych jobów. Osobne API mailowe
+ma sens tylko wtedy, gdy pojawią się webhooki lub
 niezależne wymagania skalowania.
 
-## Strategia migracji backendu
+## Dalsza ewolucja backendu
 
-Migracja nie jest jednoczesnym przepisaniem całego serwisu. Przebiega przez
-tymczasowe współistnienie starego Express backendu, auth service i NestJS Core:
+Fazy 0–5 dostarczyły baseline, testy zachowania, migracje, Core, messaging
+oraz osobny auth. Dalsza praca opiera się na tych implementacjach.
+Pozostałe trasy administracyjne i host Express można porządkować modułami,
+z zachowaniem kontraktów HTTP; nie blokuje to fazy 6. Zastosowanie ExpressAdapter
+przez NestJS samo w sobie nie wymaga wymiany transportu.
 
-1. Zamknąć baseline `1.0.3` i zabezpieczyć krytyczne przepływy testami.
-2. Na działającym `1.0.3` wdrożyć testy komponentowe React Testing Library i
-   przeglądarkowe E2E Playwright jako kontrakt zachowania dla migracji.
-3. Zdefiniować kontrakty domenowe, event envelope, tenant scope oraz kontrakt
-   JWT/JWKS.
-4. W fazie 2 zweryfikować JWT/JWKS i przejściowy adapter tożsamości dla Core,
-   przy auth nadal obsługiwanym przez Express z Better Auth.
-5. W fazie 3 uruchomić NestJS obok Expressa i przenosić moduły przez adaptery,
-   zaczynając od incydentów i audytu. W fazie 4 dodać fundament asynchroniczny.
-6. W fazie 5 uruchomić Elysia 2 + Better Auth jako osobny auth service i
-   przełączyć kontrakt tożsamości według wyników spike'u fazy 2.
-7. Przełączać ruch przez NGINX po osiągnięciu parity funkcjonalnego,
-   bezpieczeństwa i obserwowalności, osobno dla migrowanych modułów i auth.
-8. Usunąć Better Auth z Expressa, a następnie wygasić legacy route'y i sam
-   Express, gdy wszystkie moduły będą obsługiwane przez NestJS.
+Wyniki dawnych spike'ów i przebiegów są zapisane w dokumentach faz oraz ADR.
+Przed kolejnym wydaniem trzeba powtórzyć właściwe kontrole na aktualnych
+zależnościach: [aktualizacja z 30 października](development/2026-10-30-dependency-refresh.md)
+nie obejmowała testów, buildów ani typechecka.
 
-EffectTS może być używany od pierwszego nowego modułu NestJS, ale nie powinien
-blokować migracji HTTP. Auth service pozostaje prostym serwisem Elysia + Better
-Auth; EffectTS nie jest wymagany do implementacji jego podstawowego przepływu.
+## Inspiracje dla własnych funkcji SOAR
+
+Decyzja z 5 listopada 2026: AiSOC jest materiałem referencyjnym do analizy
+pomysłów i narzędzi. BastionDesk rozwija własne implementacje w obecnej
+architekturze. Plan nie obejmuje wdrażania AiSOC, adaptera do jego API,
+scalania projektów ani przejmowania jego kodu lub bibliotek reguł.
+
+Do dalszych faz włączamy następujące wymagania projektowe; nie są jeszcze
+zaimplementowanymi możliwościami BastionDesk:
+
+| Obszar | Własna realizacja / kryterium | Faza |
+| --- | --- | --- |
+| Dowód przepływu alertu | Kontrolowane zdarzenie przechodzi przez rzeczywisty adapter, zapis, kolejkę i odczyt API/UI; replay i restart nie mnożą alertów, drugi tenant nie ma dostępu. | 6 |
+| Dziennik analizy i decyzji | Powiązania z dowodami, wersja reguły/modelu, czas analizy, wynik, uzasadnienie i korekta analityka. Ponowna analiza dopisuje wynik, zachowując poprzedni. | Kontrakt 6–8; użycie przez LLM 11 |
+| Trwałe approval | Definicje i stan wykonania playbooków w PostgreSQL; wersja playbooka, krok, kontekst, decyzja, termin wygaśnięcia i idempotentne wznowienie po restarcie. | 9 |
+| Wynik reakcji | Osobne stany rekomendacji, podglądu, oczekiwania, odmowy, wykonania i weryfikacji skutku; testy awarii na granicy z wykonawcą. | 9–10 |
+| Oparcie AI w dowodach | Walidowany wynik zawiera odwołania do dostępnych dowodów; niepoparte twierdzenia trafiają do oceny analityka. Obecność IOC w wejściu nie dowodzi poprawności całej odpowiedzi. | 11 |
+| Eksport dowodów | Wersjonowany format, deterministyczna serializacja, kontrola integralności, tenant scope i redakcja danych. Hash/podpis nie zastępuje oceny prawdziwości dowodów. | 12, po ustabilizowaniu dziennika |
+
+Punkty odniesienia z przeglądu AiSOC:
+[dziennik i pakiety dowodowe](https://github.com/beenuar/AiSOC/blob/main/docs/architecture/evidence-bundles.md),
+[pauza playbooka](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/playbook/pause.py),
+[sprawdzanie oparcia odpowiedzi w dowodach](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/confidence/groundedness.py),
+[test całego przepływu](https://github.com/beenuar/AiSOC/blob/main/tests/e2e/golden_pipeline/run_golden_pipeline.py).
+Linki do `main` służą jako materiał porównawczy, nie zamrożony kontrakt.
+
+Każde dodatkowe narzędzie przechodzi nasze discovery, ocenę licencji i pomiar
+kosztu wdrożenia. Samo użycie narzędzia przez AiSOC nie uzasadnia dodania go do
+BastionDesk. Zachowujemy PostgreSQL, RabbitMQ i Compose jako bieżące fundamenty.
 
 ## Docelowy przepływ domenowy
 
 ```text
-zgłoszenie pracownika / alert Wazuh
-  -> ingest i walidacja
-  -> zapis surowego źródła
+zgłoszenie pracownika / odczyt alertu z Wazuh
+  -> walidacja i ustalenie pochodzenia
   -> normalizacja security event
   -> powiązanie z tenantem i assetem
   -> ekstrakcja IOC i artefaktów
@@ -445,6 +429,9 @@ Każda akcja wysokiego ryzyka wymaga:
 - pełnego audytu wejścia, decyzji, approval i wyniku.
 
 ## Plan implementacji
+
+Kroki faz 0–6 dokumentują zakres wdrożony w repozytorium i stan odbiorów.
+Fazy 7–12 opisują plan dalszej pracy.
 
 Fazy są uporządkowane według zależności. Spike z późniejszej fazy może rozpocząć
 się wcześniej, ale nie powinien zmieniać produkcyjnej architektury bez
@@ -502,16 +489,16 @@ implementację można porównać z `1.0.3`.
   Finalna bramka obejmuje wszystkie 41 scenariuszy `P0`, w tym pełny przepływ
   API dwóch organizacji, storage, audyt, analitykę, degradację LLM oraz osobny
   backend nad odtworzoną bazą. Wynik to `GO`: `41 PASS`, `0 PARTIAL`,
-  `0 NOT_COVERED`, `0 FAIL`. Faza 0 jest zakończona; następnym etapem jest
-  faza 1 — testy UI i E2E jako kontrakt migracji.
+  `0 NOT_COVERED`, `0 FAIL`. Faza 0 jest zakończona; jej wyniki pozostają
+  historycznym punktem odniesienia dla kolejnych etapów.
 
 ## Faza 1 — testy UI i E2E jako kontrakt migracji
 
 Implementacja i macierz scenariuszy: [kontrakt UI i E2E](./testing/phase-1-ui-e2e.md).
-Dodano testy komponentowe, Playwright dla trzech silników, izolowane fixture
-Compose oraz workflow CI. Lokalnie przechodzi 19 testów komponentowych i
-24 E2E (8 scenariuszy × 3 przeglądarki). Formalne zamknięcie fazy wymaga także pierwszego
-zielonego przebiegu nowego workflow na GitHub.
+Faza została wdrożona, a pierwszy zielony przebieg GitHub Actions jest zapisany
+w kontrakcie. Workflowy usunięto 22 września 2026; testy pozostają dostępne
+lokalnie. Rozszerzenia o JWT/mTLS i WebAuthn oraz datowany wynik macierzy
+przeglądarek opisuje [faza 5](backend/phase-5-identity.md).
 
 ### Cel
 
@@ -571,8 +558,8 @@ BastionDesk `2.0`.
 ## Faza 2 — migracje i kontrakty domenowe
 
 Fundamenty i prototypy odebrane przez właściciela w punkcie 2.5 dnia
-23 września 2026. Produkcyjne użycie kontraktów przez pierwszy moduł Core
-pozostaje w fazie 3. Paczki pracy, wdrożone kontrakty i zakres odbioru: [plan fazy 2](backend/phase-2-foundations.md).
+23 września 2026. Kontrakty zostały następnie użyte przez moduł Core
+w fazie 3. Paczki pracy, wdrożone kontrakty i zakres odbioru: [plan fazy 2](backend/phase-2-foundations.md).
 
 ### Cel
 
@@ -605,9 +592,9 @@ kontraktów bez kopiowania modeli legacy.
 
 ## Faza 3 — modularny core incydentów
 
-Status 23 września 2026: etapy 3.1–3.5 gotowe technicznie, do odbioru.
-Core NestJS/Effect obsługuje workflow incydentów we wspólnym procesie
-z Expressem; sieciowe wydzielenie auth pozostaje fazą 5.
+Etapy 3.1–3.5 są zaimplementowane. Raport z 23 września 2026 zachowuje status
+„gotowe technicznie, do odbioru”. Core NestJS/Effect działa we wspólnym procesie
+z Expressem; osobny auth został następnie wdrożony w fazie 5.
 [Realizacja i weryfikacja](backend/phase-3-core.md).
 
 ### Cel
@@ -667,7 +654,8 @@ a job jest widoczny w trace i metrykach.
 
 ## Faza 5 — tożsamość i gateway
 
-Implementacja 5.1–5.5: [zakres i runbook](backend/phase-5-identity.md).
+Implementacja 5.1–5.5 jest w repozytorium; odbiór techniczny zapisano
+23 września 2026. [Zakres, wyniki i runbook](backend/phase-5-identity.md).
 
 ### Cel
 
@@ -696,35 +684,27 @@ Konta, organizacje, role i PassKeys działają po migracji, NestJS Core akceptuj
 wyłącznie zweryfikowaną tożsamość z JWT/JWKS, a Express nie obsługuje już
 odpowiedzialności auth.
 
-## Faza 6 — model bezpieczeństwa i ingest Wazuh
+## Faza 6 — odczyt alertów Wazuh
 
-### Cel
+### Zakres
 
-Dostarczyć tylko do odczytu przepływ alertów i assetów bez reakcji.
+Administrator podłącza jedno dedykowane źródło Wazuh na organizację. Backend
+sprawdza TLS i uprawnienia do wyszukiwania. Analityk i administrator mogą
+przeglądać historię, filtrować poziomy, otwierać szczegóły i pobierać pełny JSON.
+Dokumenty i retencja pozostają w Wazuh. BastionDesk zapisuje konfigurację
+i zaszyfrowane hasło. Agent jest identyfikowany nazwą i ID z Wazuh.
 
-### Kroki
+### Odbiór
 
-1. Wykonać pełne discovery Wazuh.
-2. Zdefiniować `asset`, `security_event`, `alert` i `source`.
-3. Zachować surowy payload i tworzyć wersjonowany model znormalizowany.
-4. Zapewnić deduplikację, replay, backpressure i checkpointy.
-5. Powiązać Wazuh agent/host z assetem oraz tenantem.
-6. Określić retencję surowych i znormalizowanych danych.
-7. Udostępnić analitykowi alerty i szczegóły źródła.
-8. Przygotować fixture'y i kontrolowane zdarzenia badawcze.
-9. Defender i inne źródła dodać później jako osobne adaptery.
-
-### Kryterium ukończenia
-
-Alert trafia do właściwej organizacji, może być odtworzony bez duplikatów i
-jest widoczny wraz z surowym oraz znormalizowanym źródłem.
+Test przeglądarkowy potwierdził zgodność JSON-u istniejącego alertu agenta
+Ubuntu `001` z dokumentem Indexera oraz jeden wiersz po dwóch odświeżeniach.
+Kryterium WAZ-04 jest zamknięte. [Kryteria i wyniki](integrations/wazuh-stage-6-spec.md#kryteria-odbioru).
 
 ### Dokumentacja
 
-- [karta discovery Wazuh](integrations/wazuh-discovery.md) — analiza dokumentacji,
-  wymagania VM i plan spike'u; pełne discovery czeka na weryfikację połączenia;
-- schema mapping i retencja;
-- runbook utraty połączenia i replay.
+- [Konfiguracja i diagnostyka](integrations/wazuh-discovery.md#wdrożenie-etapu-6).
+- [Kontrakt HTTP](backend/api.md#wazuh-api).
+- [Migracja i odtwarzanie konfiguracji](database/migrations.md#rozszerzenie-etapu-6).
 
 ## Faza 7 — IOC, Threat Intelligence i artefakty
 
@@ -775,7 +755,8 @@ providera nie blokuje incydentu, a analityk widzi aktualność danych.
 ### Kryterium ukończenia
 
 Każde powiązanie i score można wyjaśnić oraz odtworzyć dla konkretnej wersji
-reguł. LLM nie jest wymagany.
+reguł. Dziennik wiąże wynik z dowodami i zachowuje historię korekt oraz
+ponownej analizy. LLM nie jest wymagany.
 
 ## Faza 9 — playbooki i human-in-the-loop
 
@@ -798,7 +779,10 @@ Przekształcić analizę w wersjonowaną rekomendację działania.
 ### Kryterium ukończenia
 
 System wybiera i przedstawia playbook, ale bez approval nie wykonuje akcji
-zewnętrznej. Analityk widzi uzasadnienie, zakres i rollback.
+zewnętrznej. Analityk widzi uzasadnienie, zakres i rollback. Definicja i wersja
+playbooka oraz stan oczekiwania są trwałe w PostgreSQL. Restart, ponowiona
+decyzja, odmowa, wygaśnięcie i anulowanie mają testy; wznowienie nie powtarza
+wykonanego kroku. Uprawnienia i polityki są ponownie sprawdzane przed akcją.
 
 ## Faza 10 — kontrolowana active response
 
@@ -847,8 +831,10 @@ zamrożonym wymaganiem.
 
 ### Kryterium ukończenia
 
-Każdy use case ma mierzalną jakość, walidowany output i fallback. Niedostępny
-model nie blokuje podstawowego systemu.
+Każdy use case ma mierzalną jakość, walidowany output, odwołania do dowodów
+i fallback. Dziennik zapisuje model, wersję kontraktu i wynik walidacji;
+niepoparte twierdzenia wymagają oceny analityka. Niedostępny model nie blokuje
+podstawowego systemu.
 
 ## Faza 12 — walidacja badawcza i wydanie
 
@@ -874,7 +860,9 @@ Udowodnić wartość systemu i przygotować powtarzalny deployment.
 ### Kryterium ukończenia
 
 Wersja ma powtarzalne wdrożenie i upgrade, wyniki eksperymentów, runbooki oraz
-udokumentowane ograniczenia. Pełny zestaw testów komponentowych i E2E przechodzi
+udokumentowane ograniczenia. Eksport dziennika dowodów zachowuje wersję
+formatu i tenant scope, ma testy deterministyczności, wykrywania zmian oraz
+redakcji wrażliwych danych. Pełny zestaw testów komponentowych i E2E przechodzi
 przeciw docelowemu BastionDesk `2.0` bez regresji przepływów `1.0.3`.
 
 ## Checkpointy produktowe
@@ -899,7 +887,7 @@ Każdy checkpoint musi być prezentowalny i testowalny bez ukończenia następne
 | 3 | mapa modułów, reguły domenowe, plan kompatybilności i wygaszania legacy |
 | 4 | topologia messagingu, standard handlera, retry/DLQ i runbook replay |
 | 5 | model zaufania Elysia 2–NestJS, kontrakt JWT/JWKS, threat model auth, rotacja kluczy i karty OIDC |
-| 6 | karta Wazuh, schema mapping, retencja i runbook utraty połączenia |
+| 6 | specyfikacja i wyniki odbioru, konfiguracja Indexera i diagnostyka, kontrakt HTTP |
 | 7 | model IOC/artefaktu, karty TI, polityka sekretów i wersjonowanie YARA |
 | 8 | specyfikacja korelacji, scoring, kalibracja i opis datasetu |
 | 9 | schema playbooka, model policy/approval i katalog bezpiecznych kroków |
@@ -958,10 +946,16 @@ docelowym BastionDesk `2.0`.
 
 ### Eksperyment 1 — czas reakcji
 
-Porównać przepływ manualny z BastionDesk: alert/zgłoszenie → ingest → korelacja
-→ enrichment → scoring → playbook → approval/akcja.
+Porównać przepływ manualny z BastionDesk od odczytu alertu lub zgłoszenia
+przez korelację, enrichment i scoring po playbook, zatwierdzenie i reakcję.
 
 Metryki: MTTD, MTTT, MTTR, liczba ręcznych kroków i czasy etapów pipeline'u.
+
+Wspólna zasada pomiarów: etykiety prawdy powstają niezależnie od predykcji
+systemu. Alert pominięty przez scorer nie staje się przez to false positive.
+Raport uwzględnia błędy i wstrzymanie decyzji, wersję datasetu/reguł/modelu
+oraz brak pomiaru jako brak danych. Historyczny replay korzysta z dowodów
+osiągalnych w badanym momencie; analizę z późniejszym TI oznaczamy oddzielnie.
 
 ### Eksperyment 2 — jakość korelacji
 
@@ -986,7 +980,7 @@ baseline i działanie bez modelu.
 ## Minimalny zakres pracy magisterskiej
 
 1. Model alertów, assetów i zdarzeń bezpieczeństwa.
-2. Wazuh ingest.
+2. Odczyt alertów Wazuh i przegląd w panelu analityka.
 3. Niezawodny workflow RabbitMQ.
 4. Ekstrakcja IOC.
 5. Co najmniej dwie klasy enrichmentu TI.
@@ -1001,18 +995,16 @@ baseline i działanie bez modelu.
 Social login, osobny auth gateway, migracja storage, Kubernetes, landing page i
 rozbudowany LLM nie są konieczne do obrony, jeśli nie wspierają eksperymentu.
 
-## Kolejność rozpoczęcia pracy
+## Kolejność dalszej pracy
 
-Faza 0 jest zakończona, a kontrakt UI i E2E fazy 1 został wdrożony i miał
-pełny zielony przebieg. Fundamenty fazy 2 zostały odebrane. Kolejność dalszej pracy:
+1. Utrzymywać kontrakt UI/E2E i sprawdzić bieżące zależności przed następnym
+   wydaniem; oddzielić formalne odbiory od historycznych wyników testów.
+2. Domknąć odbiór etapu 6 przez świeże zdarzenie kontrolowane na Ubuntu
+   z agentem `001` i sprawdzenie jego odczytu w widoku analityka.
+3. Rozszerzać własną domenę o IOC/TI, korelację i dziennik decyzji (fazy 7–8),
+   a następnie o trwałe playbooki suggestion/approval (faza 9).
+4. Dopiero po testach polityk i awarii dołączyć ograniczoną reakcję oraz
+   rozszerzony mediator LLM (fazy 10–11).
 
-1. utrzymywać zieloną macierz przeglądarek i kontrole lokalne fazy 1
-   (workflowy GitHub Actions usunięto 22 września 2026);
-2. odebrać gotowe etapy 3.1–3.5: modularny Core, workflow, pliki, audyt
-   i idempotencję, zweryfikowane macierzą E2E;
-3. odebrać fundament asynchroniczny fazy 4, a następnie przejść do
-   wydzielenia tożsamości i gateway w fazie 5.
-
-Pierwszym dużym rezultatem jest checkpoint A: system nadal robi wszystko, co
-`1.0.3`, ale ma migracje, modularny core, kontrakty, kolejki i obserwowalność
-potrzebne do bezpiecznego dodawania SOAR.
+Przepływ Wazuh → widok analityka działa w laboratorium. Checkpoint B obejmuje
+domknięcie odbioru etapu 6 oraz IOC/TI i analizę artefaktów z etapu 7.

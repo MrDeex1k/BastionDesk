@@ -35,7 +35,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 try {
   await docker(["run", "-d", "--name", name, "--tmpfs", "/var/lib/postgresql:rw",
-    "-e", "POSTGRES_PASSWORD", "-p", "127.0.0.1::5432", "postgres:18.6"]);
+    "-e", "POSTGRES_PASSWORD", "-p", "127.0.0.1::5432", "postgres:18.7"]);
   started = true;
   let ready = false;
   for (let attempt = 0; attempt < 60; attempt++) {

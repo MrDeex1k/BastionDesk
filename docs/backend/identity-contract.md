@@ -99,17 +99,19 @@ cooldownu — nie gwarantujemy bezprzerwowego przełączenia bez koordynacji.
 Podczas awarii JWKS świeży cache działa do upływu 30 s; po nim brak dostępu
 oznacza odmowę. Usunięcie skompromitowanego klucza wymaga również odświeżenia
 cache wszystkich Core lub zatrzymania ruchu; samo usunięcie z tabeli nie
-unieważnia kopii cache. Zaplanować runbook awaryjny przed wdrożeniem produkcyjnym.
+unieważnia kopii cache. Procedurę awaryjną opisuje [runbook fazy 5](phase-5-identity.md).
 
 ## Granice i testy
 
 `identity.test.ts` sprawdza profil, cache, rotację z overlap, usunięcie klucza,
 wygaśnięcie cache, awarie i timeout. `better-auth.test.ts` używa rzeczywistego
-Better Auth 1.7.5, memory adaptera, sesji/cookies, organizacji, pluginu JWT
+Better Auth z wersji przypiętej w manifeście, memory adaptera, sesji/cookies, organizacji, pluginu JWT
 i podpisów: emisja, szyfrowanie privateKey, rotacja, świeża rola, wyłączenie
 konta, usunięcie członkostwa, zmiana organizacji i logout.
 
-Test Better Auth jest uruchamiany zawsze przez Elysia `2.0.0-beta.16`.
+Test Better Auth jest uruchamiany przez Elysia. Wersje z odbioru fazy 5
+(Better Auth 1.7.5 i Elysia 2.0.0-beta.16) są historyczne; aktualne wersje
+określa manifest backendu.
 Probe w `scripts/spikes/elysia2/` pozostaje historycznym dowodem decyzji z fazy 2.
 Testy sieciowe i przeglądarkowe fazy 5 sprawdzają trwały magazyn PostgreSQL,
 restart, mTLS, reverse proxy, sesje, role oraz PassKeys; zakres i polecenia znajdują

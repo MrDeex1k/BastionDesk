@@ -1,13 +1,108 @@
-# Discovery Wazuh — faza 6
+# Integracja Wazuh — etap 6
 
-Data przeglądu: 2026-09-24. Status: analiza dokumentacji i projekt spike'u.
-Nie potwierdzono jeszcze komunikacji z rzeczywistą instalacją ani kompatybilności
-adaptera. Pełne discovery pozostaje otwarte do zakończenia spike'u.
+Uzgodniony zakres produktu i kryteria odbioru zawiera [specyfikacja etapu 6](wazuh-stage-6-spec.md).
+
+## Wdrożenie etapu 6
+
+Zakładka **Alerty Wazuh** jest dostępna w panelach analityka i administratora.
+Wazuh zawiera alerty i określa ich czas przechowywania. W BastionDesk administrator
+konfiguruje jedno dedykowane źródło dla swojej organizacji.
+
+1. Wykonaj standardową migrację bazy BastionDesk, która obejmuje `0004_wazuh_sources`.
+2. Wygeneruj klucz poleceniem `openssl rand -base64 32`. Zapisz go w magazynie
+   sekretów instalacji. Zamontuj plik tylko do odczytu dla procesu backendu
+   i ustaw jego ścieżkę w `WAZUH_SOURCE_KEY_FILE`. Zachowaj kopię klucza
+   do odtworzenia konfiguracji z kopii bazy.
+3. Zapewnij trasę z kontenera backendu do portu HTTPS Indexera na prywatnym adresie
+   VM. W sieci wdrożenia ogranicz ruch wychodzący czytnika do sieci, w których
+   działają Indexery. Dodatkowe chronione usługi wskaż w `WAZUH_PROTECTED_HOSTS`
+   jako listę nazw i IP oddzielonych przecinkami. Pracownicy korzystają ze
+   zwykłego adresu BastionDesk przez sieć firmową lub VPN.
+4. Utwórz w Wazuh osobne konto do odczytu indeksów alertów organizacji
+   (`wazuh-alerts-*`). Konto musi mieć prawo wyszukiwania oraz tworzenia
+   i zamykania krótkotrwałych kontekstów Point in Time na tych indeksach.
+   Używana ścieżka z PIT została sprawdzona na Indexerze opartym na OpenSearch
+   2.19.6. [Uprawnienia Point in Time](https://docs.opensearch.org/2.19/search-plugins/searching-data/point-in-time/#security-model)
+5. W panelu administratora podaj adres HTTPS Indexera, użytkownika i hasło.
+   Dla prywatnego urzędu certyfikacji wklej publiczny certyfikat CA w formacie PEM.
+   Wybierz **Sprawdź połączenie**, a następnie **Zapisz i włącz**.
+   Weryfikacja sprawdza utworzenie i zamknięcie PIT również na istniejącym
+   pustym indeksie. Jeżeli Indexer nie ma jeszcze pasujących indeksów, udane
+   wyszukiwanie wystarcza do zapisu źródła. Próby PIT wymagają wtedy utworzenia
+   pierwszego indeksu alertów. Cała weryfikacja ma wspólny limit 10 sekund.
+6. Otwórz zakładkę jako analityk, sprawdź zakres i poziom reguły, a następnie
+   otwórz **Szczegóły alertu Wazuh** i wybierz **Pokaż JSON**.
+
+Przykład montowania klucza w pliku uzupełniającym Docker Compose:
+
+```yaml
+services:
+  backend:
+    environment:
+      WAZUH_SOURCE_KEY_FILE: /run/secrets/wazuh-source-key
+    volumes:
+      - /srv/bastiondesk/secrets/wazuh-source-key:/run/secrets/wazuh-source-key:ro
+```
+
+Plik powinien być czytelny dla użytkownika procesu backendu.
+
+`WAZUH_REFRESH_INTERVAL_SECONDS` określa interwał całej instalacji. Domyślnie
+wynosi 60 sekund. Wartość `0` pozostawia odświeżanie ręczne. Po zmianie odtwórz
+kontener backendu z nowym środowiskiem, np. poleceniem
+`docker compose up -d --no-deps --force-recreate backend` z tymi samymi plikami
+Compose co przy wdrożeniu. Interfejs odczyta interwał z API backendu.
+Odświeżenie pierwszej strony zamyka poprzedni kontekst PIT dla tego widoku.
+Test połączenia, zapis i zmiana stanu mają co najmniej 15 sekund na odpowiedź backendu,
+również gdy globalny `VITE_API_TIMEOUT_MS` jest krótszy.
+
+Certyfikat Indexera powinien pasować do nazwy lub adresu HTTPS podanego
+w formularzu. W laboratorium z przekierowaniem TCP operator może przypisać
+istniejącą tożsamość z certyfikatu przez `WAZUH_INDEXER_TLS_NAME` oraz
+dokładny adres HTTPS przez `WAZUH_INDEXER_TLS_ORIGIN`. Nadal wymagany jest
+zaufany prywatny CA i poprawna tożsamość z certyfikatu.
+
+W teście z błędem połączenia sprawdź trasę i port z sieci kontenera.
+Przy błędzie TLS sprawdź łańcuch CA i nazwę w certyfikacie. Przy odmowie
+uwierzytelnienia lub uprawnień sprawdź konto i rolę w Indexerze.
+Jeśli inny administrator zmienił źródło, wczytaj aktualną konfigurację
+przed ponowieniem operacji.
+
+### Odbiór z rzeczywistym Wazuh
+
+Uruchom test z katalogu głównego przez `bun scripts/test-phase1-e2e.ts --wazuh`
+po zainstalowaniu Chromium używanego przez Playwright. Przekaż
+`E2E_WAZUH_ORIGIN`, `E2E_WAZUH_USER`, `E2E_WAZUH_CA_FILE`
+i `E2E_WAZUH_PASSWORD_FILE` z plikiem hasła tylko do odczytu.
+Dla laboratorium z przekierowaniem można przekazać `E2E_WAZUH_TLS_NAME`.
+Test WAZ-04 wybiera najnowszy istniejący alert agenta `001`. Opcjonalne
+`E2E_WAZUH_EVENT_SINCE` przyjmuje datę w ISO 8601 i ogranicza wyszukiwanie do
+alertów od tego czasu. Test porównuje pełny dokument z Indexerem po indeksie
+oraz ID i sprawdza dwa odświeżenia w tabeli.
+
+Polecenie diagnostyczne odczytuje podsumowanie konkretnego dokumentu.
+Korzysta z `WAZUH_INDEXER_URL`, `WAZUH_INDEXER_USER`,
+`WAZUH_INDEXER_PASSWORD_FILE` i opcjonalnych `WAZUH_INDEXER_CA`
+oraz `WAZUH_INDEXER_TLS_NAME`.
+
+```sh
+bun run --cwd backend wazuh:read <agent> <indeks> <id-dokumentu> [poziom]
+```
+
+## Notatki z discovery
+
+Poniższy zapis pochodzi z 24 września 2026. Obejmuje historyczne propozycje
+trwałego ingestu, replayu, kwarantanny i Server API. Aktualny zakres określa
+[specyfikacja etapu 6](wazuh-stage-6-spec.md), a obowiązująca konfiguracja
+znajduje się w sekcji [Wdrożenie etapu 6](#wdrożenie-etapu-6).
+
+We wrześniu praca obejmowała analizę dokumentacji i projekt spike'u.
+Połączenie z rzeczywistą instalacją oraz kompatybilność adaptera pozostawały
+wtedy do sprawdzenia.
 
 Użytkownik może przygotować dedykowaną VM na innym hoście. Nie uruchamiamy
 Wazuh w głównym Compose BastionDesk. Branch prac: `feat/stage6-implement`.
 
-## Zakres i wersje
+### Zakres i wersje
 
 Odczyt alertów oraz identyfikacja agentów/assetów, bez Active Response,
 zmiany konfiguracji, enrollmentu i wykonywania poleceń. Właściciel domenowy:
@@ -20,7 +115,7 @@ Przed spike'em zapisać dokładne wersje managera, indexera, agentów i obrazu/O
 sprawdzić zmiany względem faktycznie wybranej wersji oraz jej deprecacje.
 Wersja bazowego OpenSearch i dostępność PIT wymagają sprawdzenia na VM.
 
-## Interfejsy — ustalenia i propozycja
+### Interfejsy — ustalenia i propozycja
 
 Wazuh rozdziela analizę i zarządzanie agentami (server) od wyszukiwania danych
 (indexer). Domyślne porty HTTPS to odpowiednio 55000 i 9200.
@@ -43,7 +138,7 @@ nie stanowi dowodu trwałego dostarczenia do BastionDesk. Polling preferujemy
 ze względu na możliwość kontrolowanego odczytu historii bez instalacji skryptu.
 [Integrator](https://documentation.wazuh.com/current/user-manual/manager/integration-with-external-apis.html).
 
-## Uwierzytelnianie i izolacja
+### Uwierzytelnianie i izolacja
 
 Server API udostępnia `/security/user/authenticate` i używa JWT do kolejnych
 żądań. Adapter powinien odnawiać token, a po 401 wykonać najwyżej jedną próbę
@@ -69,7 +164,7 @@ Proponowane wymagania dla spike'u:
 Dla MVP preferujemy jawne przypisanie źródła do jednej organizacji. Współdzielona
 instalacja wymaga dodatkowego modelu zakresów agentów i testów izolacji danych.
 
-## Kontrakt i niezawodność — projekt do potwierdzenia
+### Kontrakt i niezawodność — projekt do potwierdzenia
 
 Proponowana koperta: `source_id`, `organization_id` ustalone przez konfigurację,
 `source_version`, `_index`, `_id`, `received_at`, oryginalny `_source` oraz
@@ -107,7 +202,7 @@ Server API dokumentuje domyślny limit 300 żądań/min, wspólny dla użytkowni
 (z wyjątkami opisanymi w konfiguracji); nie przenosimy tego limitu na Indexer.
 [Limity](https://documentation.wazuh.com/current/user-manual/api/configuration.html).
 
-## Retencja, eksploatacja i licencja
+### Retencja, eksploatacja i licencja
 
 Retencja raw, normalizacji, kwarantanny i kluczy deduplikacji pozostaje do
 uzgodnienia po pomiarze wolumenu. Klucze deduplikacji muszą pokrywać dopuszczalny
@@ -126,7 +221,7 @@ oraz zależności. Integracja przez API nie wymaga kopiowania kodu Wazuh.
 Pobieranie z lokalnych API nie potrzebuje publicznego Internetu; instalacja,
 aktualizacje i usługi wzbogacania Wazuh mają oddzielne wymagania sieciowe.
 
-## VM i kryteria zamknięcia discovery
+### VM i kryteria zamknięcia discovery
 
 Do testu wystarczy dedykowana instalacja laboratoryjna z managerem i Indexerem,
 dashboardem do weryfikacji oraz co najmniej jednym agentem testowym. Nie ustalamy

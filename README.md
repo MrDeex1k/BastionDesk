@@ -20,8 +20,27 @@ Dla organizacji, które potrzebują użycia komercyjnego niezgodnego z obowiązk
 Zasady współpracy opisuje [CONTRIBUTING.md](CONTRIBUTING.md), w tym
 [nazwy branchy i squash & merge](CONTRIBUTING.md#branche-i-squash--merge).
 
+## Stan rozwoju
+
+Kod zawiera fundamenty faz 0–5: migracje SQL, modularny NestJS Core z Effect,
+osobny gateway Elysia 2 + Better Auth, JWT/JWKS przez mTLS oraz trwałe zadania
+klasyfikacji przez RabbitMQ. Express pozostaje hostem HTTP Core i części tras
+administracyjnych. Wersja manifestów nadal wynosi `1.0.3`; nie jest to wydanie
+pełnej platformy SOAR.
+
+Etap 6 dodaje widok **Alerty Wazuh** dla analityka i administratora. Backend
+odczytuje alerty i pełny JSON z Indexera na żądanie. PostgreSQL przechowuje
+konfigurację jednego źródła na organizację i zaszyfrowane hasło. Test w Chromium
+potwierdził odczyt istniejącego alertu agenta Ubuntu `001` oraz zgodność pełnego
+JSON-u z dokumentem w Indexerze. Kryterium WAZ-04 jest zamknięte.
+[Wyniki odbioru](docs/integrations/wazuh-stage-6-spec.md#wyniki-odbioru-w-laboratorium) ·
+[Plan rozwoju](docs/future-soar-platform.md) · [Architektura backendu](docs/backend/backend.md).
+
 ## TechStack
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white) ![Oxc](https://img.shields.io/badge/oxc-%233451b2.svg?style=for-the-badge&logo=oxc&logoColor=white&logoSize=auto) ![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white) ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB) ![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white) ![TanStack Router](https://img.shields.io/badge/TanStack_Router-FF4154?style=for-the-badge&logo=react-router&logoColor=white) ![React Query](https://img.shields.io/badge/-React%20Query-FF4154?style=for-the-badge&logo=react%20query&logoColor=white) ![Express.js](https://img.shields.io/badge/express.js-%23404d59.svg?style=for-the-badge&logo=express&logoColor=%2361DAFB) ![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)
+
+Backend aplikacyjny: Bun, Elysia 2 + Better Auth, NestJS z ExpressAdapter,
+Effect i RabbitMQ. Dokładne wersje określają manifesty i lockfile.
 
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi) ![HuggingFace](https://img.shields.io/badge/huggingface-%23FFD21E.svg?style=for-the-badge&logo=huggingface&logoColor=white)
 
@@ -42,7 +61,8 @@ Zasady współpracy opisuje [CONTRIBUTING.md](CONTRIBUTING.md), w tym
 5. Uruchamiamy bazę: `docker compose up -d --wait database`.
 6. Wykonujemy `plan` i `apply` migratora zgodnie z
    [instrukcją wdrożenia](docs/infrastructure/deploy.md). Bez migracji
-   `0001_core_operations` backend nie wystartuje.
+   `0001_core_operations` i `0002_durable_jobs` Core/worker nie wystartują;
+   auth wymaga `0003_auth_jwks`, a integracja Wazuh wymaga `0004_wazuh_sources`.
 7. Uruchamiamy `docker compose up` lub `docker compose up -d`, jeśli stack ma działać w tle.
 8. Z aplikacji korzystamy przez `http://localhost:4567` — to jedyny publiczny entrypoint stacka.
 
@@ -98,7 +118,7 @@ bun run test:messaging:broker # routing, DLQ, confirms i restart RabbitMQ
 bun run test:messaging:telemetry # eksport OTLP i propagacja trace
 bun run test:core:db # transakcje, idempotencja, audyt na izolowanym PostgreSQL
 bun run test:migrations # izolowany PostgreSQL: baseline, historia, rollback i restore
-bun run dev        # frontend i backend równolegle
+bun run dev        # frontend i Core; auth i worker wymagają osobnego startu
 bun run changelog:generate # generowanie ostatniej sekcji CHANGELOG z Conventional Commits
 ```
 
@@ -124,7 +144,8 @@ przez filtrowane workspace’y. Wyjątek: odizolowany probe Elysia 2 w
 `scripts/spikes/elysia2` ma własny lockfile i nie jest częścią builda produkcyjnego.
 
 Core wymaga migracji `0001_core_operations` i `0002_durable_jobs` przed startem, również
-na świeżej bazie. Brak migracji blokuje nasłuchiwanie backendu.
+na świeżej bazie. Auth dodatkowo wymaga `0003_auth_jwks`. Brak wymaganego
+schematu blokuje start odpowiedniej usługi.
 [Zakres Core i wyniki](docs/backend/phase-3-core.md).
 Faza 4 dodaje worker LLM, RabbitMQ po TLS, retry/DLQ i opcjonalny OTLP.
 [Uruchomienie i replay](docs/backend/messaging-runbook.md).
@@ -133,11 +154,13 @@ Faza 2 dodaje jawne polecenia `db:migrate:plan` i `db:migrate:apply`, wymagając
 osobnego połączenia migratora. Zakres baseline i procedurę opisuje
 [instrukcja migracji](docs/database/migrations.md).
 
-Instalację przeglądarek, macierz scenariuszy i CI opisuje
+Instalację przeglądarek, macierz scenariuszy i historyczny wynik CI opisuje
 [kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).
+Workflowy GitHub Actions usunięto 22 września 2026; kontrole pozostają lokalne.
 Aktualne wersje zależności określają manifesty i pliki lockfile.
-[Odświeżenie zależności z 17 października 2026](docs/development/2026-10-17-dependency-refresh.md)
-opisuje aktualne wersje i wyniki weryfikacji. Poprzednią migrację Effect 4
+[Odświeżenie z 30 października 2026](docs/development/2026-10-30-dependency-refresh.md)
+nie obejmowało testów ani buildów; wcześniejsze wyniki nie potwierdzają
+automatycznie zgodności po tej aktualizacji. Poprzednią migrację Effect 4
 opisuje [aktualizacja z 8 października](docs/development/2026-10-08-dependency-refresh.md). Uwagi do
 schematu Better Auth opisuje [dokumentacja bazy](docs/database/database.md).
 
@@ -158,3 +181,9 @@ Najważniejsze założenia release:
 Elysia 2 + Better Auth działa w osobnym `auth-service`; Core przyjmuje JWT przez
 mTLS. Wymagane są migracja `0003_auth_jwks` i certyfikaty identity przed
 przełączeniem ruchu. [Konfiguracja, upgrade, rollback i testy](docs/backend/phase-5-identity.md).
+
+### Alerty Wazuh (etap 6)
+
+Podłącz zewnętrzny Indexer przez prywatną sieć, zamontuj klucz szyfrowania
+w backendzie i zapisz źródło w panelu administratora.
+[Instrukcja wdrożenia i testu](docs/integrations/wazuh-discovery.md#wdrożenie-etapu-6).
