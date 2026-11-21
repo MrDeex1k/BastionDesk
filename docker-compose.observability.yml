@@ -1,7 +1,7 @@
 # Local diagnostic collector; replace debug exporter for production retention/UI.
 services:
   otel-collector:
-    image: otel/opentelemetry-collector:0.148.0
+    image: otel/opentelemetry-collector:0.165.0
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./infra/otel/collector.yaml:/etc/otelcol/config.yaml:ro

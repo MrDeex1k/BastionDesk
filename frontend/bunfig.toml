@@ -1,5 +1,16 @@
 [install]
-minimumReleaseAge = 86400
+minimumReleaseAge = 10800
+
+[fmt]
+printWidth = 100
+tabWidth = 2
+useTabs = false
+semi = true
+singleQuote = false
+jsxSingleQuote = false
+trailingComma = "all"
+sortPackageJson = false
+ignorePatterns = ["dist/**", "src/routeTree.gen.ts"]
 
 [test]
 root = "./tests"

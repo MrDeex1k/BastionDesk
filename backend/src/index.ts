@@ -130,12 +130,22 @@ const { coreAdminRoutes, coreAdminHandler } = await import("./adapters/core-admi
 const { executeAdminIncidentsQuery, readIncidentFilters, readIncidentSummary } =
 	await import("./adapters/core-admin-reads");
 const { coreIdentity } = await import("./adapters/core-identity");
+const { coreWazuhRoutes } = await import("./adapters/core-wazuh-http");
+const { wazuhRefreshSeconds } = await import("./wazuh/config");
+const { wazuhService } = await import("./wazuh/service");
+const { wazuhSourceStore } = await import("./wazuh/source");
+const { getPgPool } = await import("./lib/database");
+const wazuhRoutes = coreWazuhRoutes(
+	coreIdentity,
+	wazuhService(wazuhSourceStore(getPgPool()), wazuhRefreshSeconds()),
+);
 const { coreIncidentReads } = await import("./adapters/core-incident-reads");
 const { coreReadPaths, coreReadHandler } = await import("./adapters/core-http");
 await (await import("./adapters/core-schema")).assertCoreSchema();
 const core = await (
 	await import("./core/application")
 ).createCoreApplication([
+	...wazuhRoutes,
 	...coreAdminRoutes.map((route) => ({
 		...route,
 		handle: coreAdminHandler(coreIdentity, {
@@ -160,6 +170,7 @@ const core = await (
 	},
 ]);
 app.get("/api/core/health", core.http);
+for (const route of wazuhRoutes) app.route(route.paths)[route.method](apiRateLimiter, core.http);
 
 for (const route of coreAdminRoutes) {
 	if (route.method === "query") {

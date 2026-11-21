@@ -110,18 +110,20 @@ następować po zebraniu. Adapter musi rozstrzygnąć clock skew źródła przed
 utworzeniem rekordu. Każda referencja dziedziczy tenant wpisu; resolver musi
 sprawdzić przynależność źródła i wskazanego dowodu do tej organizacji.
 
-Docelowy zapis audytu jest append-only i trwały. Sukces zapisujemy atomowo
+Zapis audytu Core jest trwały; aplikacja dopisuje wpisy. Sukces zapisujemy atomowo
 ze zmianą i wynikiem komendy. Odmowę lub błąd po rollbacku zapisujemy osobno,
 z zachowaniem command/correlation ID. Nie zastępujemy istniejącego triggera
 `incident_audit_log` ani nie backfillujemy fikcyjnego aktora/correlation ID
-dla starych rekordów. Migracja schematu trwałego audytu i adapter zapisujący
-go należą do implementacji core w fazie 3.
+dla starych rekordów. Migracja `0001_core_operations` i adaptery Core
+realizują ten zapis od fazy 3. Audyt nie jest odrębnym archiwum odpornym na
+zmiany administratora bazy. [Zakres trwałości](../database/migrations.md).
 
 ## Odbiór
 
 Testy sprawdzają konflikt klucza, replay, operację w toku, izolację zakresu,
 canonical JSON, odrzucenie nie-JSON, neutralne błędy tenantów, schemat audytu,
 provenance, bezpieczne mapowanie błędów i zgodność helpera HTTP z legacy.
-Pełna macierz E2E weryfikuje publiczne przepływy 1.0.3. Testy te nie są dowodem
-trwałości lub współbieżności przyszłego wykonawcy komend — taki dowód będzie
-wymagany przy dołączeniu adaptera PostgreSQL.
+Pełna macierz E2E weryfikuje publiczne przepływy 1.0.3. Same testy kontraktów
+nie dowodzą trwałości ani współbieżności. Wdrożony adapter PostgreSQL ma
+osobną integrację: atomowy zapis, konflikt klucza, konkurencyjne ponowienie,
+restart repozytorium i izolacja organizacji. [Wyniki fazy 3](../testing/phase-3-core.md).

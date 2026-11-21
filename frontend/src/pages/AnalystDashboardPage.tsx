@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Activity, User, UserX, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { WazuhAlerts } from "../components/WazuhAlerts";
 import { AnalystIncidentList } from "../components/AnalystIncidentList";
 import {
   Dialog,
@@ -19,6 +20,7 @@ const IncidentReportForm = lazy(() =>
 );
 
 export function AnalystDashboardPage() {
+  const [activeTab, setActiveTab] = useState("assigned");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const handleIncidentCreated = useCallback(() => {
@@ -38,8 +40,8 @@ export function AnalystDashboardPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="assigned" className="w-full">
-        <div className="mb-6 flex items-center justify-center gap-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-4">
           <TabsList className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-1">
             <TabsTrigger
               value="assigned"
@@ -55,6 +57,7 @@ export function AnalystDashboardPage() {
               <UserX className="mr-2 size-4" />
               Nieprzypisane
             </TabsTrigger>
+            <TabsTrigger value="wazuh">Alerty Wazuh</TabsTrigger>
           </TabsList>
 
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -84,6 +87,9 @@ export function AnalystDashboardPage() {
 
         <TabsContent value="unassigned" className="mt-0 w-full flex justify-center">
           <AnalystIncidentList type="unassigned" />
+        </TabsContent>
+        <TabsContent value="wazuh" className="mt-0 w-full">
+          {activeTab === "wazuh" && <WazuhAlerts />}
         </TabsContent>
       </Tabs>
     </div>

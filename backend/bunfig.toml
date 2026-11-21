@@ -1,2 +1,12 @@
 [install]
-minimumReleaseAge = 86400
+minimumReleaseAge = 10800
+
+[fmt]
+printWidth = 100
+tabWidth = 4
+useTabs = true
+semi = true
+singleQuote = false
+jsxSingleQuote = false
+trailingComma = "all"
+sortPackageJson = false

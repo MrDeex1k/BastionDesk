@@ -1,8 +1,8 @@
 # BastionDesk — baza danych PostgreSQL 18
 
-Dokumentacja odpowiada aktualnym skryptom inicjalizacyjnym znajdującym się w
-`database/init-sql/`. Schemat składa się z tabel Better Auth oraz tabel
-aplikacyjnych do obsługi zgłoszeń/incydentów.
+Schemat bieżącej aplikacji składa się z baseline w `database/init-sql/`
+oraz migracji w `database/versioned/`. Same skrypty inicjalizacji nie
+wystarczają do uruchomienia Core, workera i auth po fazie 5.
 
 ## Źródło prawdy
 
@@ -33,7 +33,8 @@ przygotowano ręczny skrypt
 [`002-better-auth-1.7.3-provider-identity.sql`](../../database/migrations/002-better-auth-1.7.3-provider-identity.sql).
 Zachowuje historyczne wartości `issuer`, dopuszcza nowe konta bez tej wartości
 i przerywa transakcję przy niejednoznacznych parach tożsamości. Nie uruchamia
-się automatycznie; nie stanowi jeszcze systemu migracji planowanego w fazie 2.
+się automatycznie; pozostaje historyczną korektą poza wersjonowanym runnerem.
+Runner fazy 2 jest już wdrożony i nie uruchamia tego skryptu.
 Przed uruchomieniem nowego backendu należy zatrzymać zapisy auth, wykonać
 backup i sprawdzić jego odtworzenie. Skrypt trzeba najpierw uruchomić na kopii
 bazy przez `psql -X -v ON_ERROR_STOP=1 -f
@@ -52,11 +53,37 @@ zweryfikować logowanie i rejestrację. Niejednoznaczne pary
 - ✅ ścieżki i metadane plików przechowywanych w MinIO/S3
 - ✅ kategoryzacja zgłoszenia przez LLM
 - ✅ audyt zmian statusu zgłoszeń
+- ✅ transakcyjny audyt Core i potwierdzenia idempotentnych komend
+- ✅ trwałe zadania klasyfikacji, retry/DLQ i deduplikacja wyniku
+- ✅ magazyn kluczy JWT auth (`jwks`)
 
 Nie jest to jeszcze schemat SOAR. Baza nie zawiera tabel alertów, zdarzeń,
 zasobów, IOC, enrichmentu TI, skanów artefaktów, scoringu ryzyka, playbooków,
 approval flow, akcji/rollbacków ani telemetryki. Te elementy są częścią
 roadmapy opisanej w [future-soar-platform.md](../future-soar-platform.md).
+
+## Rozszerzenia baseline po fazach 3–6
+
+| Migracja | Tabele / przeznaczenie |
+| --- | --- |
+| `0001_core_operations` | `core_command_receipts`, `core_audit`: idempotencja i audyt operacji. |
+| `0002_durable_jobs` | `core_jobs`: outbox/inbox, dzierżawy, retry/DLQ i wynik klasyfikacji. |
+| `0003_auth_jwks` | `jwks`: klucze JWT Better Auth. |
+| `0004_wazuh_sources` | `wazuh_sources`: jedno źródło Wazuh na organizację z zaszyfrowanym hasłem. |
+
+Rejestr `bastiondesk_meta.migrations` przechowuje historię i sumy kontrolne.
+Migracje są wymagane także na świeżej bazie; uruchamia je operator.
+[Procedura i ograniczenia](migrations.md). Tabele opisane niżej jako baseline
+nie zastępują tych rozszerzeń.
+
+### `wazuh_sources`
+
+`organization_id` jest kluczem głównym i kluczem obcym do `organization(id)`
+z `ON DELETE CASCADE`. Wiersz zawiera rewizję konfiguracji, adres HTTPS,
+nazwę użytkownika, opcjonalny certyfikat CA w PEM, zaszyfrowane hasło i stan
+włączenia. Klucz AES-256-GCM jest w pliku wskazanym przez
+`WAZUH_SOURCE_KEY_FILE`. Treść i retencja alertów pozostają w Wazuh.
+[Procedura migracji i odtwarzania konfiguracji](migrations.md#rozszerzenie-etapu-6).
 
 ## Typy wyliczeniowe
 

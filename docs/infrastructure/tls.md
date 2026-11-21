@@ -16,12 +16,17 @@ The script creates a local development certificate authority and service certifi
 - `llm_service`
 - `database`
 - `pgbouncer`
+- `rabbitmq`
 - `storage-1`
 - `storage-2`
 - `storage-3`
 - `storage-4`
 
 It also creates a dedicated PgBouncer client certificate for the PostgreSQL superuser defined by `POSTGRES_USER`.
+
+Auth and Core use separate, self-signed peer identities, not the shared service
+CA. Each process mounts only its own identity key and the public certificate
+of the other process. See the [phase 5 rotation procedure](../backend/phase-5-identity.md).
 
 ## Output Layout
 
@@ -40,6 +45,10 @@ Main output directories:
 - `infra/tls/dev/storage-2/`
 - `infra/tls/dev/storage-3/`
 - `infra/tls/dev/storage-4/`
+- `infra/tls/dev/rabbitmq/`
+- `infra/tls/dev/identity/backend/`
+- `infra/tls/dev/identity/auth-service/`
+- `infra/tls/dev/identity/trust/`
 
 ## Generated Files
 
@@ -84,6 +93,20 @@ For each `storage-N` node:
 - `infra/tls/dev/storage-N/private.key`
 - `infra/tls/dev/storage-N/CAs/ca.crt`
 
+### RabbitMQ
+
+- `infra/tls/dev/rabbitmq/tls.crt`
+- `infra/tls/dev/rabbitmq/tls.key`
+- `infra/tls/dev/rabbitmq/ca.crt`
+
+### Auth/Core peer identities
+
+Each `identity/backend/` and `identity/auth-service/` directory contains
+`client.crt` and `client.key`, used for the service's mTLS identity.
+`identity/trust/backend.crt` and `identity/trust/auth-service.crt` are public
+copies for peer pinning. JWT signing keys are separate and stored encrypted
+in PostgreSQL by Better Auth; these TLS files are not JWT keys.
+
 ## Subject Alternative Names
 
 The generated certificates currently include:
@@ -92,6 +115,8 @@ The generated certificates currently include:
 - `llm_service`: `DNS:llm_service`, `DNS:localhost`
 - `database`: `DNS:database`, `DNS:localhost`
 - `pgbouncer`: `DNS:pgbouncer`, `DNS:localhost`
+- `rabbitmq`: `DNS:rabbitmq`, `DNS:localhost`
+- peer identities: `DNS:backend` or `DNS:auth-service`, plus `DNS:localhost`
 - `storage-*`: `DNS:storage-1`, `DNS:storage-2`, `DNS:storage-3`, `DNS:storage-4`, `DNS:localhost`
 
 ## Running the Generator
@@ -112,4 +137,8 @@ POSTGRES_USER=my_postgres_user sh infra/tls/generate-dev-certs.sh
 
 - This script is intended for local development certificates, not for public production PKI.
 - Private keys are restricted with `chmod 600`.
-- Existing CA files are preserved, so rerunning the script reuses the same local CA unless you remove `infra/tls/dev/ca/`.
+- Existing CA files are preserved, but service keys/certificates and both peer
+  identities are regenerated. Use this generator for a fresh development stack;
+  use the documented rotation procedure for a running installation.
+- Mounted keys must be readable by the service UID without making them public;
+  the backend image runs as UID 1000. See the phase 5 deployment instructions.

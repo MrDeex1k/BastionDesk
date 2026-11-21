@@ -6,7 +6,11 @@ import { jobStore } from "../messaging/store";
 import { assertCoreSchema } from "../adapters/core-schema";
 import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { sourceConnection, wazuhSourceStore } from "../wazuh/source";
 import { Client, Pool, type PoolClient } from "pg";
 import { createIncidentWrites } from "../adapters/core-incident-writes";
 import { decideIncidentChange } from "./incidents/commands";
@@ -53,7 +57,7 @@ try {
 		"POSTGRES_PASSWORD",
 		"-p",
 		"127.0.0.1::5432",
-		"postgres:18.6",
+		"postgres:18.7",
 	]);
 	started = true;
 	for (let i = 0; i < 60; i++) {
@@ -112,6 +116,13 @@ try {
 	const beforeAuthUpgrade = await authSnapshot();
 	const migrations = [
 		{
+			id: "0004_wazuh_sources",
+			sql: await readFile(
+				new URL("../../../database/versioned/0004_wazuh_sources.sql", import.meta.url),
+				"utf8",
+			),
+		},
+		{
 			id: "0003_auth_jwks",
 			sql: await readFile(
 				new URL("../../../database/versioned/0003_auth_jwks.sql", import.meta.url),
@@ -147,6 +158,59 @@ try {
 	await pool.query(
 		'SELECT "publicKey", "privateKey", "createdAt", "expiresAt", alg, crv FROM jwks',
 	);
+	const keyDirectory = await mkdtemp(join(tmpdir(), "bastiondesk-core-wazuh-"));
+	const previousKey = process.env.WAZUH_SOURCE_KEY_FILE;
+	const sources = wazuhSourceStore(pool);
+	try {
+		const path = join(keyDirectory, "key");
+		await writeFile(path, randomBytes(32).toString("base64"), { mode: 0o600 });
+		process.env.WAZUH_SOURCE_KEY_FILE = path;
+		const draft = {
+			origin: "https://indexer.example.test",
+			username: "reader",
+			password: crypto.randomUUID(),
+			ca: undefined,
+		};
+		const first = await sources.save("auth-upgrade", draft);
+		const stored = await sources.get("auth-upgrade");
+		assert.ok(stored);
+		assert.equal(stored.encrypted_password.includes(draft.password), false);
+		assert.deepEqual(Object.keys(stored).sort(), [
+			"ca_pem",
+			"enabled",
+			"encrypted_password",
+			"organization_id",
+			"origin",
+			"revision",
+			"username",
+		]);
+		assert.deepEqual(await sourceConnection(stored), draft);
+		assert.equal(await sources.get("other-organization"), undefined);
+		await assert.rejects(() => sources.save("auth-upgrade", draft), /STALE/);
+		const expired = AbortSignal.abort();
+		await assert.rejects(
+			() => sources.save("auth-upgrade", draft, first.revision, expired),
+			/TIMEOUT/,
+		);
+		await assert.rejects(
+			() => sources.setEnabled("auth-upgrade", first.revision, false, expired),
+			/TIMEOUT/,
+		);
+		assert.equal((await sources.get("auth-upgrade"))?.revision, first.revision);
+		const disabled = await sources.setEnabled("auth-upgrade", first.revision, false);
+		assert.equal(disabled.enabled, false);
+		await assert.rejects(() => sources.remove("auth-upgrade", first.revision), /STALE/);
+		await sources.remove("auth-upgrade", disabled.revision);
+		assert.equal(await sources.get("auth-upgrade"), undefined);
+		console.log(
+			"PASS Wazuh migration stores one encrypted source per organization and removes its credentials",
+		);
+	} finally {
+		if (previousKey === undefined) delete process.env.WAZUH_SOURCE_KEY_FILE;
+		else process.env.WAZUH_SOURCE_KEY_FILE = previousKey;
+		await rm(keyDirectory, { recursive: true, force: true });
+	}
+
 	await pool.query(
 		`DELETE FROM organization WHERE id='auth-upgrade'; DELETE FROM "user" WHERE id='auth-upgrade'`,
 	);

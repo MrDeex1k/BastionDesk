@@ -1,5 +1,10 @@
 # Faza 2 — migracje i kontrakty domenowe
 
+Raport zakresu i odbioru z września 2026. Opisy prototypów oraz wersje bibliotek
+odnoszą się do tamtego etapu. Trwały Core i audyt wdrożono później w fazie 3,
+messaging w fazie 4, a sieciowy auth w fazie 5.
+[Bieżąca architektura](backend.md), [status całego planu](../future-soar-platform.md).
+
 Status: odebrana przez właściciela w punkcie 2.5, 23 września 2026,
 w zakresie wdrożonych fundamentów i prototypów opisanych poniżej.
 Zakres upgrade uzgodniony z właścicielem: obecny schemat 1.0.3 i izolowane
@@ -24,13 +29,13 @@ dane testowe. Nie wykonujemy migracji istniejącej instalacji użytkownika.
 | Incydent i przebieg obsługi | Moduł incydentów w Core | Przypisanie, notatki, status i rozstrzygnięcie; DTO pozostaje zgodne z 1.0.3 |
 | Pliki i dokumenty | Moduł plików w Core | Metadane i autoryzacja; storage przechowuje bajty; ścieżka obiektu nie jest uprawnieniem |
 | Audyt domenowy | Moduł audytu w Core | Historia decyzji i zmian; log techniczny nie zastępuje audytu |
-| Alert, security event, asset | Przyszły moduł ingest | Odpowiedzialność fazy 6; w fazie 2 nie tworzymy pustych modeli wszystkich integracji |
+| Alert, security event, asset | Przyszłe rozszerzenia domeny SOAR | Etap 6 udostępnia odczyt alertów bezpośrednio z Wazuh zgodnie ze [specyfikacją etapu 6](../integrations/wazuh-stage-6-spec.md). |
 | IOC, enrichment, skan | Przyszłe moduły analizy | Wynik zachowuje źródło, wersję i tenant; worker nie staje się właścicielem incydentu |
 | Playbook, approval, akcja | Przyszłe moduły orkiestracji | Trwała decyzja i zakres działania; LLM nie autoryzuje akcji |
 
-Słownik: [CONTEXT.md](../../CONTEXT.md). Dzisiejsze powiązania FK z tabelami
-auth pozostają do czasu osobnej migracji; mapa nie opisuje zakończonego
-rozdzielenia baz ani serwisów.
+Granice modeli określa tabela powyżej oraz [kontrakty operacji](operation-contracts.md).
+Powiązania FK z tabelami auth pozostają do czasu osobnej migracji. Mapa
+z fazy 2 nie opisuje późniejszego wydzielenia serwisu auth; baz nie rozdzielono.
 
 ## Kontrakty wdrożone w 2.1
 

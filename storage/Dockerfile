@@ -1,6 +1,10 @@
 FROM busybox:1.38.0-musl AS wget-src
 
-FROM quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
+FROM postgres:18.7-alpine3.24 AS mc-src
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates curl
+COPY download-client.sh /download-client.sh
+RUN sh /download-client.sh "${TARGETARCH}" /usr/bin/mc
 
 FROM coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
 

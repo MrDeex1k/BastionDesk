@@ -15,17 +15,14 @@ export interface AdminProjection {
 	filters(organizationId: string): Promise<unknown>;
 	summary(organizationId: string): Promise<unknown>;
 }
-export class AdminReads extends Context.Tag("incidents/AdminReads")<
-	AdminReads,
-	AdminProjection
->() {}
+export class AdminReads extends Context.Service<AdminReads, AdminProjection>()(
+	"incidents/AdminReads",
+) {}
 export const adminReadsLayer = (port: AdminProjection) => Layer.succeed(AdminReads, port);
 export function readAdmin(
 	identity: LiveIdentity,
 	request:
-		| { type: "query"; input: AdminIncidentsQuery }
-		| { type: "filters" }
-		| { type: "summary" },
+		{ type: "query"; input: AdminIncidentsQuery } | { type: "filters" } | { type: "summary" },
 ) {
 	return Effect.gen(function* () {
 		if (identity.role !== "admin") return yield* Effect.fail(new DomainError("FORBIDDEN"));

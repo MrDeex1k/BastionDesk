@@ -9,7 +9,7 @@ export interface FileStorage {
 	read(key: string): Promise<Buffer | null>;
 	presign(key: string): Promise<string>;
 }
-export class Storage extends Context.Tag("files/Storage")<Storage, FileStorage>() {}
+export class Storage extends Context.Service<Storage, FileStorage>()("files/Storage") {}
 export const storageLayer = (port: FileStorage) => Layer.succeed(Storage, port);
 export const fileColumns = {
 	screenshots: ["userScreenshotPath", "userScreenshotMetadata"],

@@ -6,7 +6,7 @@ import { liveIdentitySchema, type LiveIdentity } from "../identity/contract";
 export interface IdentityReader {
 	read(headers: Headers): Promise<LiveIdentity | null>;
 }
-export class Identity extends Context.Tag("core/Identity")<Identity, IdentityReader>() {}
+export class Identity extends Context.Service<Identity, IdentityReader>()("core/Identity") {}
 export const identityLayer = (reader: IdentityReader) => Layer.succeed(Identity, reader);
 export function currentIdentity(headers: Headers) {
 	return Effect.gen(function* () {
@@ -15,9 +15,9 @@ export function currentIdentity(headers: Headers) {
 			try: () => port.read(headers),
 			catch: () => new DomainError("SERVICE_UNAVAILABLE"),
 		}).pipe(
-			Effect.timeoutFail({
+			Effect.timeoutOrElse({
 				duration: "2 seconds",
-				onTimeout: () => new DomainError("SERVICE_UNAVAILABLE"),
+				orElse: () => Effect.fail(new DomainError("SERVICE_UNAVAILABLE")),
 			}),
 		);
 		if (!live) return yield* Effect.fail(new DomainError("UNAUTHORIZED"));

@@ -39,7 +39,7 @@ Module({ controllers: [CoreHealth] })(CoreModule);
 export async function createCoreApplication(
 	routes: {
 		paths: string[];
-		method?: "get" | "post" | "patch" | "put" | "query";
+		method?: "get" | "post" | "patch" | "put" | "delete" | "query";
 		handle(req: Request, res: Response): Promise<unknown>;
 	}[] = [],
 ) {
@@ -57,6 +57,7 @@ export async function createCoreApplication(
 				post: RequestMethod.POST,
 				patch: RequestMethod.PATCH,
 				put: RequestMethod.PUT,
+				delete: RequestMethod.DELETE,
 				query: RequestMethod.QUERY,
 			}[route.method ?? "get"],
 		})(

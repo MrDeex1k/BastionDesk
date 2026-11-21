@@ -169,7 +169,8 @@ To nie są katalogi w sensie POSIX, tylko prefiksy kluczy obiektów.
 Obraz storage jest budowany z:
 
 - `coollabsio/minio` jako runtime serwera,
-- `minio/mc` jako źródło klienta `mc`,
+- oficjalny plik wydania `mc` z GitHub, pobierany w etapie builda i sprawdzany
+  przez `storage/download-client.sh` względem przypiętego SHA-256 dla amd64/arm64,
 - `busybox` jako źródło `wget`.
 
 Zapewnia to:
@@ -237,3 +238,28 @@ if alerts:
 print(f"OK: max usage {max_pct}% < {TH}%")
 PY
 ```
+
+## Dostępność dystrybucji MinIO — 8 października 2026
+
+Serwer już pochodzi z Docker Hub: `coollabsio/minio:RELEASE.2025-10-15T17-29-55Z`.
+To [community build ze źródeł upstream](https://github.com/coollabsio/minio),
+nie oficjalny obraz organizacji MinIO.
+
+Ponownie sprawdzono oficjalne `minio/minio` i `minio/mc`:
+
+- publiczne API Docker Hub dla obu repozytoriów zwraca HTTP 404;
+- anonimowy token Docker Registry nie przyznaje im akcji `pull`;
+- żądanie manifestu z otrzymanym tokenem zwraca HTTP 401 `UNAUTHORIZED`;
+- bezpośredni `docker pull` dla przypiętych tagów kończy się odmową dostępu;
+- ten sam test anonimowy dla `coollabsio/minio` oraz BusyBox zwraca HTTP 200.
+
+Nie jest to dowód rozróżniający usunięcie repozytorium od zmiany jego widoczności;
+potwierdza brak publicznego dostępu, niezależnie od lokalnych danych logowania.
+Stara lub indeksowana strona opisu obrazu nie potwierdza dostępności manifestu.
+
+[MinIO Server](https://github.com/minio/minio) zostało zarchiwizowane
+25 kwietnia 2026 i deklaruje zakończenie utrzymania oraz dystrybucję community
+wyłącznie jako kod źródłowy. [MinIO Client](https://github.com/minio/mc)
+zarchiwizowano 14 lipca 2026. Z tego powodu utrzymujemy dotychczasowy
+community build serwera z Docker Hub, a `mc` pobieramy z oficjalnego historycznego
+wydania GitHub ze sprawdzeniem SHA-256. Nie zmieniono backendu S3 ani formatu danych.

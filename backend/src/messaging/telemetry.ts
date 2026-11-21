@@ -7,7 +7,8 @@ import {
 	metrics as apiMetrics,
 	ROOT_CONTEXT,
 } from "@opentelemetry/api";
-import { NodeSDK, metrics } from "@opentelemetry/sdk-node";
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import type { RequestHandler } from "express";
@@ -19,7 +20,7 @@ export function startTelemetry(serviceName: string) {
 		serviceName,
 		traceExporter: new OTLPTraceExporter(),
 		metricReaders: [
-			new metrics.PeriodicExportingMetricReader({
+			new PeriodicExportingMetricReader({
 				exporter: new OTLPMetricExporter(),
 				exportIntervalMillis: 10000,
 			}),

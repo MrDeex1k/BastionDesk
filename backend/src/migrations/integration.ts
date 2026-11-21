@@ -53,7 +53,7 @@ try {
 		"POSTGRES_PASSWORD",
 		"-p",
 		"127.0.0.1::5432",
-		"postgres:18.6",
+		"postgres:18.7",
 	]);
 	started = true;
 	let ready = false;
