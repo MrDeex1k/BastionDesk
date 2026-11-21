@@ -7,8 +7,9 @@ Nie przyjmujemy zewnętrznych pull requestów i nie prowadzimy procedury CLA.
 
 ## Jak utworzyć zgłoszenie
 
-1. Przeszukaj istniejące Issues, również zamknięte. Jeśli problem jest już opisany,
-   dopisz nowe informacje do odpowiedniego zgłoszenia.
+1. Przeszukaj istniejące Issues, również zamknięte. Jeśli zgłoszenie jest otwarte,
+   dopisz w nim nowe informacje. Jeśli problem wrócił w nowszej wersji po
+   zamknięciu zgłoszenia, otwórz nowe Issue, podaj wersję i dodaj link do poprzedniego.
 2. Otwórz [nowe Issue](https://github.com/MrDeex1k/BastionDesk/issues/new/choose)
    i wybierz szablon: błąd, propozycja funkcji lub pytanie.
 3. Nadaj konkretny tytuł i uzupełnij sekcje szablonu. Dane, których nie znasz,

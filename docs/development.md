@@ -78,12 +78,19 @@ PR powinien obejmować jeden temat, wskazywać powiązane Issue, jeśli istnieje
 i opisywać zmianę, jej przyczynę oraz sposób weryfikacji. Aktualizuj dokumentację
 razem ze zmianą zachowania. Sprawdź, czy diff nie zawiera sekretów ani danych klientów.
 
+Publiczne Issue służy do opisu problemu lub potrzeby. Przed włączeniem do
+BastionDesk kodu lub innych materiałów z Issue maintainer sprawdza ich
+pochodzenie i potwierdza, że ma uprawnienia do użycia ich na potrzeby
+planowanego wydania.
+
 ## Ustawienia GitHub
 
-W `Settings → General → Features` pozostaw Issues dostępne dla wszystkich,
-a dostęp do Pull requests ustaw na `Collaborators only`. To ustawienie GitHub
-ogranicza tworzenie PR; same pliki dokumentacji nie zmieniają dostępu.
-Szablony zgłoszeń z `.github/ISSUE_TEMPLATE/` zaczną działać po scaleniu do `main`.
+Po otwarciu PR wdrażającego tę politykę pozostaw Issues włączone i ustaw
+tworzenie pull requestów na `Collaborators only` w `Settings → General → Features`.
+Zachowaj włączone prywatne zgłaszanie podatności opisane w
+[SECURITY.md](../SECURITY.md#reporting-a-vulnerability). Szablony i odsyłacz
+do prywatnych zgłoszeń z `.github/ISSUE_TEMPLATE/` będą widoczne w wyborze
+szablonu po scaleniu do `main`.
 
 Źródła: [dostęp do PR](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/disabling-pull-requests),
 [szablony Issues](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/about-issue-and-pull-request-templates).
