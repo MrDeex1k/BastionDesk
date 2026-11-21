@@ -1,0 +1,4 @@
+contact_links:
+  - name: Zgłoś podatność prywatnie
+    url: https://github.com/MrDeex1k/BastionDesk/security/advisories/new
+    about: Skorzystaj z prywatnego formularza zamiast publikować szczegóły w Issue.

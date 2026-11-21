@@ -17,8 +17,11 @@ BastionDesk Community Edition jest udostępniany jako open source na licencji GN
 
 Dla organizacji, które potrzebują użycia komercyjnego niezgodnego z obowiązkami AGPLv3, prywatnych forków, osadzania w produkcie własnym lub dystrybucji/SaaS bez obowiązków AGPLv3, może być dostępna osobna licencja komercyjna po indywidualnym uzgodnieniu.
 
-Zasady współpracy opisuje [CONTRIBUTING.md](CONTRIBUTING.md), w tym
-[nazwy branchy i squash & merge](CONTRIBUTING.md#branche-i-squash--merge).
+## Zgłoszenia i współpraca
+
+Błędy, propozycje funkcji i pytania zgłaszaj przez [GitHub Issues](https://github.com/MrDeex1k/BastionDesk/issues).
+Pull requesty otwierają maintainerzy i zaproszeni współpracownicy.
+[Zasady współpracy i kanały zgłoszeń](CONTRIBUTING.md).
 
 ## Stan rozwoju
 
