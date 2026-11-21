@@ -2,18 +2,21 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { createCoreApplication } from "../backend/src/core/application";
 import type { LiveIdentity } from "../backend/src/identity/contract";
-import { coreReadHandler, coreReadPaths } from "../backend/src/adapters/core-http";
+import type { Incident } from "../backend/src/types";
+import { ipReputation } from "../backend/src/core/ioc/enrichment";
+import { coreReadHandler, coreReadPaths, coreReputationHandler, coreReputationPaths } from "../backend/src/adapters/core-http";
 import { coreAdminHandler, coreAdminRoutes } from "../backend/src/adapters/core-admin-http";
 
 const express = createRequire(new URL("../backend/package.json", import.meta.url))("express");
 let authenticated = false;
 let role: LiveIdentity["role"] = "pracownik";
+let organizationId = "org";
 let scopeSeen: unknown;
 let projectionCalls = 0;
 let listCalls = 0;
 let statusSeen: string | undefined;
 const identity = { read: async (): Promise<LiveIdentity | null> => authenticated ? {
-  subject: "u", organizationId: "org", role, sessionId: "s",
+  subject: "u", organizationId, role, sessionId: "s",
   sessionExpiresAt: Math.floor(Date.now() / 1000) + 60,
 } : null };
 const admin = coreAdminHandler(identity, {
@@ -25,12 +28,32 @@ const admin = coreAdminHandler(identity, {
   filters: async (organizationId) => { assert.equal(organizationId, "org"); return { analysts: [] }; },
   summary: async () => ({ success: true, data: { total: 0 } }),
 });
+const date = new Date();
+const incident: Incident = {
+  id: crypto.randomUUID(), dataZgloszenia: date, userId: "u", organizationId: "org",
+  status: "Zgłoszony", userDescription: "Adres źródłowy 1.1.1.1 oraz prywatny 10.0.0.7.",
+  userScreenshotPath: null, userScreenshotMetadata: {}, userAttachmentPath: null, userAttachmentMetadata: {},
+  analystId: null, analystNote: null, czyRozwiazany: false, dataRozwiazania: null,
+  analystReportPath: null, analystReportMetadata: {}, analystReportData: null,
+  analystStatementPath: null, analystStatementMetadata: {}, analystStatementData: null,
+  llmCategory: null, createdAt: date, updatedAt: date,
+};
+const reads = {
+  list: async (scope: unknown, input: { status?: string }) => { listCalls++; statusSeen = input.status; scopeSeen = scope; return { incidents: [], total: 0 }; },
+  get: async (_scope: unknown, id: string) => id === incident.id ? incident : null,
+};
+const audited: Array<{ actor: string; status: string }> = [];
+let externalLookups = 0;
+const reputation = ipReputation(async (org) => org === "org" ? "test-key" : undefined, {
+  name: "abuseipdb",
+  lookup: async () => { externalLookups++; return { status: "ready", confidence: 15, reports: 2 }; },
+});
 const core = await createCoreApplication([
   ...coreAdminRoutes.map((route) => ({ ...route, handle: admin })),
-  { paths: coreReadPaths, handle: coreReadHandler(identity, {
-    list: async (scope, input) => { listCalls++; statusSeen = input.status; scopeSeen = scope; return { incidents: [], total: 0 }; },
-    get: async () => null,
-  }) },
+  { paths: coreReadPaths, handle: coreReadHandler(identity, reads, reputation) },
+  { method: "post", paths: coreReputationPaths, handle: coreReputationHandler(identity, reads, async (actor, _id, status) => {
+    audited.push({ actor: actor.subject, status });
+  }, reputation) },
 ]);
 const outer = express();
 outer.use(express.json(), core.http);
@@ -88,6 +111,26 @@ try {
   const bad = await fetch(`${base}/api/admin/incidents`, { method: "QUERY", headers: { "content-type": "application/json" }, body: JSON.stringify({ filters: { organizationId: "foreign" } }) });
   assert.equal(bad.status, 400);
   assert.equal(projectionCalls, 2);
+  const lookup = (address: string) => fetch(`${base}/api/analyst/incidents/${incident.id}/ip-reputation`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address }),
+  });
+  role = "pracownik";
+  const employeeDetail = await fetch(`${base}/api/incidents/${incident.id}`);
+  assert.equal((await employeeDetail.json()).data.indicators, undefined);
+  assert.equal((await lookup("1.1.1.1")).status, 403);
+  role = "analityk";
+  const analystDetail = await fetch(`${base}/api/analyst/incidents/${incident.id}`);
+  assert.equal((await analystDetail.json()).data.ipReputation, true);
+  organizationId = "foreign";
+  assert.equal((await lookup("1.1.1.1")).status, 404);
+  organizationId = "org";
+  assert.equal((await lookup("8.8.8.8")).status, 404);
+  assert.deepEqual((await (await lookup("10.0.0.7")).json()).data, { status: "not_public" });
+  const allowed = await lookup("1.1.1.1");
+  assert.equal(allowed.headers.get("cache-control"), "private, no-store");
+  assert.equal((await allowed.json()).data.result.confidence, 15);
+  assert.equal(externalLookups, 1);
+  assert.deepEqual(audited, [{ actor: "u", status: "not_public" }, { actor: "u", status: "ready" }]);
   authenticated = false;
   assert.equal((await fetch(`${base}/api/incidents/my`)).status, 401);
   assert.equal((await fetch(`${base}/api/admin/incidents`)).status, 401);

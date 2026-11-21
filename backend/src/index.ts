@@ -146,7 +146,11 @@ const wazuhRoutes = coreWazuhRoutes(
 	wazuhService(wazuhSourceStore(getPgPool()), wazuhRefreshSeconds()),
 );
 const { coreIncidentReads } = await import("./adapters/core-incident-reads");
-const { coreReadPaths, coreReadHandler } = await import("./adapters/core-http");
+const { coreReadPaths, coreReadHandler, coreReputationPaths, coreReputationHandler } =
+	await import("./adapters/core-http");
+const { configuredIpReputation } = await import("./adapters/abuseipdb");
+const reputation = configuredIpReputation();
+const { ipReputationAudit } = await import("./adapters/core-ip-reputation-audit");
 const { assertCoreSchema } = await import("./adapters/core-schema");
 await assertCoreSchema();
 await (await import("./yara/schema")).assertYaraSchema(getPgPool());
@@ -172,7 +176,17 @@ const core = await (
 	})),
 	{
 		paths: coreReadPaths,
-		handle: coreReadHandler(coreIdentity, coreIncidentReads),
+		handle: coreReadHandler(coreIdentity, coreIncidentReads, reputation),
+	},
+	{
+		method: "post",
+		paths: coreReputationPaths,
+		handle: coreReputationHandler(
+			coreIdentity,
+			coreIncidentReads,
+			ipReputationAudit(getPgPool()),
+			reputation,
+		),
 	},
 	...coreFileRoutes.map((route) => ({
 		...route,
@@ -199,6 +213,7 @@ for (const route of coreAdminRoutes) {
 	} else app.get(route.paths, apiRateLimiter, core.http);
 }
 app.get(coreReadPaths, apiRateLimiter, core.http);
+app.post(coreReputationPaths, apiRateLimiter, core.http);
 
 for (const route of coreFileRoutes) app.route(route.paths)[route.method](apiRateLimiter, core.http);
 for (const route of coreWriteRoutes)

@@ -1,4 +1,5 @@
 import type { ApiResponse, PaginatedApiResponse } from "./common";
+import type { Indicator } from "./evidence";
 
 export interface ApiFileMetadata {
   bucket?: string;
@@ -38,7 +39,7 @@ interface Incident {
   analystName?: string | null;
 }
 
-export type IncidentDetail = Incident;
+export type IncidentDetail = Incident & { indicators?: Indicator[]; ipReputation?: boolean };
 
 export type IncidentDetailResponse = ApiResponse<IncidentDetail>;
 

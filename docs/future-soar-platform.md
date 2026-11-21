@@ -759,6 +759,21 @@ analizy, braku raportu u providera i błędu analizy.
 Potencjalni providerzy do ponownej oceny: AbuseIPDB, URLhaus, LevelBlue OTX,
 Hybrid Analysis i opcjonalnie VirusTotal.
 
+### Pierwszy dostawca reputacji adresów IP
+
+AbuseIPDB sprawdza publiczne adresy IPv4 i IPv6 znalezione w opisie zgłoszenia.
+Analityk lub administrator inicjuje zapytanie z widoku szczegółów. Zdalny odczyt
+przekazuje jeden adres IP i klucz danej organizacji. Wynik zachowuje źródło,
+godzinny okres ważności i ocenę dostawcy. Backend współdzieli równoległe zapytania
+o ten sam adres w obrębie organizacji. Limit dostawcy wstrzymuje kolejne zapytania
+tej organizacji. Próba jest zapisywana w audycie z identyfikatorem zgłoszenia
+i stanem, bez wartości IOC i klucza.
+
+Włączenie wymaga zamontowania w backendzie katalogu sekretów tylko do odczytu
+i wskazania go w `ABUSEIPDB_KEYS_DIR`. Każdy plik ma nazwę złożoną z SHA-256
+identyfikatora organizacji zapisanego szesnastkowo oraz rozszerzenia `.key`.
+Zawartość to klucz API tej organizacji. [Dokumentacja API AbuseIPDB](https://docs.abuseipdb.com/#check-endpoint)
+
 ### Kryterium ukończenia
 
 IOC lub artefakt ma wynik z provenance, a analityk widzi jego aktualność.

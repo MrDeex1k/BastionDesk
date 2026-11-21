@@ -1,4 +1,5 @@
 import { apiFetch } from "./api";
+import type { Indicator, WazuhFileObservation } from "@/ApiModel/evidence";
 
 export interface WazuhStatus {
   source: { enabled: boolean; revision: string } | null;
@@ -16,6 +17,11 @@ export interface WazuhAlert {
   ruleLevel: number;
   description: string;
 }
+
+export type WazuhAlertDetail = WazuhAlert & {
+  indicators?: Indicator[];
+  fileObservations?: WazuhFileObservation[];
+};
 
 export class WazuhRequestError extends Error {
   readonly code?: string;

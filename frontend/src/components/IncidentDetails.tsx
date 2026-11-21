@@ -11,6 +11,7 @@ import { Textarea } from "./ui/textarea";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useAttachmentScan } from "./incident-details/attachment-scan";
+import { IndicatorList } from "./IndicatorList";
 import { IncidentFileCard } from "./incident-details/IncidentFileCard";
 import { UploadFileDialog } from "./incident-details/UploadFileDialog";
 import { useIncidentUpload } from "./incident-details/useIncidentUpload";
@@ -337,7 +338,7 @@ function useIncidentDetailsActions({
 
 export function IncidentDetails({ incidentId, onBack, mode = "employee" }: IncidentDetailsProps) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, organizationId, session, role } = useAuth();
   const currentAnalystId = user?.id || null;
   const [noteDraft, setNoteDraft] = useState<{
     incidentId: string | null;
@@ -357,7 +358,7 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
   } = useIncidentUpload({ incidentId, queryClient });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["incident", incidentId, mode],
+    queryKey: ["incident", incidentId, mode, organizationId, session?.session.id, role],
     queryFn: async () => {
       // --- REAL SERVER IMPLEMENTATION ---
       const endpoint =
@@ -489,6 +490,13 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
               {incident.userDescription}
             </div>
           </div>
+
+          {mode !== "employee" && incident.indicators && (
+            <IndicatorList
+              indicators={incident.indicators}
+              reputationIncidentId={incident.ipReputation ? incident.id : undefined}
+            />
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <IncidentFileCard

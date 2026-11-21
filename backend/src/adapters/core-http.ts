@@ -11,6 +11,10 @@ import {
 	type IncidentReads,
 	type ListView,
 } from "../core/incidents/reads";
+import { z } from "zod";
+import type { LiveIdentity } from "../identity/contract";
+import { isPublicIp, type IpReputation, type ReputationResult } from "../core/ioc/enrichment";
+import { incidentIndicators } from "../core/ioc/evidence";
 import { runCore } from "../core/runtime";
 import { errorHandler } from "../middleware/error.middleware";
 import { paginationSchema, uuidSchema } from "../utils/validation";
@@ -26,7 +30,11 @@ export const coreReadPaths = [
 	"/api/analyst/incidents/:id",
 	"/api/admin/incidents/:id",
 ];
-export function coreReadHandler(identity: IdentityReader, reads: IncidentReads) {
+export function coreReadHandler(
+	identity: IdentityReader,
+	reads: IncidentReads,
+	reputation?: IpReputation,
+) {
 	return async (req: Request, res: Response) => {
 		try {
 			const live = await runCore(
@@ -105,7 +113,18 @@ export function coreReadHandler(identity: IdentityReader, reads: IncidentReads) 
 					Effect.provide(readsLayer(reads)),
 				),
 			);
-			return res.json({ success: true, data: incident });
+			return res.json({
+				success: true,
+				data:
+					live.role === "pracownik"
+						? incident
+						: {
+								...incident,
+								indicators: incidentIndicators(incident),
+								ipReputation:
+									(await reputation?.enabled(live.organizationId)) ?? false,
+							},
+			});
 		} catch (error) {
 			if (error instanceof DomainError && error.code === "NOT_FOUND") {
 				const primary = req.path.startsWith("/api/incidents/");
@@ -121,6 +140,55 @@ export function coreReadHandler(identity: IdentityReader, reads: IncidentReads) 
 					},
 				});
 			}
+			return errorHandler(error as Error, req, res, () => {});
+		}
+	};
+}
+
+const reputationBody = z.strictObject({ address: z.string().min(1).max(64) });
+export const coreReputationPaths = ["/api/analyst/incidents/:id/ip-reputation"];
+export function coreReputationHandler(
+	identity: IdentityReader,
+	reads: IncidentReads,
+	audit: (
+		actor: LiveIdentity,
+		incidentId: string,
+		status: ReputationResult["status"],
+	) => Promise<void>,
+	reputation?: IpReputation,
+) {
+	return async (req: Request, res: Response) => {
+		try {
+			const live = await runCore(
+				currentIdentity(fromNodeHeaders(req.headers)).pipe(
+					Effect.provide(identityLayer(identity)),
+				),
+			);
+			if (live.role === "pracownik") throw new DomainError("FORBIDDEN");
+			const body = reputationBody.safeParse(req.body);
+			if (!body.success) throw new DomainError("VALIDATION_ERROR");
+			const incident = await runCore(
+				getIncident(live, uuidSchema.parse(req.params.id)).pipe(
+					Effect.provide(readsLayer(reads)),
+				),
+			);
+			const { address } = body.data;
+			const present = incidentIndicators(incident).some(
+				(indicator) =>
+					(indicator.kind === "ipv4" || indicator.kind === "ipv6") &&
+					indicator.value === address,
+			);
+			if (!present) throw new DomainError("NOT_FOUND");
+			const data: ReputationResult = !isPublicIp(address)
+				? { status: "not_public" }
+				: ((await reputation?.check(live.organizationId, address)) ?? {
+						status: "not_configured",
+					});
+			await audit(live, incident.id, data.status).catch(() =>
+				console.error("[IOC] Could not persist lookup audit"),
+			);
+			return res.json({ success: true, data });
+		} catch (error) {
 			return errorHandler(error as Error, req, res, () => {});
 		}
 	};
