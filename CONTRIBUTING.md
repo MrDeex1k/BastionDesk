@@ -46,6 +46,37 @@ For larger changes that are not direct bug fixes, maintainers prefer discussion 
 
 Maintainers may postpone or decline contributions that significantly expand scope, introduce unrelated refactors, or make licensing or provenance review unclear.
 
+## Branche i squash & merge
+
+Nazwy branchy mają format `<type>/<krótki-opis>`, np. `feat/implement-stage1`
+albo `feat/implement-auth`. Typ odpowiada planowanemu commitowi squash
+(`feat`, `fix`, `chore`, `docs`, `refactor`, `test` itd.). Opis zapisujemy
+małymi literami, z łącznikami między słowami.
+
+Nazwa brancha jest krótkim opisowym skrótem planowanego tytułu commita
+**squash & merge**, a nie hashem commita. Zachowuje typ i główny cel zmiany;
+może pomijać scope i szczegóły. Nie musi kopiować całego tytułu.
+Nazwy branchy nie mogą zawierać słowa `codex` w żadnej wielkości liter,
+również jako prefiksu `codex/`. Zasada dotyczy wszystkich autorów i agentów.
+
+| Planowany tytuł commita squash & merge | Nazwa brancha |
+| --- | --- |
+| `feat(platform): implement stage 1 interface foundations` | `feat/implement-stage1` |
+| `feat(auth): implement authentication gateway` | `feat/implement-auth` |
+| `fix(auth): preserve registration error responses` | `fix/registration-errors` |
+| `chore(deps): update backend dependencies` | `chore/update-backend-deps` |
+| `docs(workflow): define branch naming conventions` | `docs/branch-naming` |
+
+Pull requesty do `main` integrujemy przez **Squash and merge**, zamiast
+**Create a merge commit**. Końcowy tytuł i opis commita opisują cały zakres PR,
+zgodnie z Conventional Commits. Commity robocze na branchu mogą dokumentować
+kolejne kroki; do `main` trafia jeden commit squash dla danego PR.
+Przed scaleniem dopasowujemy tytuł i opis do ostatecznego zakresu zmian.
+
+Ta reguła określa sposób zamykania PR do `main`. Synchronizacja roboczego
+brancha z `main` jest osobną operacją i może obejmować merge, jeżeli jest
+potrzebny w uzgodnionym toku pracy.
+
 ## Development Checks
 
 Z katalogu głównego można uruchomić kontrole obu pakietów przez TurboRepo:

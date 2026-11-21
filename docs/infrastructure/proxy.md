@@ -7,7 +7,7 @@ Ten dokument opisuje aktualną konfigurację reverse proxy dla BastionDesk.
 Serwis `nginx` jest głównym punktem wejścia do aplikacji uruchamianej przez Docker Compose. Odpowiada za:
 
 - serwowanie frontendu,
-- przekazywanie ruchu API do backendu,
+- przekazywanie ruchu API do gateway `auth-service`,
 - jednolity punkt wejścia HTTP dla użytkownika końcowego.
 
 ## Porty
@@ -31,7 +31,12 @@ Konfiguracja znajduje się w:
 Aktualne trasy:
 
 - `/` -> `frontend:8080`
-- `/api/` -> `auth-service:3340`
+- `/api` i `/api/` -> `auth-service:3340`
+- `/healthz` -> lokalna odpowiedź NGINX
+
+Gateway obsługuje Better Auth i CSRF, a żądania domenowe przekazuje do Core
+z JWT przez mTLS. NGINX nie łączy się bezpośrednio z Core.
+[Kontrakt i porty wewnętrzne](../backend/phase-5-identity.md).
 
 Frontend jest osobnym kontenerem NGINX, który serwuje statyczny build Vite i obsługuje SPA fallback przez `index.html`.
 
@@ -72,7 +77,7 @@ Definicja serwisu znajduje się w:
 Najważniejsze założenia:
 
 - `nginx` ma `restart: unless-stopped`,
-- startuje dopiero po uzyskaniu `healthy` przez `backend` i `frontend`,
+- startuje dopiero po uzyskaniu `healthy` przez `backend`, `auth-service` i `frontend`,
 - działa jako użytkownik `nginx`,
 - korzysta z port mappingu `4567:8080`.
 
@@ -109,6 +114,6 @@ Sprawdź:
 
 Sprawdź:
 
-- czy `backend` ma status `healthy`,
+- czy `backend` i `auth-service` mają status `healthy`,
 - czy w [`nginx/nginx.conf`](../../nginx/nginx.conf) trasa `/api/` wskazuje na `auth-service:3340`,
 - logi kontenera `nginx`.

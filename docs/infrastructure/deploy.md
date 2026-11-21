@@ -1,31 +1,25 @@
 # Deployment Guide
 
-Ten dokument opisuje bazowy sposób wdrożenia BastionDesk `1.0.3` oraz
-dodatkowy, wymagany krok migracji dla bieżącego Core faz 3–4.
+Dokument opisuje uruchomienie bieżącego kodu po fazie 5, z manifestami nadal
+w wersji `1.0.3`. Przegląd konfiguracji: 5 listopada 2026. Procedura obejmuje
+migracje Core, trwałych zadań i JWKS oraz osobny gateway auth.
 
 ## Supported Mode
 
-Wersja `1.0.3` wspiera jeden oficjalny model wdrożenia:
+Bazową ścieżką pozostaje self-hosted Docker Compose i świeża instalacja
+całego stosu. Wydany baseline `1.0.3` miał model `fresh install only`.
+Bieżący kod ma jawny migrator oraz procedurę przejścia auth z fazy 4 do 5,
+ale nie deklaruje obsługi upgrade z dowolnej historycznej rewizji.
 
-- self-hosted Docker Compose,
-- pełny start całego stacka z repozytorium,
-- nowa instalacja typu `fresh install only`.
+Dla nowej instalacji przygotuj nową bazę, wolumeny i sekrety/certyfikaty.
+Dla istniejącej instalacji zachowaj sekrety, dane i tożsamości zgodnie z
+[instrukcją migracji](../database/migrations.md) i
+[runbookiem fazy 5](../backend/phase-5-identity.md); najpierw zweryfikuj
+zgodność schematu oraz procedurę na kopii. Generator certyfikatów świeżej
+instalacji nie jest procedurą rotacji działającego środowiska.
 
-Nie jest obecnie wspierane:
-
-- upgrade istniejących instalacji z wcześniejszych rewizji projektu,
-- częściowe wdrożenia bez pełnego stacka,
-- alternatywne orkiestratory jako oficjalna ścieżka release `1.0`.
-
-## Fresh Install Only
-
-Model `1.0.3` należy traktować jako:
-
-```text
-fresh install only
-```
-
-To oznacza, że przed wdrożeniem należy przygotować nową bazę danych, nowe wolumeny i nowy zestaw sekretów/certyfikatów. Dokumentacja `1.0.3` nie dostarcza procedury migracji in-place ze starszych środowisk.
+Częściowe wdrożenia i alternatywne orkiestratory nie są oficjalną ścieżką
+wydania.
 
 ## What Gets Deployed
 
@@ -36,7 +30,8 @@ Docker Compose uruchamia następujące usługi:
 - `postgres-backup` - harmonogram backupów bazy do MinIO
 - `storage-1` do `storage-4` - distributed MinIO po HTTPS
 - `llm_service` - klasyfikacja incydentów przez lokalny model
-- `backend` - API i Better Auth
+- `backend` - NestJS Core/Effect hostowany przez Express, API domenowe po mTLS
+- `auth-service` - Elysia 2 + Better Auth, publiczny gateway API i wewnętrzne JWT/JWKS
 - `rabbitmq` - dostarczanie zadań przez AMQPS
 - `classifier-worker` - relay i trwała klasyfikacja incydentów
 - `frontend` - statyczny build SPA
@@ -66,6 +61,8 @@ Przed uruchomieniem skopiuj go do `.env` i uzupełnij co najmniej:
 - `POSTGRES_PASSWORD`
 - `POSTGRES_DB`
 - `BETTER_AUTH_SECRET`
+- `CSRF_SECRET`
+- `RABBITMQ_USER` i `RABBITMQ_PASSWORD`
 - `MINIO_ROOT_USER`
 - `MINIO_ROOT_PASSWORD`
 - `S3_ACCESS_KEY`
@@ -102,7 +99,12 @@ Generuje on lokalne CA i certyfikaty dla:
 - `llm_service`
 - `database`
 - `pgbouncer`
+- `rabbitmq`
 - `storage-1` do `storage-4`
+
+Generator tworzy także oddzielne samopodpisane tożsamości `backend` i
+`auth-service` w `identity/` oraz publiczne certyfikaty peerów w
+`identity/trust/`. Ta granica mTLS nie korzysta ze wspólnego CA usług danych.
 
 Instrukcja i układ plików są opisane w:
 
@@ -110,12 +112,15 @@ Instrukcja i układ plików są opisane w:
 
 ### Production
 
-W środowisku produkcyjnym generator developerski nie powinien być traktowany jako docelowe PKI. Należy podstawić własne certyfikaty i własny zaufany CA dla:
+W środowisku produkcyjnym generator developerski nie powinien być traktowany
+jako docelowe PKI. Należy przygotować certyfikaty i model zaufania dla:
 
 - PostgreSQL / PgBouncer
-- backend -> `llm_service`
+- classifier-worker -> `llm_service`
 - backend -> MinIO
 - MinIO nodes
+- worker -> RabbitMQ
+- auth-service <-> Core, z przypiętymi tożsamościami peerów według runbooka fazy 5
 
 ## Build and Start
 
@@ -128,10 +133,12 @@ docker compose build
 docker compose up -d --wait database
 ```
 
-Przed uruchomieniem backendu i workera fazy 4 wykonaj `plan` i `apply` zgodnie z
+Przed uruchomieniem Core, auth i workera wykonaj `plan` i `apply` zgodnie z
 [instrukcją migracji](../database/migrations.md), również dla świeżej bazy.
-Core wymaga `0001_core_operations` i `0002_durable_jobs`; bez nich kończy start błędem
-`CORE_MIGRATIONS_REQUIRED`. Nie wykonuje automatycznie DDL.
+Core i worker wymagają `0001_core_operations` oraz `0002_durable_jobs`; bez nich
+kończą start błędem `CORE_MIGRATIONS_REQUIRED`. Auth wymaga tabeli `jwks`
+z `0003_auth_jwks`. Integracja Wazuh wymaga tabeli `wazuh_sources`
+z `0004_wazuh_sources`. Migrator jest uruchamiany przez operatora.
 
 Migrator potrzebuje bezpośredniego połączenia do `database:5432` oraz własnego
 certyfikatu klienta zgodnego z użytkownikiem PostgreSQL. Przykład uruchomienia
@@ -178,8 +185,11 @@ Mapowanie hosta używane obecnie przez Compose:
 
 Pozostałe usługi są dostępne wyłącznie wewnątrz sieci Docker Compose. Dzięki temu użytkownik końcowy korzysta z jednego publicznego entrypointu, a backend, baza, PgBouncer, LLM i storage nie są bezpośrednio publikowane na hoście.
 
-Szczegóły nowych sekretów, certyfikatu RabbitMQ, telemetrii i replay:
-[runbook messagingu](../backend/messaging-runbook.md).
+Całe `/api` i `/api/*` trafia przez NGINX do `auth-service:3340`. Gateway
+przekazuje żądania domenowe do `backend:3333` przez mTLS; Core pobiera JWKS
+i świeżą tożsamość z wewnętrznego listenera auth na `3443`.
+Szczegóły: [runbook tożsamości](../backend/phase-5-identity.md) oraz
+[sekrety RabbitMQ, telemetria i replay](../backend/messaging-runbook.md).
 
 ## Runtime Verification
 
@@ -189,7 +199,8 @@ Po wdrożeniu warto sprawdzić:
 2. Frontend otwiera się pod `http://localhost:4567`.
 3. Logowanie i Better Auth działają przez publiczny origin `http://localhost:4567`.
 4. Upload i download plików działają przez MinIO po HTTPS.
-5. Zgłaszanie incydentu i klasyfikacja LLM przechodzą poprawnie.
+5. Zapis zgłoszenia kończy się bez oczekiwania na inferencję; działający worker
+   następnie zapisuje kategorię. Sondy Core/auth nie potwierdzają pracy workera.
 6. `postgres-backup` ma status `healthy`.
 
 ## Storage
@@ -207,6 +218,16 @@ Szczegóły znajdują się w:
 
 - [storage.md](./storage.md)
 
+## Wazuh Indexer
+
+Opcjonalna integracja łączy backend z zewnętrznym Indexerem po HTTPS.
+Kontener backendu potrzebuje trasy do prywatnego adresu Indexera
+i pliku z kluczem szyfrowania wskazanego przez `WAZUH_SOURCE_KEY_FILE`.
+Po zastosowaniu migracji skonfiguruj źródło w zakładce **Alerty Wazuh**
+w panelu administratora. Zmianę `WAZUH_REFRESH_INTERVAL_SECONDS` wprowadź
+przez ponowne uruchomienie backendu z nowym środowiskiem.
+[Klucz, CA, uprawnienia Indexera i test](../integrations/wazuh-discovery.md#wdrożenie-etapu-6).
+
 ## Backups and Restore
 
 Serwis `postgres-backup`:
@@ -217,16 +238,21 @@ Serwis `postgres-backup`:
 - wysyła dump do MinIO po HTTPS,
 - usuwa stare backupy zgodnie z retencją i versioningiem bucketa.
 
-Restore backupu został zweryfikowany praktycznym testem.
+Restore backupu został zweryfikowany praktycznym testem. Dla instalacji z Wazuh
+zachowaj klucz szyfrowania źródeł w magazynie sekretów. Dump PostgreSQL zawiera
+zaszyfrowaną konfigurację. Kopie samych alertów wykonuje instalacja Wazuh.
 
 Szczegóły znajdują się w:
 
 - [backup.md](./backup.md)
 
-## Known Limitations for 1.0.3
+## Known Limitations
 
-- Wspierany jest tylko model `fresh install only`.
-- Brak oficjalnej procedury upgrade z wcześniejszych instalacji.
+- Świeża instalacja Compose pozostaje bazową ścieżką wdrożenia.
+- Migracje i runbook fazy 5 obejmują określone schematy; nie gwarantują upgrade
+  dowolnej wcześniejszej instalacji.
+- Start Core i workera w Compose zależy od zdrowego LLM; obsługa awarii modelu
+  w działającym workflow nie usuwa tego warunku pierwszego uruchomienia.
 - `llm_service` ma limit pamięci `10GB` w Compose i może mieć zauważalny cold start podczas ładowania modelu.
 - Publiczny dostęp jest domyślnie ograniczony do reverse proxy; bezpośrednie debugowanie usług wewnętrznych z hosta wymaga tymczasowego wystawienia portów lub wejścia do sieci Docker.
 - Dokumentacja `1.0.3` opisuje wspierany deployment Compose, a nie pełny matrix środowisk i orkiestratorów.

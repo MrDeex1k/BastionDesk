@@ -18,11 +18,11 @@
     "test:core:db": "bun backend/src/core/integration.ts",
     "test:migrations": "bun backend/src/migrations/integration.ts",
     "build": "turbo run build",
-    "check": "turbo run lint typecheck format",
+    "check": "bun run test:lint-rules && turbo run lint typecheck format",
     "changelog:generate": "conventional-changelog -n changelog.config.mjs -i CHANGELOG.md -s -r 1",
     "commitlint": "commitlint",
-    "deps:install": "sfw bun install --minimum-release-age 86400",
-    "deps:update": "sfw bun update --recursive --latest --minimum-release-age 86400",
+    "deps:install": "sfw bun install --minimum-release-age 10800",
+    "deps:update": "sfw bun update --recursive --latest --minimum-release-age 10800",
     "dev": "turbo run dev --parallel",
     "format": "turbo run format",
     "lint": "turbo run lint",
@@ -43,15 +43,19 @@
     "test:e2e": "bun scripts/test-phase1-e2e.ts",
     "test:e2e:all": "bun scripts/test-phase1-e2e.ts --all",
     "test:e2e:external": "turbo run test:e2e",
-    "test:e2e:external:all": "turbo run test:e2e:all"
+    "test:e2e:external:all": "turbo run test:e2e:all",
+    "test:lint-rules": "node tools/oxlint/anti-slop/rules/no-chained-type-assertions.test.ts && node tools/oxlint/anti-slop/rules/no-widen-then-assert.test.ts && node tools/oxlint/anti-slop/rules/no-reduce-accumulator-copy.test.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
+    "@oxlint/plugins": "1.94.0",
     "conventional-changelog-cli": "5.0.0",
     "conventional-changelog-conventionalcommits": "10.4.1",
     "husky": "9.1.7",
+    "oxlint": "1.94.0",
+    "oxlint-flat-config": "0.4.0",
     "sfw": "2.0.6",
-    "turbo": "2.11.10"
+    "turbo": "2.11.13"
   }
 }

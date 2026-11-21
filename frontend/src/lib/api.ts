@@ -30,8 +30,12 @@ function apiUrl(path: string) {
   return apiBaseUrl ? `${apiBaseUrl}${normalizedPath}` : normalizedPath;
 }
 
-export async function apiFetch(path: string, init: RequestInit = {}) {
-  return executeApiFetch(path, init, true);
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {},
+  { minimumTimeoutMs = 0 } = {},
+) {
+  return executeApiFetch(path, init, true, Math.max(apiTimeoutMs, minimumTimeoutMs));
 }
 
 export async function readJsonError(response: Response, fallback: string) {
@@ -66,9 +70,9 @@ function parseApiErrorCode(response: Response, data: unknown): string | null {
   return response.status === 403 ? "FORBIDDEN" : null;
 }
 
-function createTimeoutSignal(signal: AbortSignal | null | undefined) {
+function createTimeoutSignal(signal: AbortSignal | null | undefined, timeoutMs: number) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort("timeout"), apiTimeoutMs);
+  const timeoutId = window.setTimeout(() => controller.abort("timeout"), timeoutMs);
 
   if (signal) {
     if (signal.aborted) {
@@ -84,7 +88,12 @@ function createTimeoutSignal(signal: AbortSignal | null | undefined) {
   };
 }
 
-async function executeApiFetch(path: string, init: RequestInit, allowRetry: boolean) {
+async function executeApiFetch(
+  path: string,
+  init: RequestInit,
+  allowRetry: boolean,
+  timeoutMs: number,
+) {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   headers.set("Accept", headers.get("Accept") ?? "application/json");
@@ -93,7 +102,7 @@ async function executeApiFetch(path: string, init: RequestInit, allowRetry: bool
     headers.set("X-CSRF-Token", await getCsrfToken());
   }
 
-  const { signal, cleanup } = createTimeoutSignal(init.signal);
+  const { signal, cleanup } = createTimeoutSignal(init.signal, timeoutMs);
 
   let response: Response;
   try {
@@ -127,7 +136,7 @@ async function executeApiFetch(path: string, init: RequestInit, allowRetry: bool
 
     if (typeof code === "string" && code.startsWith("CSRF_")) {
       await refreshCsrfToken();
-      return executeApiFetch(path, init, false);
+      return executeApiFetch(path, init, false, timeoutMs);
     }
   } catch {
     // Ignore non-JSON error responses and return the original response below.

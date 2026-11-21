@@ -1,5 +1,11 @@
 # Faza 5 — auth i gateway
 
+Faza 5 jest zaimplementowana; odbiór techniczny zapisano 23 września 2026.
+Wersje podane w zakresie 5.1 i datowane wyniki dotyczą tego odbioru. Aktualne
+wersje określa [manifest backendu](../../backend/package.json); późniejsze
+aktualizacje nie są automatycznie objęte historycznym wynikiem testów.
+Poniższa topologia i procedury opisują wdrożony podział usług.
+
 ## Zakres 5.1–5.5
 
 1. Discovery i przypięcie Elysia `2.0.0-beta.16`, Better Auth oraz PassKeys `1.7.5`.

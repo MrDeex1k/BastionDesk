@@ -22,9 +22,7 @@ export const adminReadsLayer = (port: AdminProjection) => Layer.succeed(AdminRea
 export function readAdmin(
 	identity: LiveIdentity,
 	request:
-		| { type: "query"; input: AdminIncidentsQuery }
-		| { type: "filters" }
-		| { type: "summary" },
+		{ type: "query"; input: AdminIncidentsQuery } | { type: "filters" } | { type: "summary" },
 ) {
 	return Effect.gen(function* () {
 		if (identity.role !== "admin") return yield* Effect.fail(new DomainError("FORBIDDEN"));

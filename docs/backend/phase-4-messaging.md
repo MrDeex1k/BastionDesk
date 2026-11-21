@@ -1,7 +1,12 @@
 # Faza 4 — trwałe zadania i obserwowalność
 
+Raport historyczny z 23 września 2026. Wersje zależności i wyniki testów
+opisują tamten przebieg. Messaging jest wdrożony, a kolejna faza 5 wydzieliła
+auth. [Bieżąca architektura](backend.md), [runbook](messaging-runbook.md).
+Status formalnego odbioru zapisany poniżej nie jest zmieniany przez przegląd dokumentacji.
+
 Branch `feat/stage4-implement` powstał z `feat/stage3-implement` przed jego merge.
-Etapy kończymy osobnymi commitami.
+Etapy realizowano w osobnych commitach.
 
 | Etap | Zakres | Status |
 | --- | --- | --- |
@@ -112,6 +117,6 @@ HA brokera ani archiwum telemetrii. Wywołanie LLM może się powtórzyć po awa
 ale zapis skutku w PostgreSQL jest deduplikowany. Retencja zadań i sprzątanie
 osieroconych obiektów S3 pozostają osobnymi decyzjami operacyjnymi.
 
-Faza 4 jest gotowa technicznie do odbioru. Kolejna faza 5 wydziela Elysia 2 +
-Better Auth i uruchamia sieciowy kontrakt JWT/JWKS. Branch fazy 4 zawiera bazę
-fazy 3; po jej squash merge należy przenieść tylko commity fazy 4 na nowe main.
+Na koniec tego etapu faza 4 była gotowa technicznie do odbioru. Faza 5
+następnie wydzieliła Elysia 2 + Better Auth i uruchomiła sieciowy kontrakt
+JWT/JWKS; bieżącą procedurę opisuje [runbook fazy 5](phase-5-identity.md).

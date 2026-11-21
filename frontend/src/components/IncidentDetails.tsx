@@ -712,12 +712,7 @@ function TransitionButton({
   const variant = isAssignedToMe
     ? "default"
     : ((transition.variant as
-        | "default"
-        | "destructive"
-        | "outline"
-        | "secondary"
-        | "ghost"
-        | "link") ?? "outline");
+        "default" | "destructive" | "outline" | "secondary" | "ghost" | "link") ?? "outline");
 
   return (
     <Button

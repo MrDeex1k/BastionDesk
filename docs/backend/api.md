@@ -2,20 +2,24 @@
 
 Dokumentacja API dla aplikacji BastionDesk. Zawiera szczegółowe informacje o endpointach, strukturach JSON odpowiedzi oraz kodach błędów.
 
-> Dokument opisuje kontrakt aktualnego backendu `1.0.3`, w którym API i auth
-> działają jeszcze w jednym serwisie Express. Docelowo `/api/auth/*` będzie
-> obsługiwane przez Elysia 2 + Better Auth, a domenowe `/api/*` przez NestJS
-> Core. Granicą zaufania będzie JWT/JWKS; zobacz [docelową architekturę](./backend.md)
-> i [ADR-0001](../adr/0001-backend-boundaries-and-auth.md).
+> Publiczny kontrakt zachowuje ścieżki workflow `1.0.3`. W bieżącym kodzie
+> NGINX przekazuje `/api` i `/api/*` do Elysia 2 + Better Auth. Gateway obsługuje
+> auth/CSRF i przekazuje API domenowe do Core z krótkim JWT przez mTLS.
+> Przeglądarka korzysta z sesji HttpOnly; nie przechowuje tokenu Core.
+> [Architektura](backend.md) i [kontrakt tożsamości](identity-contract.md).
 
-> Uwaga: w aktualnym środowisku Docker Compose publicznym entrypointem aplikacji jest `http://localhost:4567`. Przykłady dla endpointów `/api/*` korzystają z reverse proxy `nginx`. Endpoint `GET /health` pozostaje endpointem backendu i nie jest osobno publikowany na hoście w domyślnej konfiguracji.
+> Publiczny entrypoint Compose to `http://localhost:4567`. Wewnętrzne sondy
+> `/health` nie są publikowane przez proxy; publiczny `/healthz` sprawdza NGINX.
 
 ## Przegląd API
 
 ### Formaty danych
 
 #### Daty i czas
-Wszystkie pola dat w API są zwracane jako **ciągi znaków w formacie ISO 8601** bez informacji o strefie czasowej (ponieważ baza danych przechowuje `timestamp` zamiast `timestamptz`):
+Daty w odpowiedziach workflow są serializowane jako **ciągi ISO 8601**. Sufiks
+`Z` w przykładach oznacza UTC. Typ kolumny PostgreSQL nie jest formatem JSON;
+schemat zawiera zarówno historyczne `timestamp`, jak i `timestamptz` w nowych
+tabelach Core:
 
 ```json
 {
@@ -38,7 +42,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
 - **Dokumentacja:** [Better-Auth Documentation](https://better-auth.com/)
 
 ### **Pracownicy (Employees)**
-- **Ścieżka bazowa:** `/api/employee/*`
+- **Ścieżka bazowa:** `/api/incidents/*`
 - **Uprawnienia:** `pracownik`, `analityk`, `admin`
 - **Funkcjonalności:**
   - Zgłaszanie incydentów
@@ -63,7 +67,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
   - Pełny dostęp do wszystkich plików w organizacji
 
 ### **System**
-- **Health Check:** `GET /health` - Status aplikacji, bazy danych i SMTP
+- **Health Check:** lokalne sondy usług; `/healthz` sprawdza publiczny NGINX
 - **API Info:** `GET /api` - Informacje o dostępnych endpointach
 
 ## Spis treści
@@ -92,6 +96,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
   - [Szczegóły incydentu](#szczegóły-incydentu-admin)
   - [Statystyki incydentów](#statystyki-incydentów)
   - [Szczegółowe metryki](#szczegółowe-metryki)
+- [Wazuh API](#wazuh-api)
 - [Kody błędów](#kody-błędów)
 
 ## Health Check
@@ -1946,6 +1951,63 @@ nowej logiki, a jego odpowiedź zawiera nagłówki `Deprecation`, `Sunset`, `Lin
   }
 }
 ```
+
+## Wazuh API
+
+Każde żądanie wymaga sesji i parametru `organizationId` zgodnego z aktywną
+organizacją. Administrator i analityk mogą odczytać stan źródła i alerty.
+Zmiany konfiguracji oraz test połączenia wymagają roli administratora i CSRF.
+Udane odpowiedzi mają status 200 i postać `{ "success": true, "data": … }`.
+Odpowiedzi Core używają `Cache-Control: private, no-store`.
+
+| Metoda i ścieżka | Dane żądania | Pole `data` w odpowiedzi |
+| --- | --- | --- |
+| `GET /api/wazuh/source` | Parametr organizacji | `source` z `enabled` i `revision` albo `null`, a także `refreshSeconds`. Administrator dodatkowo otrzymuje `settings` z adresem `origin`, `username` i publicznym `ca`, jeśli źródło istnieje. |
+| `POST /api/wazuh/source/check` | JSON konfiguracji z `revision` | `{ "verified": true }` po sprawdzeniu bez zapisu. |
+| `PUT /api/wazuh/source` | JSON konfiguracji z `revision` | `{ "enabled": true, "revision": "…" }` po sprawdzeniu i zapisaniu źródła. |
+| `PATCH /api/wazuh/source` | JSON z `revision` i `enabled` | Aktualny stan `enabled` i nowa `revision`. Włączenie ponawia test połączenia. |
+| `DELETE /api/wazuh/source` | Parametr `revision` | `null` po usunięciu lokalnej konfiguracji. |
+| `GET /api/wazuh/alerts` | `revision` oraz opcjonalnie `level`, `from`, `to`, `cursor`, `view` | `alerts`, `cursor` i `nextCursor`. |
+| `GET /api/wazuh/alerts/detail` | `revision`, `indexName`, `documentId` | Podsumowanie konkretnego alertu. |
+| `GET /api/wazuh/alerts/json` | `revision`, `indexName`, `documentId` | `_index`, `_id` i pełny dokument `_source` z Wazuh. |
+
+JSON konfiguracji zawiera `origin` jako adres HTTPS z opcjonalnym portem,
+`username`, `password` oraz opcjonalny `ca` w PEM. Hasło jest obowiązkowe
+przy dodaniu źródła lub zmianie adresu bądź użytkownika. Jeśli adres i użytkownik
+pozostają te same, pominięcie `password` zachowuje zapisane hasło. Odpowiedzi
+API nie zawierają hasła.
+
+Do sprawdzenia, zapisu, zmiany stanu i usunięcia przekaż `revision` otrzymaną
+z `GET /api/wazuh/source`. Gdy źródło jeszcze nie istnieje, `POST` i `PUT`
+wymagają `"revision": null`. Zmiana konfiguracji od czasu jej odczytu skutkuje
+`409 WAZUH_STALE`. Pobierz wtedy bieżący stan przed ponowieniem operacji.
+Wyszukiwanie, otwarcie i zamknięcie PIT podczas weryfikacji korzystają
+ze wspólnego limitu 10 sekund. Po jego przekroczeniu backend zwraca `504`
+i nie rozpoczyna zapisu konfiguracji.
+
+Lista zwraca do 50 podsumowań z polami `indexName`, `documentId`, `agentId`,
+`agentName` (może być `null`), `timestamp`, `ruleId`, `ruleLevel` i
+`description`. Bez dat lista obejmuje ostatnie 24 godziny. Przy własnym
+zakresie przekaż oba znaczniki w ISO 8601 UTC. Brak `level` obejmuje wszystkie
+poziomy, a liczba całkowita w zakresie 0–16 oznacza dokładne dopasowanie.
+Przekaż `nextCursor` jako `cursor` wraz z tymi samymi filtrami, sesją
+i rewizją źródła. Wartość `null` w `nextCursor` oznacza koniec wyników.
+Klient może podać `view` jako UUID używany przez pojedynczy widok listy.
+Przekazuj tę samą wartość podczas odświeżania, zmiany filtrów i stronicowania.
+Odczyt bez kursora zastępuje poprzedni kontekst PIT dla widoku i unieważnia
+jego kursory. Bez `view` kontekst jest przypisany do zestawu filtrów w ramach
+sesji, organizacji i rewizji źródła.
+
+| HTTP | Kody błędów Wazuh |
+| --- | --- |
+| 400 | `WAZUH_INVALID_ADDRESS`, `WAZUH_PASSWORD_REQUIRED` |
+| 404 | `WAZUH_NOT_FOUND` dla niedostępnego dokumentu |
+| 409 | `WAZUH_DISABLED`, `WAZUH_STALE` dla zmienionej konfiguracji lub nieaktualnego kursora |
+| 502 | `WAZUH_NETWORK`, `WAZUH_TLS`, `WAZUH_AUTHENTICATION`, `WAZUH_PERMISSION`, `WAZUH_UNAVAILABLE` |
+| 503 | `WAZUH_NOT_CONFIGURED` |
+| 504 | `WAZUH_TIMEOUT` |
+
+[Konfiguracja wdrożenia i diagnostyka](../integrations/wazuh-discovery.md#wdrożenie-etapu-6).
 
 ## Przesyłanie plików do MinIO
 

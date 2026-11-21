@@ -1,17 +1,21 @@
-# Migrator fazy 2
+# Migracje schematu BastionDesk
 
 Migrator jest narzędziem uruchamianym jawnie, niezależnie od startu backendu.
 Pierwszy obsługiwany krok to adoptowanie dokładnego schematu 1.0.3: utworzenie
 `bastiondesk_meta.migrations` i zapis baseline, bez zmiany danych aplikacji.
-Nie stanowi to jeszcze wydanego upgrade do 2.0.
+Po adoptowaniu runner stosuje migracje 0001–0004 dla Core, jobów, JWKS i źródeł Wazuh.
+Nie stanowi to jeszcze wydanego upgrade do 2.0 ani obsługi dowolnego starego
+schematu. Instrukcję przejścia auth zawiera [runbook fazy 5](../backend/phase-5-identity.md).
 
 ## Źródła
 
 - `database/init-sql/` nadal inicjalizuje świeżą bazę 1.0.3.
 - `database/versioned/baseline-1.0.3.json` zawiera zamrożony fingerprint
   schematu z PostgreSQL 18.6.
-- Przyszłe migracje trafiają do `database/versioned/0001_nazwa.sql`, następnie
-  `0002_nazwa.sql` itd., bez luk i zmian istniejących plików.
+- `database/versioned/0001_core_operations.sql`, `0002_durable_jobs.sql`
+  i `0003_auth_jwks.sql` są wymaganymi rozszerzeniami bieżącego stosu.
+  `0004_wazuh_sources.sql` dodaje tabelę konfiguracji integracji Wazuh.
+  Kolejne migracje otrzymują następne numery, bez luk i zmian istniejących plików.
 - `database/migrations/001-*` oraz `002-*` to historyczne ręczne korekty
   Better Auth. Runner ich nie skanuje ani nie uruchamia automatycznie.
 
@@ -70,7 +74,7 @@ audytem konfiguracji: nie porównuje właścicieli, grantów, innych schematów,
 ustawień serwera ani bieżących wartości sekwencji. Nowe rodzaje obiektów
 wymagają rozszerzenia kontraktu fingerprintu i testu kompatybilności.
 
-Obsługujemy PostgreSQL 18; referencyjny test działa na obrazie 18.6. Zmiana
+Obsługujemy PostgreSQL 18. Bieżące testy migracji używają obrazu 18.7. Zmiana
 wersji rozszerzenia lub sposobu renderowania definicji przez PostgreSQL może
 wymagać przeglądu zgodności. Nie regenerować baseline tylko po to, by ominąć
 `SCHEMA_DRIFT`. Generowanie `--record-baseline` jest jednorazowym narzędziem
@@ -108,7 +112,8 @@ zmiany danych incydentów lub tabel auth. Należy wykonać `plan` i `apply`
 **przed uruchomieniem nowego Core**, również po świeżej inicjalizacji
 bazy 1.0.3. Migrator i pliki SQL są dostępne w obrazie backendu; uruchomienie
 migratora jest osobnym krokiem operatora, nie automatyczną migracją przy starcie.
-Backend przed otwarciem portu sprawdza obecność tabel i wpisu 0001 w historii.
+Bieżący backend przed otwarciem portu sprawdza obecność tabel i wpisów 0001/0002
+w historii, a auth wymaga magazynu JWKS z migracji 0003.
 Bramka startu nie zastępuje pełnego sprawdzenia fingerprintu przez `plan`.
 
 `MIGRATION_DIRECTORY` może wskazać zaufany katalog operatora z manifestem
@@ -138,3 +143,29 @@ dla historycznych incydentów ani nie modyfikuje danych auth. Wykonaj backup,
 `plan` i `apply` według tej samej procedury; nie pomijaj bramki startu.
 Nowy backup musi obejmować `core_jobs` wraz z audytem i receipts.
 [Obsługa zadań, replay i ograniczenia](../backend/messaging-runbook.md).
+
+## Rozszerzenie fazy 5
+
+`0003_auth_jwks.sql` tworzy magazyn kluczy Better Auth. Uruchom `plan` i `apply`
+przed startem auth, także dla świeżej bazy. Auth odmawia startu bez tabeli
+`jwks`; Core i worker nadal sprawdzają własne wymagania 0001/0002.
+
+Klucz prywatny JWT jest szyfrowany sekretem dostępnym auth. Backup obejmuje
+`jwks`, a odtworzenie wymaga zachowania właściwego sekretu Better Auth.
+Migracja nie usuwa kont, sesji ani credentiali PassKey. Nie zmieniać sekretów,
+originu ani RP ID przy przejściu istniejącej instalacji bez osobnej procedury.
+[Upgrade, rollback, rotacja i historyczne wyniki](../backend/phase-5-identity.md).
+
+## Rozszerzenie etapu 6
+
+Przed podłączeniem Wazuh zastosuj `0004_wazuh_sources.sql` przez standardowe
+`plan` i `apply`. Migracja dodaje tabelę konfiguracji. Core i worker nadal
+sprawdzają przy starcie migracje 0001/0002, a auth wymaga 0003. Tabela z 0004
+jest potrzebna przy korzystaniu z Wazuh.
+
+Kopia PostgreSQL obejmuje `wazuh_sources` i zaszyfrowane hasła. Aby odtworzyć
+połączenia, zachowaj odpowiadający im klucz `WAZUH_SOURCE_KEY_FILE` w magazynie
+sekretów. Retencją i kopią dokumentów alertów zarządza instalacja Wazuh.
+Test `bun run test:core:db` sprawdza zastosowanie migracji, zaszyfrowany zapis,
+odczyt kluczem spoza bazy i usunięcie konfiguracji.
+[Konfiguracja Wazuh](../integrations/wazuh-discovery.md#wdrożenie-etapu-6).

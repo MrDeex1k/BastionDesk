@@ -51,19 +51,10 @@ interface CreateOrganizationResponse {
 }
 
 type CreateOrganizationFormField =
-  | "email"
-  | "password"
-  | "fullName"
-  | "orgName"
-  | "orgSlug"
-  | "logoUrl";
+  "email" | "password" | "fullName" | "orgName" | "orgSlug" | "logoUrl";
 
 type CreateOrganizationFormErrorField =
-  | "emailError"
-  | "passwordError"
-  | "fullNameError"
-  | "orgNameError"
-  | "orgSlugError";
+  "emailError" | "passwordError" | "fullNameError" | "orgNameError" | "orgSlugError";
 
 interface CreateOrganizationFieldConfig {
   field: CreateOrganizationFormField;

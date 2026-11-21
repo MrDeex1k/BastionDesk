@@ -1,6 +1,10 @@
-FROM quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z AS mc-src
+FROM postgres:18.7-alpine3.24 AS mc-src
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates curl
+COPY storage/download-client.sh /download-client.sh
+RUN sh /download-client.sh "${TARGETARCH}" /usr/bin/mc
 
-FROM postgres:18.6-alpine3.24
+FROM postgres:18.7-alpine3.24
 
 COPY --from=mc-src /usr/bin/mc /usr/local/bin/mc
 

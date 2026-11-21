@@ -1,5 +1,10 @@
 # Weryfikacja Core — faza 3
 
+Ten dokument zapisuje zakres i wyniki fazy 3 z 23 września 2026.
+Przejściowy auth i klasyfikacja best-effort opisane poniżej dotyczą tamtego
+etapu. Bieżące testy zostały rozszerzone o trwały worker i sieciowy auth:
+[faza 4](../backend/phase-4-messaging.md), [faza 5](../backend/phase-5-identity.md).
+
 Zakres: modularny Core w procesie obecnego backendu. Kompozycja Express/NestJS
 zachowuje publiczne ścieżki, sesję cookie i workflow frontendu. Nie jest to
 jeszcze oddzielny serwis auth ani sieciowy kontrakt JWT/mTLS.

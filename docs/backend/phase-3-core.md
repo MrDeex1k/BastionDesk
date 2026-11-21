@@ -1,7 +1,13 @@
 # Faza 3 — modularny Core incydentów
 
-Realizacja na branchu `feat/stage3-implement`. Każdy etap kończy się
-weryfikacją i osobnym commitem. Zakres testów bazodanowych: izolowane dane,
+Raport historyczny z 23 września 2026. Wersje, liczby testów i przejściowy
+adapter tożsamości opisują realizację fazy 3. Core pozostaje wdrożony;
+klasyfikację przeniesiono następnie do workera, a auth do osobnego serwisu.
+[Bieżąca architektura](backend.md). Zapisany status odbioru użytkownika
+pozostaje bez zmian; aktualizacja dokumentacji nie jest nowym odbiorem.
+
+Realizację prowadzono na branchu `feat/stage3-implement`, z weryfikacją
+i osobnymi commitami etapów. Zakres testów bazodanowych: izolowane dane,
 bez uruchamiania migracji istniejącej instalacji użytkownika.
 
 | Etap | Zakres | Status |
