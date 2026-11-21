@@ -85,12 +85,12 @@ planowanego wydania.
 
 ## Ustawienia GitHub
 
-Po otwarciu PR wdrażającego tę politykę pozostaw Issues włączone i ustaw
-tworzenie pull requestów na `Collaborators only` w `Settings → General → Features`.
-Zachowaj włączone prywatne zgłaszanie podatności opisane w
-[SECURITY.md](../SECURITY.md#reporting-a-vulnerability). Szablony i odsyłacz
-do prywatnych zgłoszeń z `.github/ISSUE_TEMPLATE/` będą widoczne w wyborze
-szablonu po scaleniu do `main`.
+Repozytorium ma włączone publiczne Issues i tworzenie pull requestów w trybie
+`Collaborators only` w `Settings → General → Features`. Włączone jest też
+prywatne zgłaszanie podatności opisane w
+[SECURITY.md](../SECURITY.md#reporting-a-vulnerability).
+GitHub pobiera szablony zgłoszeń i odsyłacz do prywatnego raportowania
+z `.github/ISSUE_TEMPLATE/` na domyślnym branchu `main`.
 
 Źródła: [dostęp do PR](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/disabling-pull-requests),
 [szablony Issues](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/about-issue-and-pull-request-templates).

@@ -47,7 +47,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
 - **Funkcjonalności:**
   - Zgłaszanie incydentów
   - Przeglądanie własnych zgłoszeń
-  - Pobieranie raportów i sprawozdań
+  - Pobieranie plików z własnych zgłoszeń
 
 ### **Analitycy (Analysts)**
 - **Ścieżka bazowa:** `/api/analyst/*`
@@ -82,21 +82,20 @@ BastionDesk API jest podzielone na kilka głównych modułów:
   - [Organization (Organizacja)](#organization-organizacja)
   - [PassKey (Klucze sprzętowe)](#passkey-klucze-sprzętowe)
   - [Sign Out (Wylogowanie)](#sign-out-wylogowanie)
-- [Incidents API - Pracownicy](#incidents-api-pracownicy)
+- [Incidents API - Pracownicy](#incidents-api---pracownicy)
   - [Zgłaszanie incydentu](#zgłaszanie-incydentu)
   - [Pobieranie własnych incydentów](#pobieranie-własnych-incydentów)
   - [Szczegóły incydentu](#szczegóły-incydentu)
-  - [Pobieranie raportów](#pobieranie-raportów)
-  - [Pobieranie sprawozdań](#pobieranie-sprawozdań)
-- [Incidents API - Analitycy](#incidents-api-analitycy)
+- [Incidents API - Analitycy](#incidents-api---analitycy)
   - [Incydenty przypisane](#incydenty-przypisane)
   - [Incydenty nieprzypisane](#incydenty-nieprzypisane)
-- [Incidents API - Administratorzy](#incidents-api-administratorzy)
+- [Incidents API - Administratorzy](#incidents-api---administratorzy)
   - [Wszystkie incydenty](#wszystkie-incydenty)
   - [Szczegóły incydentu](#szczegóły-incydentu-admin)
   - [Statystyki incydentów](#statystyki-incydentów)
   - [Szczegółowe metryki](#szczegółowe-metryki)
 - [Wazuh API](#wazuh-api)
+- [Pobieranie plików](#pobieranie-plików)
 - [Kody błędów](#kody-błędów)
 
 ## Health Check
@@ -117,25 +116,36 @@ Odpowiedź: `200 OK` lub `503 Service Unavailable`, bez JSON i bez body.
 
 ## CSRF dla endpointów aplikacyjnych
 
-Modyfikujące żądania pod `/api/incidents`, `/api/admin` i `/api/analyst`
-wymagają tokenu wydanego przez `GET /api/csrf`. Klient przesyła token w
-nagłówku `X-CSRF-Token`; frontend realizuje bootstrap i ponowienie żądania w
-`frontend/src/lib/csrf.ts` oraz `frontend/src/lib/api.ts`.
+Przeglądarka uwierzytelnia żądania do publicznego API ciasteczkiem sesji Better Auth.
+Żądania modyfikujące pod `/api/incidents`, `/api/admin` i `/api/analyst` wymagają
+również dozwolonego `Origin`, ciasteczka `bd_csrf` i odpowiadającej mu wartości
+w nagłówku `X-CSRF-Token`. `GET /api/csrf` ustawia ciasteczko i zwraca token w `data.token`.
+Przykłady JavaScript poniżej korzystają z tego helpera:
 
-Przykłady `curl` w dalszej części skupiają się na kontrakcie konkretnego
-endpointu. Dla chronionego żądania modyfikującego należy zachować cookie z
-odpowiedzi `/api/csrf` i dodać otrzymany token, np.:
+```javascript
+async function getCsrfToken() {
+    const response = await fetch('/api/csrf', { credentials: 'include' });
+    if (!response.ok) throw new Error(`Nie udało się pobrać tokenu CSRF: ${response.status}`);
+    const { data } = await response.json();
+    return data.token;
+}
+```
+
+Obsługę odświeżania tokenu i ponawiania żądania w aplikacji opisuje kod
+[csrf.ts](../../frontend/src/lib/csrf.ts) i [api.ts](../../frontend/src/lib/api.ts).
+
+Przykłady `curl` korzystające z `cookies.txt` wymagają zapisania sesji
+zgodnie z [przykładem logowania](#sign-in-logowanie). Przed żądaniem
+modyfikującym pobierz w tym samym terminalu token dla zapisanej sesji:
 
 ```bash
-curl -c cookies.txt http://localhost:4567/api/csrf
-curl -b cookies.txt \
-  -H "Origin: http://localhost:4567" \
-  -H "X-CSRF-Token: <token-z-odpowiedzi>" ...
+csrf_token=$(curl -fsS -b cookies.txt -c cookies.txt http://localhost:4567/api/csrf \
+  | jq -er '.data.token')
 ```
 
 Standardowe trasy Better Auth korzystają z własnej walidacji originu. Własny
 endpoint `/api/auth/sign-up-with-organization/email` korzysta dodatkowo z
-middleware CSRF aplikacji.
+middleware CSRF aplikacji. Klient pobiera token przed wysłaniem rejestracji.
 
 ## Better-Auth Endpoints
 
@@ -207,7 +217,11 @@ curl -X POST http://localhost:4567/api/auth/sign-up/email \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:4567/api/auth/sign-up-with-organization/email \
+csrf_token=$(curl -fsS -c signup-cookies.txt http://localhost:4567/api/csrf \
+  | jq -er '.data.token')
+curl -b signup-cookies.txt -X POST http://localhost:4567/api/auth/sign-up-with-organization/email \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -265,7 +279,8 @@ curl -X POST http://localhost:4567/api/auth/sign-up-with-organization/email \
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:4567/api/auth/sign-in/email \
+curl -c cookies.txt -X POST http://localhost:4567/api/auth/sign-in/email \
+  -H "Origin: http://localhost:4567" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -893,7 +908,9 @@ Wszystkie endpointy dla pracowników wymagają autoryzacji z rolą `pracownik` l
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 Content-Type: multipart/form-data (ustawia się automatycznie)
 ```
 
@@ -921,12 +938,12 @@ if (attachmentFile) {
     formData.append('attachment', attachmentFile);
 }
 
+const csrfToken = await getCsrfToken();
+// Przeglądarka ustawia Content-Type dla FormData wraz z granicą części.
 const response = await fetch('/api/incidents', {
     method: 'POST',
-    headers: {
-        'Authorization': `Bearer ${token}`,
-        // NIE dodawać Content-Type - browser sam ustawi multipart/form-data
-    },
+    credentials: 'include',
+    headers: { 'X-CSRF-Token': csrfToken },
     body: formData
 });
 ```
@@ -1112,7 +1129,7 @@ curl http://localhost:4567/api/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d \
 **Uwagi dla pracowników:**
 - Pracownicy mogą przeglądać swoje incydenty i ich status
 - Raporty i sprawozdania są dostępne w szczegółach incydentu jako metadane plików
-- Do pobierania plików używają analitycy i administratorzy (endpointy `/api/analyst/incidents/:id/files/...`)
+- Pracownicy mogą [pobierać pliki](#pobieranie-plików) z własnych incydentów.
 
 ## Incidents API - Analitycy
 
@@ -1272,8 +1289,9 @@ curl "http://localhost:4567/api/analyst/incidents/unassigned?page=1&limit=5" \
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
-Content-Type: application/json
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 ```
 
 **Path Parameters:**
@@ -1281,9 +1299,9 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/assign \
-  -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=session_token_here"
+curl -b cookies.txt -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/assign \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token"
 ```
 
 **Response (Success - 200):**
@@ -1307,8 +1325,9 @@ curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
-Content-Type: application/json
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 ```
 
 **Path Parameters:**
@@ -1316,9 +1335,9 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/unassign \
-  -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=session_token_here"
+curl -b cookies.txt -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/unassign \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token"
 ```
 
 **Response (Success - 200):**
@@ -1342,7 +1361,9 @@ curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 Content-Type: application/json
 ```
 
@@ -1364,9 +1385,10 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/status \
+curl -b cookies.txt -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/status \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token" \
   -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=session_token_here" \
   -d '{"status": "Raport złożony"}'
 ```
 
@@ -1391,7 +1413,9 @@ curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 Content-Type: application/json
 ```
 
@@ -1407,9 +1431,10 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/notes \
+curl -b cookies.txt -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/notes \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token" \
   -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=session_token_here" \
   -d '{"notes": "Sprawdziłem logi systemowe..."}'
 ```
 
@@ -1433,8 +1458,9 @@ curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
-Content-Type: application/json
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 ```
 
 **Path Parameters:**
@@ -1442,9 +1468,9 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/resolve \
-  -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=session_token_here"
+curl -b cookies.txt -X PUT http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/resolve \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token"
 ```
 
 **Response (Success - 200):**
@@ -1540,7 +1566,9 @@ curl http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 Content-Type: application/json
 ```
 
@@ -1560,9 +1588,10 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports \
+curl -b cookies.txt -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/reports \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token" \
   -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=session_token_here" \
   -d '{
     "reportData": {
       "filename": "analysis_report.pdf",
@@ -1602,7 +1631,9 @@ curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 Content-Type: application/json
 ```
 
@@ -1622,9 +1653,10 @@ Content-Type: application/json
 
 **Przykład curl:**
 ```bash
-curl -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/statements \
+curl -b cookies.txt -X POST http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/statements \
+  -H "Origin: http://localhost:4567" \
+  -H "X-CSRF-Token: $csrf_token" \
   -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=session_token_here" \
   -d '{
     "statementData": {
       "filename": "final_statement.docx",
@@ -2037,7 +2069,9 @@ incidents/{incidentId}/
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 Content-Type: multipart/form-data (ustawia się automatycznie)
 ```
 
@@ -2069,12 +2103,11 @@ attachment: File (opcjonalny)                         # max 50MB, obrazki/PDF/ZI
        formData.append('attachment', attachmentFile);
    }
 
+   const csrfToken = await getCsrfToken();
    const response = await fetch('/api/incidents', {
        method: 'POST',
-       headers: {
-           'Authorization': `Bearer ${token}`,
-           // NIE dodawać Content-Type - browser sam ustawi multipart/form-data
-       },
+       credentials: 'include',
+       headers: { 'X-CSRF-Token': csrfToken },
        body: formData
    });
 
@@ -2100,7 +2133,9 @@ attachment: File (opcjonalny)                         # max 50MB, obrazki/PDF/ZI
 
 **Nagłówki:**
 ```
-Cookie: better-auth.session_token=<session_token>
+Cookie: better-auth.session_token=<session_token>; bd_csrf=<csrf_token>
+Origin: http://localhost:4567
+X-CSRF-Token: <csrf_token>
 Content-Type: application/json
 ```
 
@@ -2133,12 +2168,14 @@ const fileToBase64 = (file) => {
 
 const uploadReport = async (incidentId, file) => {
     const base64Data = await fileToBase64(file);
+    const csrfToken = await getCsrfToken();
 
     const response = await fetch(`/api/analyst/incidents/${incidentId}/reports`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            'X-CSRF-Token': csrfToken,
         },
         body: JSON.stringify({
             reportData: {
@@ -2257,9 +2294,11 @@ System umożliwia pobieranie plików (screenshotów, załączników, raportów i
 
 | Rola | Dostęp do plików |
 |------|------------------|
-| **Pracownik** | ❌ Brak dostępu do pobierania plików (tylko upload przy tworzeniu incydentu) |
-| **Analityk** | ✅ Pliki z incydentów przypisanych do niego lub pliki analityków (raporty/sprawozdania) z jego organizacji |
-| **Administrator** | ✅ Wszystkie pliki z organizacji |
+| **Pracownik** | Pliki z własnych incydentów w aktywnej organizacji |
+| **Analityk** | Pliki z incydentów w aktywnej organizacji, niezależnie od przypisania |
+| **Administrator** | Pliki z incydentów w aktywnej organizacji |
+
+Dostęp obejmuje wszystkie cztery typy plików dostępne w danym incydencie.
 
 ### Typy plików
 
@@ -2270,93 +2309,57 @@ System umożliwia pobieranie plików (screenshotów, załączników, raportów i
 
 ### Endpointy pobierania plików
 
-#### Analitycy
-```
-GET /api/analyst/incidents/:id/files/:type/:filename
-```
+| Role | Endpoint |
+|------|----------|
+| Pracownik, analityk, administrator | `GET /api/incidents/:id/files/:type/:filename` |
+| Analityk, administrator | `GET /api/analyst/incidents/:id/files/:type/:filename` |
+| Administrator | `GET /api/admin/incidents/:id/files/:type/:filename` |
 
-#### Administratorzy
-```
-GET /api/admin/incidents/:id/files/:type/:filename
-```
-
-**Uwaga:** Pracownicy nie mają dostępu do pobierania plików ze względów bezpieczeństwa. Mogą oni tylko przesyłać pliki podczas tworzenia incydentu.
+W ścieżce wspólnej `filename` odpowiada `originalName` z metadanych pliku
+lub `filename`, gdy metadane nie zawierają oryginalnej nazwy. Zakoduj nazwę
+jako segment URL. Odpowiedź zawiera treść pliku i nagłówek `Content-Disposition`.
 
 ### Przykład użycia - pobieranie plików
 
-**Jak frontend pobiera pliki (tylko dla analityków i administratorów):**
+Przykład pobiera pierwszy raport z incydentu dostępnego w bieżącej sesji.
 
 ```javascript
-// 1. Najpierw pobierz szczegóły incydentu (zawiera ścieżki plików)
-const incidentResponse = await fetch(`/api/analyst/incidents/${incidentId}`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-});
-const incident = await incidentResponse.json();
+const incidentUrl = `/api/incidents/${incidentId}`;
+const response = await fetch(incidentUrl, { credentials: 'include' });
+if (!response.ok) throw new Error(`Nie udało się pobrać incydentu: ${response.status}`);
 
-// 2. Użyj zwróconych ścieżek do pobrania plików
-if (incident.data.userScreenshotPath) {
-    // Pobierz plik używając endpointu analityka/administratora
-    const screenshotResponse = await fetch(
-        `/api/analyst/incidents/${incidentId}/files/screenshots/${incident.data.userScreenshotMetadata.originalName}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-    );
+const { data } = await response.json();
+const metadata = data.analystReportMetadata;
+const report = Array.isArray(metadata) ? metadata[0] : metadata;
+const filename = report?.originalName ?? report?.filename;
 
-    if (screenshotResponse.ok) {
-        const blob = await screenshotResponse.blob();
-        // Zapisz lub wyświetl obraz
-        const url = URL.createObjectURL(blob);
-        document.getElementById('screenshot-img').src = url;
-    }
-}
-
-// Analogicznie dla innych typów plików
-if (incident.data.analystReportPath) {
-    const reportResponse = await fetch(
-        `/api/analyst/incidents/${incidentId}/files/reports/${incident.data.analystReportMetadata.originalName}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-    );
-
-    if (reportResponse.ok) {
-        const blob = await reportResponse.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = incident.data.analystReportMetadata.originalName;
-        a.click();
-    }
+if (filename) {
+    const link = document.createElement('a');
+    link.href = `${incidentUrl}/files/reports/${encodeURIComponent(filename)}`;
+    link.download = filename;
+    link.click();
 }
 ```
 
 **cURL przykłady:**
 ```bash
-# Pobieranie screenshotu przez analityka
-curl "http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/screenshots/error.png" \
-  -H "Cookie: better-auth.session_token=session_token_here" \
+# Pobieranie screenshotu z własnego incydentu przez pracownika
+curl -b cookies.txt "http://localhost:4567/api/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/screenshots/error.png" \
   --output error.png
 
 # Pobieranie raportu przez analityka
-curl "http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/reports/analysis.docx" \
-  -H "Cookie: better-auth.session_token=session_token_here" \
+curl -b cookies.txt "http://localhost:4567/api/analyst/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/reports/analysis.docx" \
   --output analysis.docx
 
 # Pobieranie sprawozdania przez administratora
-curl "http://localhost:4567/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/statements/final_report.pdf" \
-  -H "Cookie: better-auth.session_token=session_token_here" \
+curl -b cookies.txt "http://localhost:4567/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b7c8d/files/statements/final_report.pdf" \
   --output final_report.pdf
 ```
 
 ### Odpowiedzi błędów
 
-**Brak dostępu:**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "ACCESS_DENIED",
-    "message": "Brak dostępu do tego pliku"
-  }
-}
-```
+- `404 NOT_FOUND` dla nieistniejącego incydentu lub incydentu poza zakresem dostępu.
+- `403 FORBIDDEN`, gdy rola nie może użyć wybranej ścieżki analityka lub administratora.
 
 **Plik nie znaleziony:**
 ```json
@@ -2405,8 +2408,7 @@ curl "http://localhost:4567/api/admin/incidents/0192d1f8-5c8e-7b1a-8f2d-3e4f5a6b
 | `INSUFFICIENT_PERMISSIONS` | 403 | Niewystarczające uprawnienia |
 | `MISSING_PARAMETERS` | 400 | Brak wymaganych parametrów |
 | `INVALID_FILE_TYPE` | 400 | Nieprawidłowy typ pliku |
-| `ACCESS_DENIED` | 403 | Brak dostępu do pliku |
-| `DOWNLOAD_ERROR` | 500 | Nie udało się pobrać pliku |
+| `FILE_NOT_FOUND` | 404 | Brak pliku w metadanych incydentu lub w storage |
 | `INVALID_SORT_FIELD` | 400 | Nieprawidłowe pole sortowania |
 | `INVALID_SORT_ORDER` | 400 | Nieprawidłowy kierunek sortowania |
 | `GET_STATS_ERROR` | 500 | Nie udało się pobrać statystyk |

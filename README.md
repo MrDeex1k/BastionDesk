@@ -161,9 +161,8 @@ Instalację przeglądarek, macierz scenariuszy i historyczny wynik CI opisuje
 [kontrakt testowy fazy 1](docs/testing/phase-1-ui-e2e.md).
 Workflowy GitHub Actions usunięto 22 września 2026; kontrole pozostają lokalne.
 Aktualne wersje zależności określają manifesty i pliki lockfile.
-[Odświeżenie z 30 października 2026](docs/development/2026-10-30-dependency-refresh.md)
-nie obejmowało testów ani buildów; wcześniejsze wyniki nie potwierdzają
-automatycznie zgodności po tej aktualizacji. Poprzednią migrację Effect 4
+[Odświeżenie z 19 listopada 2026](docs/development/2026-11-19-dependency-refresh.md)
+obejmowało buildy aplikacji i typecheck backendu. Poprzednią migrację Effect 4
 opisuje [aktualizacja z 8 października](docs/development/2026-10-08-dependency-refresh.md). Uwagi do
 schematu Better Auth opisuje [dokumentacja bazy](docs/database/database.md).
 

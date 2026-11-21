@@ -352,13 +352,13 @@ niezależne wymagania skalowania.
 Fazy 0–5 dostarczyły baseline, testy zachowania, migracje, Core, messaging
 oraz osobny auth. Dalsza praca opiera się na tych implementacjach.
 Pozostałe trasy administracyjne i host Express można porządkować modułami,
-z zachowaniem kontraktów HTTP; nie blokuje to fazy 6. Zastosowanie ExpressAdapter
+z zachowaniem kontraktów HTTP. Zastosowanie ExpressAdapter
 przez NestJS samo w sobie nie wymaga wymiany transportu.
 
 Wyniki dawnych spike'ów i przebiegów są zapisane w dokumentach faz oraz ADR.
 Przed kolejnym wydaniem trzeba powtórzyć właściwe kontrole na aktualnych
-zależnościach: [aktualizacja z 30 października](development/2026-10-30-dependency-refresh.md)
-nie obejmowała testów, buildów ani typechecka.
+zależnościach. [Raport aktualizacji z 19 listopada](development/2026-11-19-dependency-refresh.md)
+odnotowuje buildy aplikacji, typecheck backendu i zakres pozostałych kontroli.
 
 ## Inspiracje dla własnych funkcji SOAR
 
@@ -367,13 +367,14 @@ pomysłów i narzędzi. BastionDesk rozwija własne implementacje w obecnej
 architekturze. Plan nie obejmuje wdrażania AiSOC, adaptera do jego API,
 scalania projektów ani przejmowania jego kodu lub bibliotek reguł.
 
-Do dalszych faz włączamy następujące wymagania projektowe; nie są jeszcze
-zaimplementowanymi możliwościami BastionDesk:
+Faza 6 potwierdziła odczyt alertów z Indexera na żądanie. Wazuh przechowuje
+dokumenty i zarządza ich retencją. Testy odbioru potwierdziły ścieżkę od
+istniejącego alertu do widoku i pełnego JSON-u oraz izolację organizacji.
+[Wyniki fazy 6](integrations/wazuh-stage-6-spec.md#kryteria-odbioru).
 
 | Obszar | Własna realizacja / kryterium | Faza |
 | --- | --- | --- |
-| Dowód przepływu alertu | Kontrolowane zdarzenie przechodzi przez rzeczywisty adapter, zapis, kolejkę i odczyt API/UI; replay i restart nie mnożą alertów, drugi tenant nie ma dostępu. | 6 |
-| Dziennik analizy i decyzji | Powiązania z dowodami, wersja reguły/modelu, czas analizy, wynik, uzasadnienie i korekta analityka. Ponowna analiza dopisuje wynik, zachowując poprzedni. | Kontrakt 6–8; użycie przez LLM 11 |
+| Dziennik analizy i decyzji | Powiązania z dowodami, wersja reguły/modelu, czas analizy, wynik, uzasadnienie i korekta analityka. Ponowna analiza dopisuje wynik, zachowując poprzedni. | Kontrakt 7–8, użycie przez LLM 11 |
 | Trwałe approval | Definicje i stan wykonania playbooków w PostgreSQL; wersja playbooka, krok, kontekst, decyzja, termin wygaśnięcia i idempotentne wznowienie po restarcie. | 9 |
 | Wynik reakcji | Osobne stany rekomendacji, podglądu, oczekiwania, odmowy, wykonania i weryfikacji skutku; testy awarii na granicy z wykonawcą. | 9–10 |
 | Oparcie AI w dowodach | Walidowany wynik zawiera odwołania do dostępnych dowodów; niepoparte twierdzenia trafiają do oceny analityka. Obecność IOC w wejściu nie dowodzi poprawności całej odpowiedzi. | 11 |
@@ -713,13 +714,39 @@ Kryterium WAZ-04 jest zamknięte. [Kryteria i wyniki](integrations/wazuh-stage-6
 Automatycznie zbierać dowody i wzbogacać incydenty bez zależności domeny od
 jednego providera.
 
+### Podział analizy plików
+
+- **Pliki wykryte na monitorowanych urządzeniach.** Wazuh skanuje pliki za
+  pomocą YARA. Sprawdzenie w VirusTotal zależy od włączenia tej integracji
+  przez organizację. BastionDesk odczytuje dostępne wyniki z Indexera i pokazuje je przy alercie
+  i powiązanym zgłoszeniu. Discovery ustali, jak rozpoznać wynik przypisany
+  do danego pliku, również gdy Wazuh rejestruje analizę jako osobny alert.
+- **Pliki załączone przez pracowników do zgłoszeń.** BastionDesk uruchamia
+  YARA w izolowanym workerze. Jeżeli organizacja włączy VirusTotal, worker
+  wyszukuje raport po SHA-256. Treść załącznika pozostaje w BastionDesk.
+
+### Ponowne użycie wyników
+
+Zakończoną analizę można wykorzystać w tej samej organizacji dla identycznego
+SHA-256. Dla YARA wymagana jest zgodna wersja zestawu reguł. Dla VirusTotal
+raport musi mieścić się w skonfigurowanym okresie ważności i być dopuszczony
+przez bieżącą politykę organizacji. Te same warunki obowiązują, gdy wynik
+pochodzi z Wazuh i ma zostać użyty dla pliku przesłanego do BastionDesk.
+Równoległe przesłania tego samego pliku korzystają ze wspólnego zadania
+analizy, jeśli dotyczą tej samej organizacji, metody i wersji konfiguracji.
+
+Wynik powinien wskazywać źródło, SHA-256, czas analizy i wersję reguł, jeśli ma
+zastosowanie. Analityk powinien móc odróżnić analizę bez trafień od braku
+analizy, braku raportu u providera i błędu analizy.
+
 ### Kroki
 
 1. Zdefiniować typy IOC, canonical form i provenance.
 2. Zbudować deterministyczny extractor IOC.
 3. Dodać hashing, magic bytes i bezpieczny pipeline artefaktów.
-4. Wykonać discovery YARA i zaprojektować wspólny model reguł oraz wyników.
-5. Uruchomić skanowanie artefaktów w izolowanym workerze.
+4. Wykonać discovery wyników YARA i VirusTotal w Wazuh oraz zaprojektować
+   wspólny model reguł i wyników.
+5. Uruchomić analizę załączników w izolowanym workerze i ponowne użycie wyników.
 6. Zdefiniować provider-neutralny kontrakt enrichmentu.
 7. Dodawać providerów pojedynczo, każdy z osobną kartą integracji.
 8. Dodać cache TTL, rate limiting, retry i circuit breaker.
@@ -731,8 +758,11 @@ Hybrid Analysis i opcjonalnie VirusTotal.
 
 ### Kryterium ukończenia
 
-IOC lub artefakt ma wynik z provenance, cache nie miesza tenantów, awaria
-providera nie blokuje incydentu, a analityk widzi aktualność danych.
+IOC lub artefakt ma wynik z provenance, a analityk widzi jego aktualność.
+Testy odbioru mają potwierdzić izolację organizacji, użycie zgodnego wyniku Wazuh,
+jednokrotne wykonanie analizy przy równoległych przesłaniach i odświeżenie
+wyniku po zmianie reguł YARA lub upływie ważności raportu VirusTotal. Awaria
+providera nie blokuje obsługi incydentu.
 
 ## Faza 8 — korelacja i scoring ryzyka
 
@@ -999,12 +1029,11 @@ rozbudowany LLM nie są konieczne do obrony, jeśli nie wspierają eksperymentu.
 
 1. Utrzymywać kontrakt UI/E2E i sprawdzić bieżące zależności przed następnym
    wydaniem; oddzielić formalne odbiory od historycznych wyników testów.
-2. Domknąć odbiór etapu 6 przez świeże zdarzenie kontrolowane na Ubuntu
-   z agentem `001` i sprawdzenie jego odczytu w widoku analityka.
-3. Rozszerzać własną domenę o IOC/TI, korelację i dziennik decyzji (fazy 7–8),
-   a następnie o trwałe playbooki suggestion/approval (faza 9).
-4. Dopiero po testach polityk i awarii dołączyć ograniczoną reakcję oraz
+2. Zrealizować IOC/TI i analizę artefaktów w fazie 7 w ramach checkpointu B.
+3. Dodać korelację i scoring w fazie 8, a następnie trwałe playbooki
+   suggestion/approval w fazie 9.
+4. Po testach polityk i awarii dołączyć ograniczoną reakcję oraz
    rozszerzony mediator LLM (fazy 10–11).
 
-Przepływ Wazuh → widok analityka działa w laboratorium. Checkpoint B obejmuje
-domknięcie odbioru etapu 6 oraz IOC/TI i analizę artefaktów z etapu 7.
+[Odbiór fazy 6](integrations/wazuh-stage-6-spec.md#kryteria-odbioru) zakończono
+na istniejącym alercie agenta Ubuntu `001`.
