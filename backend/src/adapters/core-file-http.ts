@@ -30,6 +30,8 @@ import {
 	validateFile,
 } from "../utils/file.helper";
 import { uuidSchema } from "../utils/validation";
+import type { AttachmentScans } from "../yara/store";
+import { attachmentDownloadAllowed, AttachmentDownloadBlocked } from "../yara/download";
 import { operationRequest } from "./core-operation";
 
 export const coreFileRoutes = [
@@ -55,6 +57,7 @@ export function coreFileHandler(
 	identity: IdentityReader,
 	reads: IncidentReads,
 	writes: IncidentWrites,
+	scans: Pick<AttachmentScans, "download">,
 ) {
 	return async (req: Request, res: Response) => {
 		try {
@@ -94,15 +97,39 @@ export function coreFileHandler(
 						live,
 						id,
 						kind as StoredFileKind,
-						presign ? undefined : filename,
+						presign ||
+							(kind === "attachments" &&
+								filename === "download" &&
+								req.query.attachment === "1")
+							? undefined
+							: filename,
 						presign,
 						workflow || admin,
+						kind === "attachments"
+							? async (file) => {
+									const state = await scans.download(
+										{
+											organizationId: live.organizationId,
+											incidentId: id,
+											storageKey: file.key,
+										},
+										req.method === "GET",
+									);
+									if (!attachmentDownloadAllowed(state))
+										throw new AttachmentDownloadBlocked(state);
+								}
+							: undefined,
 					).pipe(
 						Effect.provide(readsLayer(reads)),
 						Effect.provide(
 							storageLayer({
 								read: getObjectBuffer,
-								presign: (key) => presignObject(key, { expiresIn: 3600 }),
+								presign: (key) =>
+									kind === "attachments"
+										? Promise.resolve(
+												`/api/incidents/${id}/files/attachments/download?attachment=1`,
+											)
+										: presignObject(key, { expiresIn: 3600 }),
 							}),
 						),
 					),
@@ -110,7 +137,11 @@ export function coreFileHandler(
 				if (presign)
 					return res.json({
 						success: true,
-						data: { url: result.content, metadata: result.metadata, expiresIn: 3600 },
+						data: {
+							url: result.content,
+							metadata: result.metadata,
+							expiresIn: 3600,
+						},
 					});
 				res.setHeader(
 					"Content-Type",
@@ -200,10 +231,22 @@ export function coreFileHandler(
 				},
 			});
 		} catch (error) {
+			if (error instanceof AttachmentDownloadBlocked)
+				return res.status(409).json({
+					success: false,
+					error: {
+						code: "YARA_DOWNLOAD_BLOCKED",
+						message: "Pobranie wymaga aktualnego skanu bez dopasowań.",
+						status: error.state,
+					},
+				});
 			if (error instanceof IncidentRuleError)
 				return res
 					.status(error.kind === "missing" ? 404 : error.kind === "denied" ? 403 : 400)
-					.json({ success: false, error: { code: error.code, message: error.message } });
+					.json({
+						success: false,
+						error: { code: error.code, message: error.message },
+					});
 			return errorHandler(error as Error, req, res, () => {});
 		}
 	};

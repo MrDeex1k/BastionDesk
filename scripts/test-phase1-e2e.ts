@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 
 const root = resolve(import.meta.dir, "..");
 const wazuh = process.argv.includes("--wazuh");
+const yara = process.argv.includes("--yara");
 if (wazuh) {
   for (const name of ["E2E_WAZUH_ORIGIN", "E2E_WAZUH_USER", "E2E_WAZUH_CA_FILE", "E2E_WAZUH_PASSWORD_FILE"]) {
     if (!process.env[name]) throw new Error(`Set ${name} before running the Wazuh live test.`);
@@ -60,6 +61,8 @@ Object.assign(env, {
   BETTER_AUTH_SECRET: crypto.randomUUID(),
   CSRF_SECRET: crypto.randomUUID(),
   RABBITMQ_PASSWORD: crypto.randomUUID(),
+  YARA_S3_SECRET_KEY: crypto.randomUUID(),
+  YARA_LEGACY_SCAN_NOT_BEFORE: new Date(0).toISOString(),
   MINIO_ROOT_PASSWORD: crypto.randomUUID(),
   AUTH_PASSWORD_BREACH_CHECK_ENABLED: "false",
   AUTH_GATEWAY_RATE_LIMIT: "10000",
@@ -191,6 +194,8 @@ try {
     `${root}/scripts/fixtures/phase1-account-migration.sql:/migration-fixture.sql:ro`,
   );
   config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`, `${root}/scripts/fixtures/phase4-probe.ts:/app/backend/phase4-probe.ts:ro`);
+  config.services["yara-worker"].environment.DATABASE_URL = `${env.DATABASE_URL}?sslmode=require`;
+  if (yara) config.services.backend.volumes.push(`${root}/scripts/fixtures/phase7-yara-legacy.ts:/app/backend/phase7-yara-legacy.ts:ro`);
   if (wazuh) {
     const sourceKey = join(tlsDirectory, "wazuh-source.key");
     await Bun.write(sourceKey, Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"));
@@ -255,6 +260,14 @@ try {
     if (wazuhSecrets.some((value) => logs.includes(value)))
       throw new Error("Wazuh credentials appeared in an application log.");
     console.log("[phase1] PASS Wazuh analyst workflow and credential redaction");
+  } else if (yara) {
+    await command(["bun", "run", "--cwd", "frontend", "test:e2e", "yara.spec.ts"], {
+      ...testEnvironment,
+      E2E_YARA_COMPOSE_CONFIG: configFile,
+      E2E_YARA_COMPOSE_ENV: envFile,
+      E2E_YARA_COMPOSE_PROJECT: project,
+    });
+    console.log("[phase7] PASS automatic and manual YARA workflows");
   } else {
     await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "seed"]);
     await compose(["restart", "auth-service"]);

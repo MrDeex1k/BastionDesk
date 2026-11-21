@@ -73,6 +73,7 @@ services:
       - ./infra/tls/dev/pgbouncer:/certs/pgbouncer:ro
     networks:
       - bastiondesk-net-internal
+      - bastiondesk-yara-dependencies
 
   postgres-backup:
     build:
@@ -131,6 +132,7 @@ services:
       - ./infra/tls/dev/identity/trust/auth-service.crt:/certs/identity/trust/auth-service.crt:ro
     networks:
       - bastiondesk-net-internal
+      - bastiondesk-yara
 
   auth-service:
     build:
@@ -177,6 +179,7 @@ services:
       - ./infra/rabbitmq/entrypoint.sh:/etc/rabbitmq/tls-entrypoint.sh:ro
     networks:
       - bastiondesk-net-internal
+      - bastiondesk-yara-dependencies
     healthcheck:
       test: ["CMD", "/usr/local/bin/docker-entrypoint.sh", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -215,6 +218,69 @@ services:
       timeout: 3s
       retries: 20
 
+  yara-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["bun", "src/yara/worker.ts"]
+    restart: unless-stopped
+    stop_grace_period: 100s
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DB_TLS_CA_PATH: /certs/ca/ca.crt
+      DB_TLS_CERT_PATH: /certs/backend/client.crt
+      DB_TLS_KEY_PATH: /certs/backend/client.key
+      YARA_S3_ENDPOINT: https://storage-1:9000
+      YARA_S3_BUCKET: ${S3_BUCKET}
+      YARA_S3_ACCESS_KEY: ${YARA_S3_ACCESS_KEY:-bastiondesk-yara}
+      YARA_S3_SECRET_KEY: ${YARA_S3_SECRET_KEY:-}
+      NODE_EXTRA_CA_CERTS: /certs/ca/ca.crt
+      SSL_CERT_FILE: /certs/ca/ca.crt
+      RABBITMQ_URL: amqps://${RABBITMQ_USER:-bastiondesk}:${RABBITMQ_PASSWORD}@rabbitmq:5671
+      RABBITMQ_TLS_CA: /certs/ca/ca.crt
+    volumes:
+      - ./infra/tls/dev/ca:/certs/ca:ro
+      - ./infra/tls/dev/backend:/certs/backend:ro
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      storage-1:
+        condition: service_healthy
+      yara-scanner:
+        condition: service_healthy
+    networks:
+      - bastiondesk-yara-dependencies
+      - bastiondesk-yara
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3343').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  yara-scanner:
+    build:
+      context: ./yara_scanner
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 32
+    networks:
+      - bastiondesk-yara
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:3342/health', timeout=2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   frontend:
     build:
       context: .
@@ -252,6 +318,8 @@ services:
       - .env
     environment:
       - BOOTSTRAP_NODE=true
+      - YARA_S3_ACCESS_KEY=${YARA_S3_ACCESS_KEY:-bastiondesk-yara}
+      - YARA_S3_SECRET_KEY=${YARA_S3_SECRET_KEY:-}
     entrypoint:
       - /bin/sh
       - -c
@@ -283,6 +351,20 @@ services:
           [ "$$ready" = true ] || { kill $$pid; exit 1; }
           mc mb --ignore-existing minio/"$${S3_BUCKET}" || { kill $$pid; exit 1; }
           mc version enable minio/"$${S3_BUCKET}" || { kill $$pid; exit 1; }
+          if [ -n "$${YARA_S3_SECRET_KEY}" ]; then
+            if [ "$${YARA_S3_ACCESS_KEY}" = "$${MINIO_ROOT_USER}" ] || [ "$${YARA_S3_ACCESS_KEY}" = "$${S3_ACCESS_KEY}" ] || [ "$${YARA_S3_SECRET_KEY}" = "$${MINIO_ROOT_PASSWORD}" ] || [ "$${YARA_S3_SECRET_KEY}" = "$${S3_SECRET_KEY}" ]; then
+              echo 'YARA requires dedicated MinIO credentials' >&2
+              kill $$pid
+              exit 1
+            fi
+            policy=$$(mktemp)
+            printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/incidents/*/attachment_*"]}]}\n' "$${S3_BUCKET}" > "$$policy"
+            mc admin policy create minio bastiondesk-yara-read "$$policy" \
+              && mc admin user add minio "$${YARA_S3_ACCESS_KEY}" "$${YARA_S3_SECRET_KEY}" \
+              && mc admin policy attach minio bastiondesk-yara-read --user "$${YARA_S3_ACCESS_KEY}" \
+              || { rm -f "$$policy"; kill $$pid; exit 1; }
+            rm -f "$$policy"
+          fi
         fi
         wait $$pid
     volumes:
@@ -290,6 +372,7 @@ services:
       - ./infra/tls/dev/storage-1:/root/.minio/certs:ro
     networks:
       - bastiondesk-net-internal
+      - bastiondesk-yara-dependencies
     healthcheck:
       test:
         [
@@ -434,3 +517,7 @@ networks:
     driver: bridge
   bastiondesk-net-external:
     driver: bridge
+  bastiondesk-yara:
+    internal: true
+  bastiondesk-yara-dependencies:
+    internal: true

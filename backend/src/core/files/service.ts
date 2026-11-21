@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect";
 import { DomainError } from "../../contracts/errors";
+import type { Incident } from "../../types";
 import type { LiveIdentity } from "../../identity/contract";
 import { getIncident } from "../incidents/reads";
 import { IncidentRuleError } from "../incidents/commands";
@@ -25,25 +26,23 @@ export function incidentFile(
 	filename?: string,
 	presign = false,
 	strictFilename = true,
+	authorize?: (file: ReturnType<typeof storedIncidentFile>) => Promise<void>,
 ) {
 	return Effect.gen(function* () {
 		const incident = yield* getIncident(identity, id);
-		const [pathColumn, metadataColumn] = fileColumns[kind];
-		const metadata = parseStoredFileMetadata(incident[metadataColumn]);
-		const file =
-			filename && (strictFilename || Array.isArray(metadata))
-				? findStoredFileMetadata(metadata, filename)
-				: Array.isArray(metadata)
-					? metadata[0]
-					: metadata;
-		const key = Array.isArray(metadata) ? file?.path : incident[pathColumn];
-		if (!file || !key)
-			return yield* Effect.fail(
-				new IncidentRuleError("FILE_NOT_FOUND", "Plik nie został znaleziony", "missing"),
-			);
+		const file = yield* Effect.try({
+			try: () => storedIncidentFile(incident, kind, filename, strictFilename),
+			catch: (error) => error,
+		});
+		if (authorize)
+			yield* Effect.tryPromise({
+				try: () => authorize(file),
+				catch: (error) => error,
+			});
 		const storage = yield* Storage;
 		const content = yield* Effect.tryPromise({
-			try: async () => (presign ? await storage.presign(key) : await storage.read(key)),
+			try: async () =>
+				presign ? await storage.presign(file.key) : await storage.read(file.key),
 			catch: () => new DomainError("SERVICE_UNAVAILABLE"),
 		});
 		if (!content)
@@ -54,6 +53,26 @@ export function incidentFile(
 					"missing",
 				),
 			);
-		return { content, metadata: file };
+		return { content, metadata: file.metadata };
 	});
+}
+
+export function storedIncidentFile(
+	incident: Incident,
+	kind: StoredFileKind,
+	filename?: string,
+	strictFilename = true,
+) {
+	const [pathColumn, metadataColumn] = fileColumns[kind];
+	const parsed = parseStoredFileMetadata(incident[metadataColumn]);
+	const metadata =
+		filename && (strictFilename || Array.isArray(parsed))
+			? findStoredFileMetadata(parsed, filename)
+			: Array.isArray(parsed)
+				? parsed[0]
+				: parsed;
+	const key = Array.isArray(parsed) ? metadata?.path : incident[pathColumn];
+	if (!metadata || !key)
+		throw new IncidentRuleError("FILE_NOT_FOUND", "Plik nie został znaleziony", "missing");
+	return { key, metadata };
 }

@@ -3,6 +3,9 @@ import { makeCommand, withReceipt } from "../adapters/core-receipts";
 import { Effect } from "effect";
 import { classificationJob } from "../messaging/worker";
 import { jobStore } from "../messaging/store";
+import { attachmentScans, scanWorkerStore } from "../yara/store";
+import { baseRuleSet, ruleSet } from "../yara/rules";
+import { assertYaraSchema } from "../yara/schema";
 import { assertCoreSchema } from "../adapters/core-schema";
 import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
@@ -115,6 +118,13 @@ try {
 		);
 	const beforeAuthUpgrade = await authSnapshot();
 	const migrations = [
+		{
+			id: "0005_yara_attachments",
+			sql: await readFile(
+				new URL("../../../database/versioned/0005_yara_attachments.sql", import.meta.url),
+				"utf8",
+			),
+		},
 		{
 			id: "0004_wazuh_sources",
 			sql: await readFile(
@@ -243,6 +253,97 @@ try {
 		sessionExpiresAt: 9999999999,
 	};
 	const b = { ...a, subject: "b" };
+	await assertYaraSchema(pool);
+	const scans = attachmentScans(pool, transaction);
+	const scanWorker = scanWorkerStore(pool);
+	const hash = "a".repeat(64);
+	const attachment = async (name: string, legacy = false) => {
+		const incident = {
+			organizationId: a.organizationId,
+			incidentId: crypto.randomUUID(),
+			storageKey: name,
+		};
+		if (legacy) {
+			await pool!.query(
+				`INSERT INTO incidents (id, "userId", "organizationId", "userDescription", "userAttachmentPath", "userAttachmentMetadata")
+				VALUES ($1,$2,$3,'legacy scan fixture',$4,'{}')`,
+				[incident.incidentId, a.subject, a.organizationId, name],
+			);
+		} else {
+			await writes.create(a, {
+				id: incident.incidentId,
+				userDescription: `Scan fixture ${name}`,
+				userScreenshotPath: null,
+				userScreenshotMetadata: {},
+				userAttachmentPath: name,
+				userAttachmentMetadata: { contentHash: hash },
+			});
+		}
+		return incident;
+	};
+	const [firstFile, identicalFile, legacyFile] = await Promise.all([
+		attachment("first.txt"),
+		attachment("identical.txt"),
+		attachment("legacy.txt", true),
+	]);
+	assert.equal(await scans.download(firstFile, true), "pending");
+	assert.equal(await scans.download(legacyFile, true), "unscanned");
+	const queued = await scanWorker.dispatch();
+	assert.equal(queued.length, 1);
+	await scanWorker.published(queued[0]!.id, queued[0]!.publication_token);
+	assert.equal(
+		(
+			await pool.query<{ confirmed: boolean }>(
+				"SELECT publish_after='infinity' AS confirmed FROM yara_scan_jobs WHERE id=$1",
+				[queued[0]!.id],
+			)
+		).rows[0]?.confirmed,
+		true,
+	);
+	const initialJob = await scanWorker.claim(queued[0]!.id);
+	assert.ok(initialJob);
+	assert.equal(await scanWorker.claim(initialJob.id), undefined);
+	assert.equal(await scans.download(identicalFile, true), "running");
+	await scanWorker.complete(initialJob, []);
+	assert.equal(await scans.download(firstFile, true), "clean");
+	assert.equal(await scans.download(identicalFile, true), "clean");
+	assert.equal((await scans.request(legacyFile, hash)).state, "clean");
+	const customSet = ruleSet("rule organization_marker { condition: true }");
+	await scans.activate("org", customSet);
+	assert.equal((await scans.rules("foreign")).version, baseRuleSet.version);
+	assert.equal(await scans.download(legacyFile, false), "stale");
+	assert.equal(await scans.download(legacyFile, true), "pending");
+	assert.equal(
+		(await scans.status(legacyFile, true)).history?.[0]?.ruleVersion,
+		baseRuleSet.version,
+	);
+	const changed = await scanWorker.dispatch();
+	assert.equal(changed.length, 1);
+	const changedJob = await scanWorker.claim(changed[0]!.id);
+	assert.ok(changedJob);
+	assert.equal((await scanWorker.input(changedJob)).rules, customSet.rules);
+	await scanWorker.fail(changedJob, false);
+	assert.equal(await scans.download(legacyFile, true), "failed");
+	await Promise.all([scans.request(legacyFile, hash), scans.request(firstFile, hash)]);
+	const [retry] = await scanWorker.dispatch();
+	assert.equal(retry?.id, changedJob.id);
+	const retryJob = await scanWorker.claim(changedJob.id);
+	assert.ok(retryJob);
+	assert.equal(retryJob.attempts, 1);
+	await scanWorker.complete(retryJob, ["organization:organization_marker"]);
+	assert.equal(await scans.download(firstFile, true), "matched");
+	await scans.activate("org", baseRuleSet);
+	assert.equal(await scans.download(firstFile, true), "clean");
+	assert.equal((await scans.status(firstFile)).latest?.ruleVersion, baseRuleSet.version);
+	await pool.query("DELETE FROM incidents WHERE id = ANY($1::uuid[])", [
+		[firstFile.incidentId, identicalFile.incidentId, legacyFile.incidentId],
+	]);
+	await pool.query("DELETE FROM core_jobs WHERE incident_id = ANY($1::uuid[])", [
+		[firstFile.incidentId, identicalFile.incidentId],
+	]);
+	console.log(
+		"PASS YARA upload, concurrent deduplication, legacy scan, durable retry, active version and download policy",
+	);
 	const created = await writes.create(a, {
 		id: crypto.randomUUID(),
 		userDescription: "Fixture incident for concurrent commands",
@@ -513,7 +614,10 @@ try {
 	const restartedJobs = jobStore(pool);
 	assert(await restartedJobs.claim(failedId), "replay survives store recreation");
 
-	const workerIncident = await writes.create(a, { ...createInput, id: crypto.randomUUID() });
+	const workerIncident = await writes.create(a, {
+		...createInput,
+		id: crypto.randomUUID(),
+	});
 	const workerId = (
 		await pool.query<{ id: string }>("SELECT id FROM core_jobs WHERE incident_id=$1", [
 			workerIncident.id,
@@ -555,7 +659,10 @@ try {
 	);
 	const pagedIds: string[] = [];
 	for (let i = 0; i < 102; i++) {
-		const incident = await writes.create(a, { ...createInput, id: crypto.randomUUID() });
+		const incident = await writes.create(a, {
+			...createInput,
+			id: crypto.randomUUID(),
+		});
 		const row = (
 			await pool.query(
 				"UPDATE core_jobs SET state='dead', created_at='2026-01-01' WHERE incident_id=$1 RETURNING id",
@@ -567,7 +674,10 @@ try {
 	const firstPage = await listJobs(pool, "org", { state: "dead" });
 	assert.equal(firstPage.jobs.length, 100);
 	assert(firstPage.nextCursor);
-	const secondPage = await listJobs(pool, "org", { state: "dead", after: firstPage.nextCursor });
+	const secondPage = await listJobs(pool, "org", {
+		state: "dead",
+		after: firstPage.nextCursor,
+	});
 	assert.equal(secondPage.nextCursor, null);
 	const found = [...firstPage.jobs, ...secondPage.jobs].map((row) => row.id);
 	assert.equal(new Set(found).size, found.length);

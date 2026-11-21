@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { ShieldCheck, Building2, Activity, ShieldAlert } from "lucide-react";
+import { ShieldCheck, Building2, Activity, ShieldAlert, ScanSearch } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 
 const AdminIncidentList = lazy(() =>
@@ -18,7 +18,15 @@ const AdminOrganizationManagement = lazy(() =>
   })),
 );
 const WazuhAlerts = lazy(() =>
-  import("../components/WazuhAlerts").then((module) => ({ default: module.WazuhAlerts })),
+  import("../components/WazuhAlerts").then((module) => ({
+    default: module.WazuhAlerts,
+  })),
+);
+
+const YaraRulesForm = lazy(() =>
+  import("../components/YaraRulesForm").then((module) => ({
+    default: module.YaraRulesForm,
+  })),
 );
 
 export function AdminDashboardPage() {
@@ -43,7 +51,7 @@ export function AdminDashboardPage() {
       <div className="w-full max-w-7xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full gap-8">
           <div className="flex justify-center">
-            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-1 border border-zinc-800 bg-zinc-950/80 sm:grid-cols-3">
+            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-1 border border-zinc-800 bg-zinc-950/80 sm:grid-cols-4">
               <TabsTrigger
                 value="stats"
                 className="text-white/85 data-active:bg-blue-600 data-active:text-white"
@@ -64,6 +72,13 @@ export function AdminDashboardPage() {
               >
                 <ShieldAlert className="mr-2 size-4" />
                 Alerty Wazuh
+              </TabsTrigger>
+              <TabsTrigger
+                value="yara"
+                className="text-white/85 data-active:bg-blue-600 data-active:text-white"
+              >
+                <ScanSearch className="mr-2 size-4" />
+                Reguły YARA
               </TabsTrigger>
             </TabsList>
           </div>
@@ -88,6 +103,11 @@ export function AdminDashboardPage() {
           <TabsContent value="wazuh">
             <Suspense fallback={<AdminSectionLoader />}>
               {activeTab === "wazuh" && <WazuhAlerts />}
+            </Suspense>
+          </TabsContent>
+          <TabsContent value="yara">
+            <Suspense fallback={<AdminSectionLoader />}>
+              {activeTab === "yara" && <YaraRulesForm />}
             </Suspense>
           </TabsContent>
         </Tabs>

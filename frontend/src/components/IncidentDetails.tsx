@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import type { IncidentDetail, IncidentDetailResponse } from "@/ApiModel";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, readJsonError } from "@/lib/api";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -10,6 +10,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Textarea } from "./ui/textarea";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useAttachmentScan } from "./incident-details/attachment-scan";
 import { IncidentFileCard } from "./incident-details/IncidentFileCard";
 import { UploadFileDialog } from "./incident-details/UploadFileDialog";
 import { useIncidentUpload } from "./incident-details/useIncidentUpload";
@@ -211,7 +212,9 @@ function useIncidentDetailsActions({
     },
     onSuccess: (_data: unknown, variables) => {
       toast.success(`Status zmieniony na: ${variables}`);
-      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["incident", incidentId],
+      });
       void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
@@ -232,7 +235,9 @@ function useIncidentDetailsActions({
     },
     onSuccess: () => {
       toast.success("Incydent oznaczony jako rozwiązany");
-      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["incident", incidentId],
+      });
       void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
@@ -254,7 +259,9 @@ function useIncidentDetailsActions({
     },
     onSuccess: () => {
       toast.success("Notatka została zapisana");
-      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["incident", incidentId],
+      });
     },
     onError: () => {
       toast.error("Nie udało się zapisać notatki");
@@ -276,8 +283,13 @@ function useIncidentDetailsActions({
         const response = await apiFetch(url);
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to download file: ${errorText}`);
+          if (type === "attachments") {
+            void queryClient.invalidateQueries({
+              queryKey: ["yara-scan", incidentId],
+            });
+          }
+          toast.error(await readJsonError(response, "Nie udało się pobrać pliku"));
+          return;
         }
 
         const blob = await response.blob();
@@ -294,7 +306,7 @@ function useIncidentDetailsActions({
         toast.error("Nie udało się pobrać pliku");
       }
     },
-    [incidentId, mode],
+    [incidentId, mode, queryClient],
   );
 
   const handleTransitionClick = useCallback(
@@ -361,6 +373,7 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
     },
   });
   const incident = data?.data;
+  const attachmentScan = useAttachmentScan(incidentId, Boolean(incident?.userAttachmentPath));
   const incidentAnalystNote = incident?.analystNote;
   const incidentIdValue = incident?.id;
   const incidentStatus = incident?.status;
@@ -496,6 +509,7 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
               icon={Paperclip}
               isAssignedToMe={isAssignedToMe}
               mode={mode}
+              scan={attachmentScan}
               onDownload={(filename) => downloadFile("attachments", filename)}
             />
           </div>

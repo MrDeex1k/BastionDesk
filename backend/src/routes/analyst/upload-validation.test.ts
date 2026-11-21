@@ -4,7 +4,9 @@ import type { Request, Response } from "express";
 let putObjectCalls = 0;
 let lastStorageKey: string | null = null;
 
-await mock.module("../../lib/env.js", () => ({ env: { S3_BUCKET: "baseline-test" } }));
+await mock.module("../../lib/env.js", () => ({
+	env: { S3_BUCKET: "baseline-test" },
+}));
 
 await mock.module("../../lib/storage.js", () => ({
 	getObjectBuffer: async () => null,
@@ -43,6 +45,7 @@ const handler = coreFileHandler(
 			incident: { ...row, ...decide(row) },
 		}),
 	},
+	{ download: async () => "unscanned" },
 );
 
 async function uploadReport(reportData: unknown, method = "POST") {

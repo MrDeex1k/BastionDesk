@@ -714,6 +714,9 @@ Kryterium WAZ-04 jest zamknięte. [Kryteria i wyniki](integrations/wazuh-stage-6
 Automatycznie zbierać dowody i wzbogacać incydenty bez zależności domeny od
 jednego providera.
 
+Analiza załączników zaczyna się od [dwóch kroków lokalnego skanowania YARA](integrations/yara-stage-7-attachments-spec.md).
+Specyfikacja opisuje kolejność wdrożenia, uprawnienia, pobieranie i kryteria odbioru.
+
 ### Podział analizy plików
 
 - **Pliki wykryte na monitorowanych urządzeniach.** Wazuh skanuje pliki za

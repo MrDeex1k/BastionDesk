@@ -122,7 +122,8 @@ app.get("/api", (_req, res) => {
 
 import apiRoutes from "./routes/index";
 
-const { coreIncidentWrites } = await import("./adapters/core-incident-writes");
+const { coreIncidentWrites, withIncidentTransaction } =
+	await import("./adapters/core-incident-writes");
 const { coreWriteRoutes, coreCommandHandler } = await import("./adapters/core-command-http");
 const { coreFileRoutes, coreFileHandler } = await import("./adapters/core-file-http");
 const { coreCreateHandler } = await import("./adapters/core-create-http");
@@ -135,17 +136,32 @@ const { wazuhRefreshSeconds } = await import("./wazuh/config");
 const { wazuhService } = await import("./wazuh/service");
 const { wazuhSourceStore } = await import("./wazuh/source");
 const { getPgPool } = await import("./lib/database");
+const { attachmentScans } = await import("./yara/store");
+const { yaraScanner } = await import("./yara/scanner");
+const { coreYaraRoutes } = await import("./adapters/core-yara-http");
+const { getObjectBuffer } = await import("./lib/storage");
+const scans = attachmentScans(getPgPool(), withIncidentTransaction);
 const wazuhRoutes = coreWazuhRoutes(
 	coreIdentity,
 	wazuhService(wazuhSourceStore(getPgPool()), wazuhRefreshSeconds()),
 );
 const { coreIncidentReads } = await import("./adapters/core-incident-reads");
 const { coreReadPaths, coreReadHandler } = await import("./adapters/core-http");
-await (await import("./adapters/core-schema")).assertCoreSchema();
+const { assertCoreSchema } = await import("./adapters/core-schema");
+await assertCoreSchema();
+await (await import("./yara/schema")).assertYaraSchema(getPgPool());
+const yaraRoutes = coreYaraRoutes(
+	coreIdentity,
+	coreIncidentReads,
+	scans,
+	yaraScanner(),
+	getObjectBuffer,
+);
 const core = await (
 	await import("./core/application")
 ).createCoreApplication([
 	...wazuhRoutes,
+	...yaraRoutes,
 	...coreAdminRoutes.map((route) => ({
 		...route,
 		handle: coreAdminHandler(coreIdentity, {
@@ -154,10 +170,13 @@ const core = await (
 			summary: readIncidentSummary,
 		}),
 	})),
-	{ paths: coreReadPaths, handle: coreReadHandler(coreIdentity, coreIncidentReads) },
+	{
+		paths: coreReadPaths,
+		handle: coreReadHandler(coreIdentity, coreIncidentReads),
+	},
 	...coreFileRoutes.map((route) => ({
 		...route,
-		handle: coreFileHandler(coreIdentity, coreIncidentReads, coreIncidentWrites),
+		handle: coreFileHandler(coreIdentity, coreIncidentReads, coreIncidentWrites, scans),
 	})),
 	...coreWriteRoutes.map((route) => ({
 		...route,
@@ -170,7 +189,8 @@ const core = await (
 	},
 ]);
 app.get("/api/core/health", core.http);
-for (const route of wazuhRoutes) app.route(route.paths)[route.method](apiRateLimiter, core.http);
+for (const route of [...wazuhRoutes, ...yaraRoutes])
+	app.route(route.paths)[route.method](apiRateLimiter, core.http);
 
 for (const route of coreAdminRoutes) {
 	if (route.method === "query") {

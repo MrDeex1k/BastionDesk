@@ -1,3 +1,4 @@
+import { enqueueScan } from "../yara/store";
 import { enqueueClassification } from "../messaging/store";
 import { DomainError } from "../contracts/errors";
 import { makeCommand, withReceipt, recordFailure } from "./core-receipts";
@@ -146,6 +147,20 @@ export function createIncidentWrites(transaction = withIncidentTransaction): Inc
 							],
 						);
 						await enqueueClassification(client, command, input.id);
+						if (
+							input.userAttachmentPath &&
+							typeof input.userAttachmentMetadata.contentHash === "string"
+						) {
+							await enqueueScan(
+								client,
+								{
+									organizationId: identity.organizationId,
+									incidentId: input.id,
+									storageKey: input.userAttachmentPath,
+								},
+								input.userAttachmentMetadata.contentHash,
+							);
+						}
 						return {
 							value: result.rows[0]!,
 							resourceId: input.id,
