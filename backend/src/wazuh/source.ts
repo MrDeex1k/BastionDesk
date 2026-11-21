@@ -54,6 +54,24 @@ export function assertWithinDeadline(signal?: AbortSignal) {
 	if (signal?.aborted) throw new WazuhError("TIMEOUT");
 }
 
+export async function withinDeadline<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
+	assertWithinDeadline(signal);
+	const timeout = Promise.withResolvers<never>();
+	const abort = () => timeout.reject(new WazuhError("TIMEOUT"));
+	signal.addEventListener("abort", abort, { once: true });
+	try {
+		const pending = Promise.resolve().then(() => {
+			assertWithinDeadline(signal);
+			return work();
+		});
+		const result = await Promise.race([pending, timeout.promise]);
+		assertWithinDeadline(signal);
+		return result;
+	} finally {
+		signal.removeEventListener("abort", abort);
+	}
+}
+
 async function encryptionKey() {
 	const path = process.env.WAZUH_SOURCE_KEY_FILE;
 	if (!path) throw new WazuhError("NOT_CONFIGURED");

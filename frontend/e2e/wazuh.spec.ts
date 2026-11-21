@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { readFile } from "node:fs/promises";
 import { request } from "node:https";
 import { checkServerIdentity } from "node:tls";
+import type { Page } from "@playwright/test";
 import { test, expect, api } from "./fixtures";
 
 const origin = process.env.E2E_WAZUH_ORIGIN;
@@ -18,6 +19,59 @@ interface IndexerHit {
     agent: { id: string; name: string };
     timestamp: string;
     rule: { id: string; level: number };
+  };
+}
+
+type AlertKey = { indexName: string; documentId: string };
+type AlertPage = { alerts: AlertKey[]; nextCursor: string | null };
+type ReadAlertPage = (cursor: string | null, action: () => Promise<void>) => Promise<AlertPage>;
+
+async function findAlertRow(
+  page: Page,
+  key: AlertKey,
+  current: AlertPage,
+  cursor: string | null,
+  readPage: ReadAlertPage,
+) {
+  const visited = new Set<string>();
+  if (cursor) visited.add(cursor);
+  for (;;) {
+    const matches = current.alerts.flatMap((alert, index) =>
+      alert.indexName === key.indexName && alert.documentId === key.documentId ? [index] : [],
+    );
+    if (matches.length > 0) {
+      expect(matches).toHaveLength(1);
+      const table = page.getByRole("table", { name: "Alerty Wazuh" });
+      await expect(table.getByRole("row")).toHaveCount(current.alerts.length + 1);
+      return { row: table.getByRole("row").nth(matches[0]! + 1), cursor };
+    }
+    const next = current.nextCursor;
+    if (!next || visited.has(next)) throw new Error("Expected alert was not found in the list");
+    visited.add(next);
+    cursor = next;
+    current = await readPage(cursor, () => page.getByRole("button", { name: "Następna" }).click());
+  }
+}
+
+function alertPageReader(
+  page: Page,
+  matchesFilters: (query: URLSearchParams) => boolean,
+): ReadAlertPage {
+  return async (cursor, action) => {
+    const [response] = await Promise.all([
+      page.waitForResponse((response) => {
+        const { pathname, searchParams } = new URL(response.url());
+        return (
+          pathname === "/api/wazuh/alerts" &&
+          searchParams.get("cursor") === cursor &&
+          matchesFilters(searchParams)
+        );
+      }),
+      action(),
+    ]);
+    expect(response.ok()).toBe(true);
+    const { data }: { data: AlertPage } = await response.json();
+    return data;
   };
 }
 
@@ -138,19 +192,29 @@ test("WAZ-04 agent 001 from the Indexer to the analyst, including the full JSON"
   await page
     .getByLabel("Poziom reguły", { exact: true })
     .selectOption(String(hit._source.rule.level));
-  await page.getByRole("button", { name: "Pokaż zakres" }).click();
-  const open = page.getByRole("button", { name: `Szczegóły alertu ${hit._id}` });
-  const row = page.getByRole("row").filter({ has: open });
+  const readPage = alertPageReader(
+    page,
+    (query) =>
+      query.get("organizationId") === scenario.organizationId &&
+      query.get("revision") === revision &&
+      query.get("level") === String(hit._source.rule.level) &&
+      query.has("from") &&
+      query.has("to"),
+  );
+  const firstPage = await readPage(null, () =>
+    page.getByRole("button", { name: "Pokaż zakres" }).click(),
+  );
+  const key = { indexName: hit._index, documentId: hit._id };
+  let found = await findAlertRow(page, key, firstPage, null, readPage);
+  const { row } = found;
   await expect(row).toContainText(`${hit._source.agent.name} (001)`);
   await expect(row).toContainText(hit._source.rule.id);
   await expect(row.locator("time")).toHaveAttribute("datetime", new Date(timestamp).toISOString());
   for (let attempt = 0; attempt < 2; attempt++) {
-    const refreshed = page.waitForResponse((response) =>
-      response.url().includes("/api/wazuh/alerts?"),
+    const refreshed = await readPage(found.cursor, () =>
+      page.getByRole("button", { name: "Odśwież", exact: true }).click(),
     );
-    await page.getByRole("button", { name: "Odśwież", exact: true }).click();
-    expect((await refreshed).ok()).toBe(true);
-    await expect(row).toHaveCount(1);
+    found = await findAlertRow(page, key, refreshed, found.cursor, readPage);
   }
 
   let rawRequests = 0;
@@ -160,7 +224,7 @@ test("WAZ-04 agent 001 from the Indexer to the analyst, including the full JSON"
   const details = page.waitForResponse((response) =>
     response.url().includes("/api/wazuh/alerts/detail?"),
   );
-  await open.click();
+  await found.row.getByRole("button", { name: `Szczegóły alertu ${hit._id}`, exact: true }).click();
   expect((await (await details).json()).data).toEqual(adminData);
   const dialog = page.getByRole("dialog", { name: "Szczegóły alertu Wazuh" });
   await expect(dialog.getByText(hit._index, { exact: true })).toBeVisible();
@@ -197,7 +261,7 @@ test("WAZ-04 agent 001 from the Indexer to the analyst, including the full JSON"
     await page.reload();
     await page.getByRole("tab", { name: "Alerty Wazuh", exact: true }).click();
     await expect(page.getByText("Organizacja nie ma skonfigurowanego źródła Wazuh.")).toBeVisible();
-    await expect(row).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "Alerty Wazuh" })).toHaveCount(0);
   } finally {
     await api(scenario.admin.api, "/api/auth/organization/delete", { organizationId: other.id });
     await api(scenario.admin.api, "/api/auth/organization/set-active", {
@@ -284,7 +348,11 @@ test("WAZ-06 refresh interval, inactive views, historical pages and manual recov
     const alerts = secondPage
       ? [{ ...entry, documentId: "older", description: "Starszy alert" }]
       : moreAlerts
-        ? [{ ...entry, documentId: "new", description: "Nowy alert" }, entry]
+        ? [
+            { ...entry, documentId: "new", description: "Nowy alert" },
+            { ...entry, indexName: "wazuh-alerts-other", documentId: "older" },
+            entry,
+          ]
         : [entry];
     return route.fulfill({
       json: {
@@ -304,12 +372,19 @@ test("WAZ-06 refresh interval, inactive views, historical pages and manual recov
   moreAlerts = true;
   await page.clock.fastForward(55_000);
   expect(requests).toBe(beforePolling);
-  await page.clock.fastForward(5_000);
+  const readPage = alertPageReader(page, (query) => query.get("revision") === revision);
+  const polled = await readPage(null, () => page.clock.fastForward(5_000));
   await expect(page.getByText("Nowy alert", { exact: true })).toBeVisible();
   expect(requests).toBe(beforePolling + 1);
 
-  await page.getByRole("button", { name: "Następna" }).click();
-  await expect(page.getByText("Starszy alert", { exact: true })).toBeVisible();
+  const older = await findAlertRow(
+    page,
+    { indexName: entry.indexName, documentId: "older" },
+    polled,
+    null,
+    readPage,
+  );
+  await expect(older.row).toContainText("Starszy alert");
   const beforeOlder = requests;
   await page.clock.fastForward(61_000);
   expect(requests).toBe(beforeOlder);

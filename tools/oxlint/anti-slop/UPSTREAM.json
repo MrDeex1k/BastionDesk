@@ -5,7 +5,8 @@
   "sourceDirectory": "src",
   "localChanges": [
     "index.ts registers only the three selected generic rules",
-    "package.json marks vendored TypeScript as ES modules for Node RuleTester"
+    "package.json marks vendored TypeScript as ES modules for Node RuleTester",
+    "no-widen-then-assert detects literal Record keys and follows satisfies expressions, with regression tests"
   ],
   "upstreamFileSha256": {
     "rules/no-chained-type-assertions.test.ts": "53d18a7bde98b2d9c093cce3f4fc45b10b385cf5723202ed6a32ba877cc928bf",

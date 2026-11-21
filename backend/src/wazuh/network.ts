@@ -8,6 +8,7 @@ import {
 	parseIndexerOrigin,
 	type SourceConnection,
 	WazuhError,
+	withinDeadline,
 } from "./source";
 
 const denied = new BlockList();
@@ -69,7 +70,6 @@ function protectedHosts(env: NodeJS.ProcessEnv) {
 				"OTEL_EXPORTER_OTLP_ENDPOINT",
 				"FRONTEND_URL",
 			].map((key) => env[key] && URL.parse(env[key])?.hostname),
-			...(env.WAZUH_PROTECTED_HOSTS ?? "").split(","),
 		]
 			.filter((host) => Boolean(host))
 			.map((host) => normalizedHost(host?.trim() ?? "")),
@@ -77,9 +77,18 @@ function protectedHosts(env: NodeJS.ProcessEnv) {
 	return hosts;
 }
 
-export async function indexerAddress(url: URL, env = process.env) {
+const lookupAll = (host: string) => lookup(host, { all: true });
+
+export async function indexerAddress(url: URL, env = process.env, resolveHost = lookupAll) {
 	const host = normalizedHost(url.hostname);
+	const required = new Set(
+		(env.WAZUH_PROTECTED_HOSTS ?? "")
+			.split(",")
+			.map((name) => normalizedHost(name.trim()))
+			.filter(Boolean),
+	);
 	const protectedNames = protectedHosts(env);
+	for (const name of required) protectedNames.add(name);
 	if (protectedNames.has(host) || host.endsWith(".localhost"))
 		throw new WazuhError("INVALID_ADDRESS");
 	const addresses = new BlockList();
@@ -89,18 +98,16 @@ export async function indexerAddress(url: URL, env = process.env) {
 	}
 	const configured = await Promise.all(
 		[...protectedNames].filter(Boolean).map(async (value) => {
-			try {
-				return await lookup(value, { all: true });
-			} catch {
-				return [];
-			}
+			const resolved = await resolveHost(value).catch(() => []);
+			if (resolved.length === 0 && required.has(value)) throw new WazuhError("NETWORK");
+			return resolved;
 		}),
 	);
 	for (const { address, family } of configured.flat())
 		addresses.addAddress(address, family === 4 ? "ipv4" : "ipv6");
 	let resolved: { address: string; family: number }[];
 	try {
-		resolved = await lookup(host, { all: true });
+		resolved = await resolveHost(host);
 	} catch {
 		throw new WazuhError("NETWORK");
 	}
@@ -135,13 +142,7 @@ export function indexerTransport(
 		data?: object,
 		deadline = AbortSignal.timeout(10_000),
 	): Promise<unknown> => {
-		assertWithinDeadline(deadline);
-		const timeout = Promise.withResolvers<never>();
-		const abortLookup = () => timeout.reject(new WazuhError("TIMEOUT"));
-		deadline.addEventListener("abort", abortLookup, { once: true });
-		const address = await Promise.race([resolveAddress(url, env), timeout.promise]).finally(
-			() => deadline.removeEventListener("abort", abortLookup),
-		);
+		const address = await withinDeadline(deadline, () => resolveAddress(url, env));
 		assertWithinDeadline(deadline);
 		const body = data && JSON.stringify(data);
 		return new Promise((resolve, reject) => {

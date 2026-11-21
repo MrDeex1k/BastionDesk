@@ -9,8 +9,14 @@ if (wazuh) {
     if (!process.env[name]) throw new Error(`Set ${name} before running the Wazuh live test.`);
   }
 }
-const wazuhSecrets = wazuh
-  ? await Bun.file(process.env.E2E_WAZUH_PASSWORD_FILE!).text().then((value) => {
+const wazuhFiles = wazuh
+  ? {
+      E2E_WAZUH_CA_FILE: resolve(process.env.E2E_WAZUH_CA_FILE!),
+      E2E_WAZUH_PASSWORD_FILE: resolve(process.env.E2E_WAZUH_PASSWORD_FILE!),
+    }
+  : undefined;
+const wazuhSecrets = wazuhFiles
+  ? await Bun.file(wazuhFiles.E2E_WAZUH_PASSWORD_FILE).text().then((value) => {
       const password = value.replace(/\r?\n$/, "");
       if (!password) throw new Error("The Wazuh test password file is empty.");
       return [password, Buffer.from(`${process.env.E2E_WAZUH_USER}:${password}`).toString("base64")];
@@ -241,7 +247,10 @@ try {
     E2E_RUN_ID: runId,
   };
   if (wazuh) {
-    await command(["bun", "run", "--cwd", "frontend", "test:e2e", "wazuh.spec.ts"], testEnvironment);
+    await command(["bun", "run", "--cwd", "frontend", "test:e2e", "wazuh.spec.ts"], {
+      ...testEnvironment,
+      ...wazuhFiles,
+    });
     const logs = await compose(["logs", "--no-color", "backend", "auth-service", "nginx"], true);
     if (wazuhSecrets.some((value) => logs.includes(value)))
       throw new Error("Wazuh credentials appeared in an application log.");

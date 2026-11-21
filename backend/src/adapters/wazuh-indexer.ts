@@ -120,12 +120,16 @@ export function wazuhIndexer(connection: SourceConnection, send = indexerTranspo
 				throw new WazuhError("UNAVAILABLE");
 			return { alerts, next };
 		},
-		async document(key: DocumentKey, full: boolean) {
-			const result = await search("/" + encodeURIComponent(key.indexName) + "/_search", {
-				size: 1,
-				_source: full ? true : fields,
-				query: { ids: { values: [key.documentId] } },
-			});
+		async document(key: DocumentKey, full: boolean, signal?: AbortSignal) {
+			const result = await search(
+				"/" + encodeURIComponent(key.indexName) + "/_search",
+				{
+					size: 1,
+					_source: full ? true : fields,
+					query: { ids: { values: [key.documentId] } },
+				},
+				signal,
+			);
 			const [row] = result.hits.hits;
 			if (!row) throw new WazuhError("NOT_FOUND");
 			if (

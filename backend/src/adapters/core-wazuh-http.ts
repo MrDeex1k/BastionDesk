@@ -183,9 +183,9 @@ export function coreWazuhRoutes(
 		...([false, true] as const).map((full) => ({
 			method: "get" as const,
 			paths: [full ? "/api/wazuh/alerts/json" : "/api/wazuh/alerts/detail"],
-			handle: wrap(false, (req, id) => {
+			handle: wrap(false, (req, id, _session, _admin, signal) => {
 				const { revision, indexName, documentId } = parse(document, req.query);
-				return service.document(id, revision, { indexName, documentId }, full);
+				return service.document(id, revision, { indexName, documentId }, full, signal);
 			}),
 		})),
 	];

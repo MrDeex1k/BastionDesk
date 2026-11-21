@@ -140,6 +140,12 @@ function isDefinitelyObjectType(type: ESTree.TSType): boolean {
   }
 }
 
+function hasLiteralRecordKeys(type: ESTree.TSType): boolean {
+  const unwrapped = unwrapTypeParentheses(type);
+  if (unwrapped.type === "TSUnionType") return unwrapped.types.every(hasLiteralRecordKeys);
+  return unwrapped.type === "TSLiteralType";
+}
+
 function isDefinitelyNarrowerRecordType(type: ESTree.TSType): boolean {
   const unwrapped = unwrapTypeParentheses(type);
   if (unwrapped.type === "TSTypeLiteral") {
@@ -153,9 +159,11 @@ function isDefinitelyNarrowerRecordType(type: ESTree.TSType): boolean {
   }
   if (typeReferenceName(unwrapped) !== "Record") return false;
 
-  const parameters = unwrapped.typeArguments?.params ?? [];
+  const [keys, value] = unwrapped.typeArguments?.params ?? [];
   return (
-    parameters.length === 2 && parameters[1] !== undefined && !isUnknownOrAnyType(parameters[1])
+    keys !== undefined &&
+    value !== undefined &&
+    (hasLiteralRecordKeys(keys) || !isUnknownOrAnyType(value))
   );
 }
 
@@ -204,6 +212,10 @@ function knownValueEvidence(
   visitedVariables: ReadonlySet<Variable>,
 ): KnownValueEvidence | null {
   const unwrapped = unwrapExpressionParentheses(expression);
+
+  if (unwrapped.type === "TSSatisfiesExpression") {
+    return knownValueEvidence(unwrapped.expression, scopes, boundary, visitedVariables);
+  }
 
   if (unwrapped.type === "TSAsExpression" || unwrapped.type === "TSTypeAssertion") {
     if (broadTypeKind(unwrapped.typeAnnotation) !== null) return null;

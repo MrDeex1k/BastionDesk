@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import assert from "node:assert/strict";
 import { createCipheriv, randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:https";
@@ -7,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { coreWazuhRoutes } from "./core-wazuh-http";
-import { wazuhIndexer, type Sort } from "./wazuh-indexer";
+import { keepAliveMs, wazuhIndexer, type Sort } from "./wazuh-indexer";
 import { createCoreApplication } from "../core/application";
 import type { LiveIdentity } from "../identity/contract";
 import { wazuhRefreshSeconds } from "../wazuh/config";
@@ -95,6 +96,7 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 		_source?: unknown;
 		pit?: { id: string };
 		search_after?: Sort;
+		sort?: object[];
 		query?: {
 			bool?: {
 				filter: {
@@ -116,6 +118,7 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 	let canClosePit = true;
 	let abortVerification: AbortController | undefined;
 	const verificationSignals = new Set<AbortSignal>();
+	let documentRead: ReturnType<typeof Promise.withResolvers<AbortSignal>> | undefined;
 	let identity: LiveIdentity | null = null;
 	const service = wazuhService(store, 60, (connection) =>
 		wazuhIndexer(connection, async (method, path, data, signal) => {
@@ -146,6 +149,13 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 			if (!body) throw new Error("Expected a search body");
 			if (body._source === false) return response([]);
 			if (body.query?.ids) {
+				if (documentRead) {
+					if (!signal) throw new Error("Expected the document request signal");
+					const disconnected = once(signal, "abort");
+					documentRead.resolve(signal);
+					await disconnected;
+					throw new WazuhError("TIMEOUT");
+				}
 				const hit = records.find(
 					(record) =>
 						record._id === body.query?.ids?.values[0] &&
@@ -191,9 +201,11 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 			payload?: unknown,
 			organizationId = org,
 			params = {},
+			signal?: AbortSignal,
 		) =>
 			fetch(url + path + "?" + new URLSearchParams({ organizationId, ...params }), {
 				method,
+				signal,
 				...(payload !== undefined && {
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify(payload),
@@ -300,6 +312,8 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 		};
 		const first = await get("alerts", historical);
 		const next = await get("alerts", { ...historical, cursor: first.nextCursor });
+		for (const query of queries.slice(-2))
+			expect(query.sort).toEqual([{ timestamp: "desc" }, { _index: "asc" }, { _id: "asc" }]);
 		const keys = [...first.alerts, ...next.alerts].map(
 			({ indexName, documentId }) => indexName + "/" + documentId,
 		);
@@ -309,6 +323,18 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 		const doc = { revision, indexName: records[0]!._index, documentId: records[0]!._id };
 		expect((await get("alerts/detail", doc)).agentId).toBe("001");
 		expect((await get("alerts/json", doc))._source).toEqual(source);
+		for (const path of ["alerts/detail", "alerts/json"]) {
+			const client = new AbortController();
+			documentRead = Promise.withResolvers<AbortSignal>();
+			const fetchAborted = assert.rejects(
+				send(path, "GET", undefined, org, doc, client.signal),
+			);
+			const remoteSignal = await documentRead.promise;
+			const cancelled = once(remoteSignal, "abort");
+			client.abort();
+			await Promise.all([fetchAborted, cancelled]);
+			documentRead = undefined;
+		}
 		expect(
 			(await send("alerts", "GET", undefined, org, { revision, level: "17" })).status,
 		).toBe(400);
@@ -393,6 +419,147 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 		server.close();
 		await app.close();
 	}
+});
+
+test("an active cursor remains valid while another view prunes expired snapshots", async () => {
+	const configured = await store.save("cursor-test", { origin, username: "reader", password });
+	const started = Promise.withResolvers<void>();
+	const finish = Promise.withResolvers<void>();
+	const service = wazuhService({ ...store, get: async () => configured }, 60, (connection) => ({
+		...wazuhIndexer(connection),
+		openSnapshot: async () => crypto.randomUUID(),
+		page: async (_, _id, after) => {
+			if (after) {
+				started.resolve();
+				await finish.promise;
+			}
+			return { alerts: [], next: after ? undefined : records[0]!.sort };
+		},
+	}));
+	let now = Date.now();
+	const clock = spyOn(Date, "now").mockImplementation(() => now);
+	const request = new AbortController();
+	const list = (view: string, cursor?: string) =>
+		service.list(
+			configured.organization_id,
+			"session",
+			configured.revision,
+			{},
+			request.signal,
+			cursor,
+			view,
+		);
+	try {
+		const first = await list("first-view");
+		now += keepAliveMs - 1;
+		const page = list("first-view", first.nextCursor!);
+		await started.promise;
+		now += 2;
+		await list("other-view");
+		finish.resolve();
+		expect((await page).cursor).toBe(first.nextCursor!);
+		expect((await list("first-view", first.nextCursor!)).cursor).toBe(first.nextCursor!);
+	} finally {
+		finish.resolve();
+		clock.mockRestore();
+		scopes.delete(configured.organization_id);
+	}
+});
+
+test("aborted refreshes stop waiting without letting later refreshes overtake the active one", async () => {
+	const configured = await store.save("queue-test", { origin, username: "reader", password });
+	const sourceRead = Promise.withResolvers<Source>();
+	const sourceReadStarted = Promise.withResolvers<void>();
+	const secondReady = Promise.withResolvers<void>();
+	const thirdReady = Promise.withResolvers<void>();
+	const first = new AbortController();
+	const second = new AbortController();
+	const third = new AbortController();
+	let blockNextRead = false;
+	let connections = 0;
+	let opened = 0;
+	const service = wazuhService(
+		{
+			...store,
+			async get() {
+				if (!blockNextRead) return configured;
+				blockNextRead = false;
+				sourceReadStarted.resolve();
+				return sourceRead.promise;
+			},
+		},
+		60,
+		(connection) => {
+			connections++;
+			if (connections === 2) secondReady.resolve();
+			if (connections === 3) thirdReady.resolve();
+			return {
+				...wazuhIndexer(connection),
+				openSnapshot: async () => String(++opened),
+				closeSnapshot: async () => {},
+				page: async () => {
+					blockNextRead = opened === 1;
+					return { alerts: [], next: records[0]!.sort };
+				},
+			};
+		},
+	);
+	const list = (signal: AbortSignal) =>
+		service.list(
+			configured.organization_id,
+			"session",
+			configured.revision,
+			{},
+			signal,
+			undefined,
+			"view",
+		);
+	try {
+		const firstFailed = assert.rejects(list(first.signal), { code: "TIMEOUT" });
+		await sourceReadStarted.promise;
+		const secondFailed = assert.rejects(list(second.signal), { code: "TIMEOUT" });
+		await secondReady.promise;
+		second.abort();
+		await secondFailed;
+		const result = list(third.signal);
+		await thirdReady.promise;
+		expect(opened).toBe(1);
+		first.abort();
+		await firstFailed;
+		expect((await result).nextCursor).not.toBeNull();
+		expect(opened).toBe(2);
+	} finally {
+		first.abort();
+		second.abort();
+		third.abort();
+		sourceRead.resolve(configured);
+		scopes.delete(configured.organization_id);
+	}
+});
+
+test("checks required protected DNS entries before resolving the Indexer", async () => {
+	const target = new URL(origin);
+	const env = { WAZUH_PROTECTED_HOSTS: " Protected.example.test. " };
+	for (const fails of [true, false]) {
+		const requested: string[] = [];
+		await assert.rejects(
+			indexerAddress(target, env, async (name) => {
+				requested.push(name);
+				if (fails) throw new Error("DNS unavailable");
+				return [];
+			}),
+			{ code: "NETWORK" },
+		);
+		expect(requested).toContain("protected.example.test");
+		expect(requested).not.toContain(target.hostname);
+	}
+	expect(
+		await indexerAddress(target, env, async (name) => {
+			if (name === target.hostname) return [{ address: "192.0.2.10", family: 4 }];
+			if (name === "protected.example.test") return [{ address: "192.0.2.20", family: 4 }];
+			throw new Error("Optional host is absent");
+		}),
+	).toBe("192.0.2.10");
 });
 
 test("blocks loopback, deployment services, and metadata while allowing a private Indexer", async () => {

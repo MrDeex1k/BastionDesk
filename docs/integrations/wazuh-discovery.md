@@ -16,8 +16,10 @@ konfiguruje jedno dedykowane źródło dla swojej organizacji.
 3. Zapewnij trasę z kontenera backendu do portu HTTPS Indexera na prywatnym adresie
    VM. W sieci wdrożenia ogranicz ruch wychodzący czytnika do sieci, w których
    działają Indexery. Dodatkowe chronione usługi wskaż w `WAZUH_PROTECTED_HOSTS`
-   jako listę nazw i IP oddzielonych przecinkami. Pracownicy korzystają ze
-   zwykłego adresu BastionDesk przez sieć firmową lub VPN.
+   jako listę nazw i IP oddzielonych przecinkami. Każda wpisana nazwa musi
+   rozwiązywać się z sieci backendu. Błąd jej rozwiązania wstrzymuje połączenie
+   z Indexerem. Pracownicy korzystają ze zwykłego adresu BastionDesk przez sieć
+   firmową lub VPN.
 4. Utwórz w Wazuh osobne konto do odczytu indeksów alertów organizacji
    (`wazuh-alerts-*`). Konto musi mieć prawo wyszukiwania oraz tworzenia
    i zamykania krótkotrwałych kontekstów Point in Time na tych indeksach.
