@@ -169,3 +169,14 @@ sekretów. Retencją i kopią dokumentów alertów zarządza instalacja Wazuh.
 Test `bun run test:core:db` sprawdza zastosowanie migracji, zaszyfrowany zapis,
 odczyt kluczem spoza bazy i usunięcie konfiguracji.
 [Konfiguracja Wazuh](../integrations/wazuh-discovery.md#wdrożenie-etapu-6).
+
+## Rozszerzenie fazy 8
+
+Przed uruchomieniem backendu zastosuj `0007_correlation_cases.sql`,
+`0008_correlation_jobs.sql` i `0009_correlation_risk.sql` przez `plan` i `apply`.
+Bramka startu sprawdza wpisy tych migracji. Migracje dodają incydenty, aktywne
+powiązania, historię, kolejki korelacji i ryzyka oraz trwałe identyfikatory
+istniejących źródeł Wazuh. Migracja zachowuje dotychczasowe zgłoszenia i ich
+statusy. Można je powiązać ręcznie lub zlecić korelację z ich widoku.
+Kopia PostgreSQL obejmuje tabele `soc_*` i lokalne zapisy dołączonych alertów.
+[Specyfikacja fazy 8](../integrations/stage-8-correlation-spec.md).

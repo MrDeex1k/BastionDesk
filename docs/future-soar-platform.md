@@ -61,7 +61,7 @@ Docelowy system powinien łączyć:
 - wersjonowane playbooki;
 - reakcję typu human-in-the-loop;
 - opcjonalną, kontrolowaną automatyzację;
-- lokalny LLM jako warstwę pomocniczą, a nie wykonawcę akcji;
+- modele AI jako warstwę pomocniczą, z inferencją lokalną lub przez API;
 - pełny audyt i obserwowalność procesu.
 
 Określenie „SOAR-lite” jest właściwe dla zakresu pracy magisterskiej. Produkt
@@ -888,21 +888,68 @@ providera nie blokuje obsługi incydentu.
 
 ## Faza 8 — korelacja i scoring ryzyka
 
+[Specyfikacja fazy 8](integrations/stage-8-correlation-spec.md) zawiera
+uzgodnione przepływy, reguły decyzyjne i scenariusze odbioru.
+
 ### Cel
 
 Łączyć zgłoszenia, alerty, assety, IOC i wyniki analizy w wyjaśnialny incydent.
 
 ### Kroki
 
-1. Zdefiniować relacje zgłoszenie–alert–security event–incydent.
-2. Korelować deterministycznie po asset/agent ID, użytkowniku, hostname, IP,
-   hashu, procesie, MITRE ATT&CK i czasie.
-3. Rozdzielić `severity`, `confidence` i `risk score`.
-4. Wersjonować reguły i zapisywać uzasadnienie.
-5. Umożliwić ręczne połączenie, rozłączenie i korektę.
-6. Dodać reprocessing bez utraty historycznej decyzji.
-7. Przygotować oznaczony dataset pozytywny i negatywny.
-8. Kalibrować progi przez precision, recall, false positives i false negatives.
+1. **Powiązania i pochodzenie danych.** Opisać relacje między zgłoszeniem
+   pracownika, alertem Wazuh, zdarzeniem bezpieczeństwa, zasobem i incydentem
+   obsługiwanym przez analityka. Zachować bieżące identyfikatory i API zgłoszeń.
+   Wskazać, które dane przechowujemy lokalnie jako dowód potrzebny do odtworzenia
+   decyzji. Zacząć od referencji do alertu z kluczem organizacja, źródło, indeks
+   i ID dokumentu oraz od mapowania agentów w obrębie źródła. Migracja ma
+   zachować istniejące zgłoszenia i pozwalać na wiele dowodów w incydencie.
+
+2. **Dane testowe i pierwsza reguła.** Przygotować oznaczone pary zgłoszenie–alert
+   dla trafień, pomyłek i przypadków niejednoznacznych. Uwzględnić wspólne IP,
+   zmianę adresu, identyczne ID agenta w różnych źródłach, opóźniony alert,
+   duplikat i podobne zdarzenia z różnych organizacji. Pierwsza reguła łączy
+   zgodność potwierdzonego zasobu lub SHA-256 z konfigurowalnym oknem czasu,
+   domyślnie ±24 godziny. Zapisać sygnały, czas, odwołania do dowodów i wersję
+   reguły przy każdej sugestii.
+
+3. **Korelacja asynchroniczna.** Uruchomić analizę na żądanie, a po
+   potwierdzeniu przepływu zlecać ją automatycznie po nowym zgłoszeniu lub
+   utworzeniu incydentu z alertu. Użyć trwałej kolejki PostgreSQL z dzierżawą
+   zadań i ponawianiem po błędzie. Kolejne reguły ocenią
+   agent ID, użytkownika, hostname, IP, hash, proces i MITRE ATT&CK, zależnie
+   od dostępności tych danych. Deduplikacja obejmuje organizację, źródło
+   i parę dokumentów. Sugestia zapisuje wersję reguły, a decyzja analityka
+   pozostaje przypisana do pary po zmianie wersji. Błąd Indexera wstrzymuje kolejną próbę
+   korelacji z tego źródła przy zachowaniu obsługi zgłoszenia.
+
+4. **Ocena ryzyka.** Utrzymać trzy odrębne wartości. `severity` opisuje
+   ważność zdarzenia i zachowuje ocenę źródłową. `confidence` opisuje siłę
+   podstaw do powiązania. `risk score` określa priorytet pracy na podstawie
+   potwierdzonych sygnałów, ważności zasobu i dostępnych wyników analizy.
+   Wersjonować sposób obliczeń i zapisywać wkład każdego sygnału. Brak wyniku
+   providera ma być widoczny jako brak danych. Kalibrować progi na oznaczonych
+   przypadkach i zmierzyć precision, recall oraz fałszywe trafienia i pominięcia
+   na osobnym zestawie odbiorczym.
+
+5. **Widok analityka i ponowna analiza.** Umożliwić utworzenie incydentu z
+   alertu Wazuh i ręczne powiązanie z obu widoków. Pokazać w szczegółach
+   incydentu sugestie, uzasadnienie, dowody i składowe oceny. Analityk może zaakceptować
+   lub odrzucić sugestię, ręcznie połączyć lub rozłączyć dowody oraz podać
+   powód korekty. Każda zmiana zapisuje aktora, czas i uzasadnienie. Ponowne
+   przeliczenie według nowej wersji reguł zachowuje poprzednią ocenę oraz
+   ręczne decyzje.
+
+6. **Odbiór.** Przetestować migrację, izolację organizacji, powtarzalność
+   wyników, równoległe zlecenia, opóźnienia i awarie źródeł oraz pełny przepływ
+   od zgłoszenia do korekty analityka. Udokumentować zestaw danych, wyniki
+   kalibracji i przypadki, które wymagają ręcznej decyzji.
+
+Pierwszy przebieg wykorzysta odczyt alertów Wazuh i IOC dostępne po fazie 7.
+Test AbuseIPDB na żywo oraz ponowne użycie wyników YARA i VirusTotal z Wazuh
+pozostają osobnymi punktami odbioru fazy 7. Przepływ fazy 8 kończy się decyzją
+analityka i oceną ryzyka. Rekomendacje playbooków i aktywna reakcja są objęte
+fazami 9 i 10.
 
 ### Kryterium ukończenia
 
@@ -963,13 +1010,16 @@ przekraczają tenant scope ani blast radius.
 
 ### Cel
 
-Rozszerzyć lokalne AI bez uzależniania poprawności systemu od modelu.
+Rozszerzyć obsługę zadań AI z modelami samodzielnie hostowanymi lub online,
+z zachowaniem działania systemu przy niedostępności modeli.
 
 ### Kroki
 
 1. Zdefiniować provider-neutralny kontrakt mediatora.
-2. Zweryfikować aktualnie wspierane lokalne runtime'y i modele.
-3. Wybrać model po benchmarku jakości, licencji, RAM/VRAM i latencji.
+2. Zweryfikować modele samodzielnie hostowane i integrację z usługą online
+   w całej macierzy wdrożeń.
+3. Wybrać modele dla poszczególnych zadań po benchmarku jakości, licencji,
+   RAM/VRAM i latencji.
 4. Wymagać structured output zgodnego z wersjonowanym JSON Schema.
 5. Walidować i audytować wejście oraz odpowiedź.
 6. Rozdzielić klasyfikację, ekstrakcję, streszczenie, mapowanie ATT&CK, draft
@@ -978,8 +1028,41 @@ Rozszerzyć lokalne AI bez uzależniania poprawności systemu od modelu.
 8. Dodać timeout, retry, circuit breaker i działanie bez LLM.
 9. Uniemożliwić mediatorowi bezpośrednie wywołanie action runnera.
 
-Docker Model Runner, llama.cpp i rodzina Gemma pozostają kandydatami, a nie
-zamrożonym wymaganiem.
+### Warianty wdrożenia
+
+BastionDesk korzysta ze wspólnego bazowego Docker Compose dla kontenerów
+linuksowych. Obrazy i zależności należy zweryfikować na `linux/amd64`
+i `linux/arm64`. Ustawienia sprzętu i hosta można podać w dodatkowych plikach
+Compose. [Obrazy wieloplatformowe](https://docs.docker.com/build/building/multi-platform/),
+[Łączenie plików Compose](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
+
+- **Linux Server** — Docker Engine i Compose na wspieranej dystrybucji.
+  [Wspierane platformy Docker Engine](https://docs.docker.com/engine/install/)
+- **Windows Server** — Docker Engine i Compose w linuksowej maszynie
+  wirtualnej, np. na Hyper-V. Docker Desktop jest wspierany na klienckich
+  wersjach Windows.
+  [Dystrybucje Linux wspierane przez Hyper-V](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/supported-linux-and-freebsd-virtual-machines-for-hyper-v-on-windows),
+  [wymagania Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+- **macOS** — Docker Desktop i Compose. Apple Silicon (`arm64`) wchodzi do
+  macierzy odbioru. [Docker Desktop na macOS](https://docs.docker.com/desktop/setup/install/mac-install/)
+
+### Konfiguracja usług inferencji
+
+Operator ustawia osobno adapter, adres URL usługi (nazwa DNS lub IP z portem),
+identyfikator modelu i opcjonalny sekret dla modelu decyzyjnego oraz
+generatywnego. Zmiana następuje przez konfigurację wdrożenia bez modyfikacji kodu
+i przebudowy obrazów. Każdy model może działać przy aplikacji, na innym serwerze
+w sieci prywatnej lub przez HTTPS u dostawcy online obsługiwanego przez adapter.
+Własny runtime uruchamia się tylko w konfiguracji, która go używa.
+
+Dostawca online wymaga jawnego włączenia dla organizacji. Backend przekazuje
+zakres danych tekstowych potrzebny do zadania zgodnie z polityką organizacji.
+Zrzuty ekranu i treść plików pozostają w BastionDesk. W razie awarii modelu
+samodzielnie hostowanego przejście do usługi online wymaga jawnej konfiguracji.
+
+Docker Model Runner i samodzielny llama.cpp są kandydatami dla wdrożeń
+samodzielnie hostowanych. Do benchmarku klasyfikacji uwzględnić basal mini,
+a do streszczeń i szkiców raportów Gemma 4 E2B Instruct.
 
 ### Kryterium ukończenia
 
@@ -987,6 +1070,12 @@ Każdy use case ma mierzalną jakość, walidowany output, odwołania do dowodó
 i fallback. Dziennik zapisuje model, wersję kontraktu i wynik walidacji;
 niepoparte twierdzenia wymagają oceny analityka. Niedostępny model nie blokuje
 podstawowego systemu.
+
+Na Linux Serverze, Windows Serverze i macOS przechodzą te same scenariusze
+odbioru, w tym klasyfikacja, generowanie szkicu i obsługa niedostępności
+usługi inferencji. Test konfiguracji potwierdza zmianę adresu, przełączenie
+jednego modelu do dostawcy online i działanie obu ról z różnymi dostawcami.
+Wyniki wydajności dokumentują host, sprzęt i wybrany runtime lub usługę.
 
 ## Faza 12 — walidacja badawcza i wydanie
 
@@ -1002,7 +1091,8 @@ Udowodnić wartość systemu i przygotować powtarzalny deployment.
 4. Dodać SBOM i skan zależności, obrazów oraz konfiguracji.
 5. Zweryfikować backup/restore i upgrade ze wspieranej wersji.
 6. Przygotować runbooki instalacji, upgrade, awarii i rotacji sekretów.
-7. Ustabilizować Docker Compose jako wariant podstawowy.
+7. Potwierdzić uruchomienie, restart i zachowanie danych całego stosu Compose
+   na Linux Serverze, Windows Serverze z linuksową VM i macOS z Apple Silicon.
 8. Przygotować docs użytkownika, operatora i dewelopera.
 9. Oddzielić zakres magisterski od elementów późniejszego produktu.
 10. Uruchomić pełny zestaw React Testing Library i Flashwright przeciw
@@ -1024,7 +1114,7 @@ przeciw docelowemu BastionDesk `2.0` bez regresji przepływów `1.0.3`.
 | A — stabilny fundament | 0–4 | Baseline, testy migracyjne, core, kontrakty, kolejki i obserwowalność. |
 | B — platforma detekcji | 5–7 | Tożsamość, Wazuh, assety, IOC, TI i artefakty. |
 | C — wsparcie triage | 8–9 | Korelacja, scoring i playbooki suggestion/approval. |
-| D — SOAR-lite | 10–11 | Kontrolowana reakcja i pomocniczy lokalny LLM. |
+| D — SOAR-lite | 10–11 | Kontrolowana reakcja i pomocnicze modele lokalne lub online. |
 | E — wydanie badawcze | 12 | Pomiary, deployment, upgrade i dokumentacja. |
 
 Każdy checkpoint musi być prezentowalny i testowalny bez ukończenia następnego.

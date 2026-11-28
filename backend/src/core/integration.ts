@@ -13,13 +13,16 @@ import { enrichmentTargets } from "./ioc/automatic";
 import { providerLookups } from "./ioc/provider-lookups";
 import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sourceConnection, wazuhSourceStore } from "../wazuh/source";
 import { Client, Pool, type PoolClient } from "pg";
 import { createIncidentWrites } from "../adapters/core-incident-writes";
+import { correlationCases } from "../adapters/core-correlation-store";
+import { enqueueCorrelation, runCorrelationJob } from "../correlation/service";
+import { decodeQueueCursor } from "../correlation/pagination";
 import { decideIncidentChange } from "./incidents/commands";
 import type { LiveIdentity } from "../identity/contract";
 
@@ -110,71 +113,49 @@ try {
   INSERT INTO session (id,"userId",token,"expiresAt","activeOrganizationId") VALUES ('auth-upgrade','auth-upgrade','existing-session',now()+interval '1 day','auth-upgrade');
   INSERT INTO account (id,"userId","accountId","providerId",password) VALUES ('auth-upgrade','auth-upgrade','auth-upgrade','credential','existing-password-hash');
   INSERT INTO passkey (id,"userId","publicKey","credentialId",counter,"deviceType") VALUES ('auth-upgrade','auth-upgrade','existing-public-key','existing-credential',7,'singleDevice');
+  INSERT INTO incidents ("userId","organizationId",status,"userDescription","userAttachmentPath","analystNote")
+    VALUES ('auth-upgrade','auth-upgrade','Raport w trakcie','Existing employee report','fixture/existing.txt','Existing analyst note');
+  INSERT INTO incident_audit_log ("incidentId","changedBy","oldStatus","newStatus")
+    SELECT id,'auth-upgrade','Zgłoszony','Raport w trakcie' FROM incidents WHERE "organizationId"='auth-upgrade';
  `);
-	const authTables = ["user", "session", "account", "organization", "member", "passkey"];
-	const authSnapshot = async () =>
+	const upgradeTables = [
+		"user",
+		"session",
+		"account",
+		"organization",
+		"member",
+		"passkey",
+		"incidents",
+		"incident_audit_log",
+	];
+	const upgradeSnapshot = async () =>
 		Promise.all(
-			authTables.map(
+			upgradeTables.map(
 				async (table) =>
 					(await pool!.query(`SELECT to_jsonb(t) AS data FROM "${table}" t ORDER BY id`))
 						.rows,
 			),
 		);
-	const beforeAuthUpgrade = await authSnapshot();
-	const migrations = [
-		{
-			id: "0006_ioc_enrichment",
-			sql: await readFile(
-				new URL("../../../database/versioned/0006_ioc_enrichment.sql", import.meta.url),
-				"utf8",
-			),
-		},
-		{
-			id: "0005_yara_attachments",
-			sql: await readFile(
-				new URL("../../../database/versioned/0005_yara_attachments.sql", import.meta.url),
-				"utf8",
-			),
-		},
-		{
-			id: "0004_wazuh_sources",
-			sql: await readFile(
-				new URL("../../../database/versioned/0004_wazuh_sources.sql", import.meta.url),
-				"utf8",
-			),
-		},
-		{
-			id: "0003_auth_jwks",
-			sql: await readFile(
-				new URL("../../../database/versioned/0003_auth_jwks.sql", import.meta.url),
-				"utf8",
-			),
-		},
-		{
-			id: "0002_durable_jobs",
-			sql: await readFile(
-				new URL("../../../database/versioned/0002_durable_jobs.sql", import.meta.url),
-				"utf8",
-			),
-		},
-		{
-			id: "0001_core_operations",
-			sql: await readFile(
-				new URL("../../../database/versioned/0001_core_operations.sql", import.meta.url),
-				"utf8",
-			),
-		},
-	];
-	migrations.sort((a, b) => a.id.localeCompare(b.id));
+	const beforeUpgrade = await upgradeSnapshot();
+	const migrationDirectory = new URL("../../../database/versioned/", import.meta.url);
+	const migrationFiles = (await readdir(migrationDirectory))
+		.filter((file) => file.endsWith(".sql"))
+		.sort();
+	const migrations = await Promise.all(
+		migrationFiles.map(async (file) => ({
+			id: file.slice(0, -4),
+			sql: await readFile(new URL(file, migrationDirectory), "utf8"),
+		})),
+	);
 	await migrate(migrator, baseline.fingerprint, migrations, "apply");
 	assert.deepEqual(
 		(await migrate(migrator, baseline.fingerprint, migrations, "apply")).pending,
 		[],
 	);
 	assert.deepEqual(
-		await authSnapshot(),
-		beforeAuthUpgrade,
-		"upgrade preserves accounts, sessions, organizations, roles and PassKeys byte for byte",
+		await upgradeSnapshot(),
+		beforeUpgrade,
+		"upgrade preserves identity, existing incident records and their audit history byte for byte",
 	);
 	await pool.query(
 		'SELECT "publicKey", "privateKey", "createdAt", "expiresAt", alg, crv FROM jwks',
@@ -203,6 +184,7 @@ try {
 			"organization_id",
 			"origin",
 			"revision",
+			"source_id",
 			"username",
 		]);
 		assert.deepEqual(await sourceConnection(stored), draft);
@@ -817,6 +799,191 @@ try {
 	);
 	console.log(
 		"PASS Core PostgreSQL creation, concurrent assignment, tenant scope and transaction rollback",
+	);
+	const cases = correlationCases(pool, transaction);
+	const caseWrites = createIncidentWrites(transaction, undefined, true);
+	const reportId = crypto.randomUUID();
+	const fileHash = "ca".repeat(32);
+	await caseWrites.create(a, {
+		id: reportId,
+		userDescription: "Stage 8 fixture",
+		userScreenshotPath: null,
+		userScreenshotMetadata: {},
+		userAttachmentPath: null,
+		userAttachmentMetadata: { contentHash: fileHash },
+	});
+	const alert = {
+		sourceId: crypto.randomUUID(),
+		agentId: "001",
+		agentName: "fixture",
+		indexName: "wazuh-alerts-fixture",
+		documentId: "fixture-1",
+		timestamp: new Date().toISOString(),
+		ruleId: "1001",
+		ruleLevel: 12,
+		description: "Stage 8 fixture alert",
+		sha256s: [fileHash],
+		ips: [],
+		users: [],
+	};
+	const duplicate = await Promise.all([
+		cases.create(a, { title: "Fixture", alert }),
+		cases.create(a, { title: "Fixture", alert }),
+	]);
+	const id = duplicate[0]!.id;
+	assert.equal(duplicate[1]?.id, id);
+	assert.equal((await cases.detail("org", id)).evidence.length, 1);
+	assert.equal((await cases.detail("org", id)).riskScore, 36);
+	assert.equal(
+		await runCorrelationJob(pool, { correlationCandidates: async () => [alert] }),
+		true,
+	);
+	const pending = (await cases.report("org", reportId)).suggestions[0];
+	assert.equal(pending?.status, "pending");
+	await assert.rejects(() => cases.decide(b, pending!.id, "accepted"), /Brak uprawnień/);
+	await cases.decide(a, pending!.id, "rejected");
+	assert.equal((await cases.report("org", reportId)).suggestions[0]?.status, "rejected");
+	await cases.decide(a, pending!.id, "accepted");
+	assert.deepEqual(await cases.link(a, reportId, alert), { id });
+	assert.equal((await cases.detail("org", id)).evidence.length, 2);
+	await assert.rejects(() => cases.detail("foreign", id), /Zasób nie został znaleziony/);
+	const other = await cases.create(a, {
+		title: "Other",
+		alert: { ...alert, documentId: "fixture-2" },
+	});
+	const linked = (await cases.detail("org", id)).evidence.find(
+		(item) => item.reportId === reportId,
+	);
+	assert.ok(linked);
+	await cases.change(a, id, { action: "close" });
+	await assert.rejects(
+		() => cases.change(a, id, { action: "unlink", evidenceId: linked.id, reason: "Fixture" }),
+		/Wznów/,
+	);
+	assert.equal(
+		(await pool.query("SELECT status FROM incidents WHERE id=$1", [reportId])).rows[0]?.status,
+		"Zgłoszony",
+	);
+	await cases.change(a, id, { action: "reopen", reason: "Fixture follow-up" });
+	await cases.change(a, id, {
+		action: "move",
+		evidenceId: linked.id,
+		targetCaseId: other.id,
+		reason: "Fixture move",
+	});
+	assert.equal((await cases.report("org", reportId)).caseId, other.id);
+	const lastAlert = (await cases.detail("org", id)).evidence[0]!;
+	await cases.change(a, id, {
+		action: "unlink",
+		evidenceId: lastAlert.id,
+		reason: "Fixture unlink",
+	});
+	const cleared = await cases.detail("org", id);
+	assert.equal(cleared.evidence.length, 0);
+	assert.equal(cleared.riskScore, null);
+	assert.ok(
+		(await cases.history("org", id, "operations")).items.some(
+			(entry) => "action" in entry && entry.action === "movedOut",
+		),
+	);
+	assert.ok(
+		(await cases.history("org", id, "risk")).items.some(
+			(entry) => "riskScore" in entry && entry.riskScore === 36,
+		),
+	);
+	assert.equal((await cases.list("org", "risk")).items.at(-1)?.id, id);
+	const historical = {
+		...alert,
+		documentId: "historical",
+		timestamp: "2000-01-01T00:00:00.000Z",
+	};
+	const anotherReport = await caseWrites.create(a, {
+		id: crypto.randomUUID(),
+		userDescription: "A second report for the same case",
+		userScreenshotPath: null,
+		userScreenshotMetadata: {},
+		userAttachmentPath: null,
+		userAttachmentMetadata: {},
+	});
+	await cases.change(a, other.id, { action: "attachAlert", alert: historical });
+	assert.deepEqual(await cases.link(a, anotherReport.id, historical), { id: other.id });
+	const combined = await cases.detail("org", other.id);
+	assert.equal(combined.evidence.filter((item) => item.reportId).length, 2);
+	assert.equal(combined.evidence.filter((item) => item.alert).length, 2);
+	assert.equal(combined.riskScore, 36, "repeated evidence must not inflate risk");
+	await pool.query('UPDATE incidents SET "analystId"=$2 WHERE id=$1', [
+		anotherReport.id,
+		b.subject,
+	]);
+	await assert.rejects(() => cases.link(a, anotherReport.id, historical), /Brak uprawnień/);
+	await pool.query('UPDATE incidents SET "analystId"=$2 WHERE id=$1', [reportId, b.subject]);
+	await assert.rejects(
+		() => cases.change(a, id, { action: "attachReport", reportId: anotherReport.id }),
+		/Brak uprawnień/,
+	);
+
+	const fresh = await caseWrites.create(a, {
+		id: crypto.randomUUID(),
+		userDescription: "Stage 8 asset expiry fixture",
+		userScreenshotPath: null,
+		userScreenshotMetadata: {},
+		userAttachmentPath: null,
+		userAttachmentMetadata: {},
+	});
+	await pool.query('UPDATE incidents SET "analystId"=$2 WHERE id=$1', [fresh.id, b.subject]);
+	await assert.rejects(
+		() => cases.change(a, id, { action: "attachReport", reportId: fresh.id }),
+		/Brak uprawnień/,
+	);
+	await assert.rejects(() => cases.link(a, fresh.id, historical), /Brak uprawnień/);
+	await cases.setAsset(b, fresh.id, { sourceId: alert.sourceId, agentId: "001" });
+	// Run just the controlled case job rather than older background work in this suite.
+	await pool.query(
+		"UPDATE soc_correlation_jobs SET available_at=NULL WHERE organization_id='org'",
+	);
+	await enqueueCorrelation(pool, "org", { caseId: other.id }, true);
+	await runCorrelationJob(pool, { correlationCandidates: async () => [] });
+	const candidate = (await cases.report("org", fresh.id)).suggestions[0];
+	assert.equal(candidate?.signals[0], "asset:001");
+	await cases.setAsset(b, fresh.id, { sourceId: alert.sourceId, agentId: "002" });
+	assert.deepEqual((await cases.report("org", fresh.id)).suggestions, []);
+	const admin = { ...a, role: "admin" as const };
+	await assert.rejects(() => cases.decide(admin, candidate!.id, "accepted"), /Sugestia/);
+	await assert.rejects(() => cases.history("foreign", id, "risk"), /Zasób nie został znaleziony/);
+
+	await pool.query(`INSERT INTO soc_incidents (organization_id,title,status,created_at)
+	 SELECT 'org','Pagination fixture','closed','2025-01-01T00:00:00Z' FROM generate_series(1,105)`);
+	const paged = new Set<string>();
+	let pageCursor: string | null = null;
+	do {
+		const result = await cases.list(
+			"org",
+			"risk",
+			"closed",
+			pageCursor ? decodeQueueCursor(pageCursor) : undefined,
+		);
+		for (const item of result.items) {
+			assert.ok(!paged.has(item.id));
+			paged.add(item.id);
+		}
+		pageCursor = result.nextCursor;
+	} while (pageCursor);
+	assert.equal(paged.size, 105);
+
+	await pool.query(
+		`INSERT INTO soc_case_history (organization_id,incident_id,action,actor_id)
+	 SELECT 'org',$1,'history fixture','a' FROM generate_series(1,30)`,
+		[id],
+	);
+	const firstHistory = await cases.history("org", id, "operations");
+	assert.equal(firstHistory.items.length, 25);
+	assert.ok(firstHistory.nextCursor);
+	const olderHistory = await cases.history("org", id, "operations", firstHistory.nextCursor);
+	assert.ok(olderHistory.items.length >= 5);
+	assert.ok(olderHistory.items.every((row) => BigInt(row.id) < BigInt(firstHistory.nextCursor!)));
+
+	console.log(
+		"PASS Stage 8 concurrent create, suggestions, scope, move, close/reopen and risk history",
 	);
 } finally {
 	await cleanup();

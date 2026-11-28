@@ -26,3 +26,16 @@ export async function assertIocEnrichmentSchema(pool: Pick<Pool, "query"> = getP
 	if (!result.rows[0]?.ready)
 		throw new Error("IOC_MIGRATIONS_REQUIRED: run bun run db:migrate:apply before startup");
 }
+
+export async function assertCorrelationSchema(pool: Pick<Pool, "query"> = getPgPool()) {
+	const result = await pool.query<{ ready: boolean }>(`SELECT
+		to_regclass('public.soc_incidents') IS NOT NULL
+		AND to_regclass('public.soc_correlation_jobs') IS NOT NULL
+		AND to_regclass('public.soc_risk_history') IS NOT NULL
+		AND (SELECT count(*) FROM bastiondesk_meta.migrations
+		 WHERE id IN ('0007_correlation_cases','0008_correlation_jobs','0009_correlation_risk'))=3 AS ready`);
+	if (!result.rows[0]?.ready)
+		throw new Error(
+			"CORRELATION_MIGRATIONS_REQUIRED: run bun run db:migrate:apply before startup",
+		);
+}

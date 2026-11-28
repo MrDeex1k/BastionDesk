@@ -21,7 +21,11 @@ const evidenceFields = [
 const alertFields = z.object({
 	timestamp: z.string().refine((value) => Number.isFinite(Date.parse(value))),
 	agent: z.object({ id: z.string().min(1), name: z.string().optional() }),
-	rule: z.object({ id: z.string().min(1), level: ruleLevel, description: z.string() }),
+	rule: z.object({
+		id: z.string().min(1),
+		level: ruleLevel,
+		description: z.string(),
+	}),
 });
 const documentKey = alertReference.pick({ indexName: true, documentId: true });
 const hit = z.object({
@@ -32,7 +36,10 @@ const hit = z.object({
 });
 const response = z.object({
 	timed_out: z.literal(false),
-	_shards: z.object({ failed: z.literal(0), total: z.number().int().nonnegative() }),
+	_shards: z.object({
+		failed: z.literal(0),
+		total: z.number().int().nonnegative(),
+	}),
 	hits: z.object({ hits: z.array(hit).max(51) }),
 });
 const snapshotResponse = z.object({
@@ -46,6 +53,12 @@ export const pageSize = 50;
 export const keepAliveMs = 120_000;
 export type Sort = [number, string, string];
 export type SearchFilters = { from: string; to: string; level?: number };
+export type CandidateFilters = {
+	from: string;
+	to: string;
+	agentId?: string;
+	sha256s: string[];
+};
 export type DocumentKey = z.infer<typeof documentKey>;
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -68,6 +81,36 @@ function project(document: z.infer<typeof hit>) {
 	};
 }
 
+const correlationFields = [
+	...fields,
+	"syscheck.sha256_after",
+	"data.virustotal.source.sha256",
+	"data.srcip",
+	"data.dstip",
+	"data.srcuser",
+	"data.dstuser",
+	"data.user",
+];
+
+function correlationProjection(row: z.infer<typeof hit>) {
+	const indicators = wazuhEvidence(row._source ?? {}).indicators;
+	const data = z.record(z.string(), z.unknown()).safeParse(row._source?.data);
+	const users = data.success
+		? ["srcuser", "dstuser", "user"]
+				.map((key) => data.data[key])
+				.filter(
+					(value): value is string =>
+						typeof value === "string" && value.length > 0 && value.length <= 128,
+				)
+		: [];
+	return {
+		...project(row),
+		sha256s: indicators.filter((i) => i.kind === "sha256").map((i) => i.value),
+		ips: indicators.filter((i) => i.kind === "ipv4" || i.kind === "ipv6").map((i) => i.value),
+		users: [...new Set(users)],
+	};
+}
+
 export function wazuhIndexer(connection: SourceConnection, send = indexerTransport(connection)) {
 	const search = async (path: string, body: object, signal?: AbortSignal) =>
 		parse(
@@ -81,6 +124,61 @@ export function wazuhIndexer(connection: SourceConnection, send = indexerTranspo
 	};
 
 	return {
+		async correlationPicker(
+			filters: { from: string; to: string; query: string },
+			signal?: AbortSignal,
+		) {
+			const { from, to, query } = filters;
+			const recent = { range: { timestamp: { gte: from, lte: to } } };
+			const filter = query
+				? {
+						bool: {
+							should: [
+								{ ids: { values: [query] } },
+								{
+									bool: {
+										filter: [recent],
+										should: [
+											{ term: { "agent.id": query } },
+											{ term: { "rule.id": query } },
+											{
+												prefix: {
+													"agent.name": {
+														value: query,
+														case_insensitive: true,
+													},
+												},
+											},
+											{
+												prefix: {
+													"rule.description": {
+														value: query,
+														case_insensitive: true,
+													},
+												},
+											},
+										],
+										minimum_should_match: 1,
+									},
+								},
+							],
+							minimum_should_match: 1,
+						},
+					}
+				: recent;
+			const result = await search(
+				"/wazuh-alerts-*/_search",
+				{
+					size: pageSize,
+					track_total_hits: false,
+					_source: fields,
+					sort: [{ timestamp: "desc" }, { _index: "asc" }, { _id: "asc" }],
+					query: { bool: { filter } },
+				},
+				signal,
+			);
+			return uniqueAlerts(result.hits.hits.map(project));
+		},
 		async hasAlertIndices(signal?: AbortSignal) {
 			const result = await search(
 				"/wazuh-alerts-*/_search",
@@ -133,6 +231,66 @@ export function wazuhIndexer(connection: SourceConnection, send = indexerTranspo
 			)
 				throw new WazuhError("UNAVAILABLE");
 			return { alerts, next };
+		},
+		async candidates(filters: CandidateFilters, signal?: AbortSignal) {
+			const hashes = ["syscheck.sha256_after", "data.virustotal.source.sha256"].flatMap(
+				(field) =>
+					filters.sha256s.slice(0, 64).map((hash) => ({
+						term: { [field]: { value: hash, case_insensitive: true } },
+					})),
+			);
+			const query = async (size: number, conditions: object) => {
+				const result = await search(
+					"/wazuh-alerts-*/_search",
+					{
+						size,
+						track_total_hits: false,
+						_source: correlationFields,
+						sort: [{ timestamp: "desc" }, { _index: "asc" }, { _id: "asc" }],
+						query: {
+							bool: {
+								filter: [
+									{
+										range: {
+											timestamp: { gte: filters.from, lte: filters.to },
+										},
+									},
+								],
+								...conditions,
+							},
+						},
+					},
+					signal,
+				);
+				return result.hits.hits;
+			};
+			const hashMatch = { bool: { should: hashes, minimum_should_match: 1 } };
+			const exact = hashes.length ? await query(pageSize, hashMatch.bool) : [];
+			const agent =
+				filters.agentId && exact.length < pageSize
+					? await query(pageSize - exact.length, {
+							must: [{ term: { "agent.id": filters.agentId } }],
+							...(hashes.length && { must_not: [hashMatch] }),
+						})
+					: [];
+			return [...exact, ...agent].map(correlationProjection);
+		},
+		async correlationAlert(key: DocumentKey, signal?: AbortSignal) {
+			const checked = parse(documentKey, key);
+			const result = await search(
+				"/" + encodeURIComponent(checked.indexName) + "/_search",
+				{
+					size: 1,
+					_source: correlationFields,
+					query: { ids: { values: [checked.documentId] } },
+				},
+				signal,
+			);
+			const [row] = result.hits.hits;
+			if (!row) throw new WazuhError("NOT_FOUND");
+			if (row._index !== checked.indexName || row._id !== checked.documentId)
+				throw new WazuhError("UNAVAILABLE");
+			return correlationProjection(row);
 		},
 		async document(key: DocumentKey, full: boolean, signal?: AbortSignal) {
 			const result = await search(

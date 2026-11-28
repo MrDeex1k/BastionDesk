@@ -95,6 +95,7 @@ BastionDesk API jest podzielone na kilka głównych modułów:
   - [Statystyki incydentów](#statystyki-incydentów)
   - [Szczegółowe metryki](#szczegółowe-metryki)
 - [Wazuh API](#wazuh-api)
+- [API korelacji](#api-korelacji)
 - [Pobieranie plików](#pobieranie-plików)
 - [Kody błędów](#kody-błędów)
 
@@ -2507,3 +2508,38 @@ curl -b cookies.txt "http://localhost:4567/api/admin/incidents/0192d1f8-5c8e-7b1
 | `PASSWORD_RESET_TOO_MANY_REQUESTS` | 429 | Zbyt wiele próśb resetowania hasła |
 | `CURRENT_PASSWORD_INCORRECT` | 400 | Aktualne hasło jest nieprawidłowe |
 | `PASSWORD_RESET_SUCCESS` | 200 | Hasło zostało pomyślnie zresetowane |
+
+## API korelacji
+
+Trasy `/api/correlation` wymagają sesji analityka lub administratora w aktywnej
+organizacji. Zapis wymaga tokenu CSRF. Zmiany w istniejącym incydencie wykonuje
+przypisany analityk lub administrator. Przeniesienie wymaga prawa zapisu do
+obu incydentów. Zmiana powiązania zgłoszenia wymaga także uprawnień jego
+przypisanego analityka albo administratora. Nieprzypisane zgłoszenie może
+powiązać dowolny analityk organizacji. Referencja alertu w zapisie zawiera `revision`, `indexName`
+i `documentId`, uzyskane ze źródła aktywnej organizacji.
+
+| Trasa | Parametry lub działanie |
+| --- | --- |
+| `GET /cases` | `sort=recent` domyślnie lub `sort=risk`, opcjonalnie `status=open\|closed` oraz `cursor`. Do 50 wyników w odpowiedzi. |
+| `GET /cases/:id` | Bieżący stan incydentu, dowody i sugestie. |
+| `GET /cases/:id/history` | `kind=operations\|risk` i opcjonalne `before`. Do 25 wpisów w odpowiedzi. |
+| `GET /reports`, `GET /alerts`, `GET /agents` | Wyszukiwanie z opcjonalnym `query`. |
+| `GET /reports/:id` | Aktywne powiązanie, potwierdzony zasób i sugestie. |
+| `GET /alert-case` | Referencja alertu jako parametry zapytania. Zwraca jego aktywny incydent. |
+| `POST /cases` | `title`, opcjonalne `note` oraz `reportId` lub `alert`. |
+| `POST /links` | `reportId` i `alert`. Łączy dowody w istniejącym lub nowym incydencie. |
+| `POST /reports/:id/asset` | `sourceId` i `agentId`. Potwierdza zasób na podstawie danych aktywnego Indexera. |
+| `POST /reports/:id/refresh`, `POST /cases/:id/refresh` | Zleca ponowną korelację. |
+| `POST /suggestions/:id` | `decision` równe `accepted` lub `rejected`. |
+| `POST /cases/:id/actions` | `action` równe `take`, `close`, `reopen`, `unlink`, `move`, `attachReport` lub `attachAlert`. |
+
+Akcje `reopen`, `unlink` i `move` wymagają `reason`. Odpięcie i przeniesienie
+wskazują `evidenceId`, a przeniesienie także `targetCaseId`. Dołączenie podaje
+`reportId` lub obiekt `alert` zgodnie z akcją. Konflikt aktywnego powiązania
+lub stanu incydentu zwraca HTTP 409. Niedostępny Indexer zwraca HTTP 503 dla
+operacji wymagających odczytu Wazuh. [Specyfikacja fazy 8](../integrations/stage-8-correlation-spec.md).
+
+Strony kolejki i historii zwracają `data.items` i `data.nextCursor`.
+Przekaż `nextCursor` kolejki jako `cursor`, a historii jako `before`.
+Akceptacja sugestii z nieaktualną podstawą dopasowania zwraca HTTP 409.

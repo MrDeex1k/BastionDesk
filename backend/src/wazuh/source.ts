@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 
 export type Source = {
 	organization_id: string;
+	source_id?: string;
 	revision: string;
 	origin: string;
 	username: string;
@@ -149,7 +150,8 @@ export function wazuhSourceStore(db: Pick<Pool, "query">) {
 			assertWithinDeadline(signal);
 			const result = expected
 				? await db.query<Source>(
-						`UPDATE wazuh_sources SET revision=$2, origin=$3, username=$4, ca_pem=$5, encrypted_password=$6, enabled=true
+						`UPDATE wazuh_sources SET revision=$2, source_id=CASE WHEN origin=$3 THEN source_id ELSE gen_random_uuid() END,
+						 origin=$3, username=$4, ca_pem=$5, encrypted_password=$6, enabled=true
 					 WHERE organization_id=$1 AND revision=$7 RETURNING *`,
 						[...values, expected],
 					)
