@@ -894,15 +894,55 @@ providera nie blokuje obsługi incydentu.
 
 ### Kroki
 
-1. Zdefiniować relacje zgłoszenie–alert–security event–incydent.
-2. Korelować deterministycznie po asset/agent ID, użytkowniku, hostname, IP,
-   hashu, procesie, MITRE ATT&CK i czasie.
-3. Rozdzielić `severity`, `confidence` i `risk score`.
-4. Wersjonować reguły i zapisywać uzasadnienie.
-5. Umożliwić ręczne połączenie, rozłączenie i korektę.
-6. Dodać reprocessing bez utraty historycznej decyzji.
-7. Przygotować oznaczony dataset pozytywny i negatywny.
-8. Kalibrować progi przez precision, recall, false positives i false negatives.
+1. **Powiązania i pochodzenie danych.** Opisać relacje między zgłoszeniem
+   pracownika, alertem Wazuh, zdarzeniem bezpieczeństwa, zasobem i incydentem
+   obsługiwanym przez analityka. Zachować bieżące identyfikatory i API zgłoszeń.
+   Wskazać, które dane przechowujemy lokalnie jako dowód potrzebny do odtworzenia
+   decyzji. Zacząć od referencji do alertu z kluczem organizacja, źródło, indeks
+   i ID dokumentu oraz od mapowania agentów w obrębie źródła. Migracja ma
+   zachować istniejące zgłoszenia i pozwalać na wiele dowodów w incydencie.
+
+2. **Dane testowe i pierwsza reguła.** Przygotować oznaczone pary zgłoszenie–alert
+   dla trafień, pomyłek i przypadków niejednoznacznych. Uwzględnić wspólne IP,
+   zmianę adresu, identyczne ID agenta w różnych źródłach, opóźniony alert,
+   duplikat i podobne zdarzenia z różnych organizacji. Wybrać pierwszą regułę
+   łączącą wiarygodną zgodność zasobu lub IOC z oknem czasu. Zapisać sygnały,
+   czas, odwołania do dowodów i wersję reguły przy każdej sugestii.
+
+3. **Korelacja asynchroniczna.** Uruchomić analizę na żądanie dla jednego
+   zgłoszenia, a po potwierdzeniu przepływu zlecać ją automatycznie dla nowych
+   zgłoszeń. Użyć istniejącego mechanizmu trwałych zadań. Kolejne reguły ocenią
+   agent ID, użytkownika, hostname, IP, hash, proces i MITRE ATT&CK, zależnie
+   od dostępności tych danych. Deduplikacja ma obejmować organizację, źródło,
+   parę dokumentów i wersję reguł. Błąd Indexera ma wstrzymywać kolejną próbę
+   korelacji z tego źródła przy zachowaniu obsługi zgłoszenia.
+
+4. **Ocena ryzyka.** Utrzymać trzy odrębne wartości. `severity` opisuje
+   ważność zdarzenia i zachowuje ocenę źródłową. `confidence` opisuje siłę
+   podstaw do powiązania. `risk score` określa priorytet pracy na podstawie
+   potwierdzonych sygnałów, ważności zasobu i dostępnych wyników analizy.
+   Wersjonować sposób obliczeń i zapisywać wkład każdego sygnału. Brak wyniku
+   providera ma być widoczny jako brak danych. Kalibrować progi na oznaczonych
+   przypadkach i zmierzyć precision, recall oraz fałszywe trafienia i pominięcia
+   na osobnym zestawie odbiorczym.
+
+5. **Widok analityka i ponowna analiza.** Pokazać w szczegółach incydentu
+   sugestie, uzasadnienie, dowody i składowe oceny. Analityk może zaakceptować
+   lub odrzucić sugestię, ręcznie połączyć lub rozłączyć dowody oraz podać
+   powód korekty. Każda zmiana zapisuje aktora, czas i uzasadnienie. Ponowne
+   przeliczenie według nowej wersji reguł zachowuje poprzednią ocenę oraz
+   ręczne decyzje.
+
+6. **Odbiór.** Przetestować migrację, izolację organizacji, powtarzalność
+   wyników, równoległe zlecenia, opóźnienia i awarie źródeł oraz pełny przepływ
+   od zgłoszenia do korekty analityka. Udokumentować zestaw danych, wyniki
+   kalibracji i przypadki, które wymagają ręcznej decyzji.
+
+Pierwszy przebieg wykorzysta odczyt alertów Wazuh i IOC dostępne po fazie 7.
+Test AbuseIPDB na żywo oraz ponowne użycie wyników YARA i VirusTotal z Wazuh
+pozostają osobnymi punktami odbioru fazy 7. Przepływ fazy 8 kończy się decyzją
+analityka i oceną ryzyka. Rekomendacje playbooków i aktywna reakcja są objęte
+fazami 9 i 10.
 
 ### Kryterium ukończenia
 
