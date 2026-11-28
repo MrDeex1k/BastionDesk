@@ -88,7 +88,9 @@ export function observeIndicators(inputs: readonly Observation[]): Indicator[] {
 	for (const input of inputs) {
 		for (const candidate of candidates(input)) {
 			if (candidate.length > maxToken) continue;
-			const value = candidate.replaceAll("[.]", ".").replace(/[.,;!?)}]+$/u, "");
+			const normalized = candidate.replaceAll("[.]", ".");
+			const value =
+				input.format === "text" ? normalized.replace(/[.,;!?)}]+$/u, "") : normalized;
 			const indicator = canonicalize(value, input.format);
 			if (!indicator) continue;
 			const key = `${indicator.kind}:${indicator.value}`;

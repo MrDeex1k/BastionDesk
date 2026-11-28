@@ -34,11 +34,10 @@ export async function publishConfirmed(
 	queue: JobTopology = topology,
 ) {
 	return traced("messaging.publish", parent, SpanKind.PRODUCER, async () => {
-		const delivery = {
-			schemaVersion: 1,
-			type: queue.routingKey,
-			jobId,
-		};
+		const delivery = Buffer.from(
+			JSON.stringify({ schemaVersion: 1, type: queue.routingKey, jobId }),
+		);
+		decodeDelivery(delivery, queue.routingKey);
 		let returned = false;
 		const onReturn = () => {
 			returned = true;
@@ -51,7 +50,7 @@ export async function publishConfirmed(
 					channel.publish(
 						dead ? queue.deadExchange : queue.exchange,
 						queue.routingKey,
-						Buffer.from(JSON.stringify(delivery)),
+						delivery,
 						{
 							persistent: true,
 							mandatory: true,

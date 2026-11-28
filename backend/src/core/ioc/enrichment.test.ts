@@ -74,9 +74,54 @@ test("temporary errors retry and a rate limit affects only its organization", as
 		provider,
 		() => 0,
 	);
-	expect(await service.check("alpha", "1.1.1.1")).toEqual({ status: "rate_limited" });
-	expect(await service.check("alpha", "8.8.8.8")).toEqual({ status: "rate_limited" });
+	expect(await service.check("alpha", "1.1.1.1")).toEqual({
+		status: "rate_limited",
+		retryAfterMs: 600_000,
+	});
+	expect(await service.check("alpha", "8.8.8.8")).toEqual({
+		status: "rate_limited",
+		retryAfterMs: 600_000,
+	});
 	expect(attempts).toBe(2);
-	expect(await service.check("beta", "1.1.1.1")).toEqual({ status: "rate_limited" });
+	expect(await service.check("beta", "1.1.1.1")).toEqual({
+		status: "rate_limited",
+		retryAfterMs: 600_000,
+	});
 	expect(attempts).toBe(3);
+});
+
+test("concurrent replies preserve the longest rate limit and return its remaining duration", async () => {
+	const slow = Promise.withResolvers<Response>();
+	const started = Promise.withResolvers<void>();
+	let time = 0;
+	let sent = 0;
+	const service = ipReputation(
+		async () => "fixture",
+		abuseIpDb(async (url) => {
+			sent++;
+			const address = url.searchParams.get("ipAddress");
+			if (address === "1.1.1.1") {
+				started.resolve();
+				return slow.promise;
+			}
+			return new Response(null, { status: 429, headers: { "retry-after": "600" } });
+		}),
+		() => time,
+	);
+	const pending = service.check("org", "1.1.1.1");
+	await started.promise;
+	expect(await service.check("org", "8.8.8.8")).toEqual({
+		status: "rate_limited",
+		retryAfterMs: 600_000,
+	});
+	slow.resolve(
+		Response.json({ data: { ipAddress: "1.1.1.1", abuseConfidenceScore: 0, totalReports: 0 } }),
+	);
+	expect((await pending).status).toBe("ready");
+	time = 61_000;
+	expect(await service.check("org", "9.9.9.9")).toEqual({
+		status: "rate_limited",
+		retryAfterMs: 539_000,
+	});
+	expect(sent).toBe(2);
 });

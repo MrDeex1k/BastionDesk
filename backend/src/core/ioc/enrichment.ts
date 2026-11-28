@@ -10,7 +10,10 @@ export type Reputation = {
 };
 
 type Failure = "not_configured" | "not_public" | "unavailable" | "rate_limited";
-export type ReputationResult = { status: "ready"; result: Reputation } | { status: Failure };
+export type ReputationResult =
+	| { status: "ready"; result: Reputation }
+	| { status: Exclude<Failure, "rate_limited"> }
+	| { status: "rate_limited"; retryAfterMs: number };
 export type FeedLookup<Provider extends string> = { provider: Provider } & (
 	| { status: "matched" | "not_found"; fetchedAt: string; expiresAt: string }
 	| { status: Exclude<Failure, "not_public"> }
@@ -66,34 +69,35 @@ const maxPending = 24;
 export function ipReputation(keyFor: KeyFor, provider: ReputationProvider, now = Date.now) {
 	const cache = new Map<string, Reputation>();
 	const pending = new Map<string, Promise<ReputationResult>>();
-	const paused = new Map<
-		string,
-		{ until: number; status: "rate_limited" | "unavailable"; failures: number }
-	>();
+	const rateLimits = new Map<string, number>();
+	const failuresByOrg = new Map<string, { until: number; failures: number }>();
 
 	async function lookup(org: string, address: string, token: string): Promise<ReputationResult> {
 		const reply = await provider
 			.lookup(address, token)
 			.catch((): ProviderReply => ({ status: "unavailable" }));
 		switch (reply.status) {
-			case "rate_limited":
-				paused.set(org, {
-					until: now() + reply.retryAfterSeconds * 1000,
-					status: "rate_limited",
-					failures: 0,
-				});
-				return { status: "rate_limited" };
+			case "rate_limited": {
+				const current = now();
+				const until = Math.max(
+					rateLimits.get(org) ?? 0,
+					current + reply.retryAfterSeconds * 1000,
+				);
+				rateLimits.set(org, until);
+				failuresByOrg.delete(org);
+				return { status: "rate_limited", retryAfterMs: until - current };
+			}
 			case "unavailable": {
-				const failures = (paused.get(org)?.failures ?? 0) + 1;
-				paused.set(org, {
-					until: failures >= 3 ? now() + 60_000 : 0,
-					status: "unavailable",
-					failures,
-				});
-				return { status: "unavailable" };
+				const failures = (failuresByOrg.get(org)?.failures ?? 0) + 1;
+				const current = now();
+				failuresByOrg.set(org, { until: failures >= 3 ? current + 60_000 : 0, failures });
+				const rateLimit = rateLimits.get(org) ?? 0;
+				return rateLimit > current
+					? { status: "rate_limited", retryAfterMs: rateLimit - current }
+					: { status: "unavailable" };
 			}
 			case "ready": {
-				paused.delete(org);
+				failuresByOrg.delete(org);
 				const fetched = now();
 				return {
 					status: "ready",
@@ -124,8 +128,12 @@ export function ipReputation(keyFor: KeyFor, provider: ReputationProvider, now =
 				return { status: "ready", result: found };
 			const active = pending.get(key);
 			if (active) return active;
-			const blocked = paused.get(org);
-			if (blocked && blocked.until > now()) return { status: blocked.status };
+			const current = now();
+			const rateLimit = rateLimits.get(org) ?? 0;
+			if (rateLimit > current)
+				return { status: "rate_limited", retryAfterMs: rateLimit - current };
+			rateLimits.delete(org);
+			if ((failuresByOrg.get(org)?.until ?? 0) > current) return { status: "unavailable" };
 			if (pending.size >= maxPending) return { status: "unavailable" };
 			const request = lookup(org, address, token)
 				.then((value) => {

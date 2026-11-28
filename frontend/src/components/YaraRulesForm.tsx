@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { yaraRequest, type YaraRules } from "@/lib/yara";
+import { yaraRequest, yaraRulesSchema } from "@/lib/yara";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Label } from "./ui/label";
@@ -34,19 +34,19 @@ function OrganizationRules({
   const [draft, setDraft] = useState("");
   const rules = useQuery({
     queryKey,
-    queryFn: ({ signal }) => yaraRequest<YaraRules>(path, organizationId, { signal }),
+    queryFn: ({ signal }) => yaraRequest(path, organizationId, yaraRulesSchema, { signal }),
   });
   const change = useMutation({
     mutationFn: (method: "PUT" | "DELETE") =>
-      yaraRequest<YaraRules>(path, organizationId, {
+      yaraRequest(path, organizationId, yaraRulesSchema, {
         method,
         ...(method === "PUT" && {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rules: draft }),
         }),
       }),
-    onSuccess: (value) => {
-      setDraft("");
+    onSuccess: (value, method) => {
+      if (method === "PUT") setDraft("");
       client.setQueryData(queryKey, value);
       void client.invalidateQueries({ queryKey: ["yara-scan"] });
     },
@@ -78,6 +78,7 @@ function OrganizationRules({
           <Textarea
             id="yara-rules"
             value={draft}
+            disabled={change.isPending}
             onChange={(event) => setDraft(event.target.value)}
             maxLength={65536}
             className="min-h-40 font-mono"

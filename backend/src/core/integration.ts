@@ -285,14 +285,17 @@ try {
 	assert.equal(queued.length, 1);
 	await scanWorker.published(queued[0]!.id, queued[0]!.publication_token);
 	assert.equal(
-		(
-			await pool.query<{ confirmed: boolean }>(
-				"SELECT publish_after='infinity' AS confirmed FROM yara_scan_jobs WHERE id=$1",
-				[queued[0]!.id],
-			)
-		).rows[0]?.confirmed,
-		true,
+		(await scanWorker.dispatch()).length,
+		0,
+		"a confirmed wake-up is not published again immediately",
 	);
+	await pool.query(
+		"UPDATE yara_scan_jobs SET publish_after=statement_timestamp()-interval '1 second' WHERE id=$1 AND publish_after < 'infinity'",
+		[queued[0]!.id],
+	);
+	const [recoverable] = await scanWorker.dispatch();
+	assert.equal(recoverable?.id, queued[0]!.id, "lost delivery before claim can be republished");
+	await scanWorker.published(recoverable!.id, recoverable!.publication_token);
 	const initialJob = await scanWorker.claim(queued[0]!.id);
 	assert.ok(initialJob);
 	assert.equal(await scanWorker.claim(initialJob.id), undefined);
@@ -774,6 +777,20 @@ try {
 	} finally {
 		await stopWorker();
 	}
+	await pool.query(
+		"UPDATE ioc_enrichment_jobs SET retry_at=clock_timestamp()-interval '1 second' WHERE id=$1",
+		[iocJob.id],
+	);
+	await enrichment.enqueue("org", first.id, iocJob, a.subject);
+	const [manualJob] = await enrichment.claim();
+	assert.ok(manualJob);
+	await pool.query("DELETE FROM incident_ioc_enrichment WHERE incident_id=$1", [first.id]);
+	await enrichment.finish(
+		manualJob,
+		{ provider: "virustotal", status: "not_found", fetchedAt: time, expiresAt: time },
+		async () => assert.fail("manual completion audit must remain on the requesting incident"),
+	);
+	assert.equal((await enrichment.forIncident("org", second.id))[0]?.result?.status, "not_found");
 	console.log(
 		"PASS IOC auto enqueue ignores screenshots, shares checks within a tenant and enforces both cooldowns",
 	);

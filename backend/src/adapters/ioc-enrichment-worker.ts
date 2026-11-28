@@ -16,11 +16,15 @@ export function enrichmentServices(
 	urlhaus?: Urlhaus,
 ) {
 	async function enabled(org: string): Promise<EnrichmentProvider[]> {
-		const [remote, ip] = await Promise.all([lookups.enabled(org), reputation?.enabled(org)]);
+		const [remote, ip, feed] = await Promise.all([
+			lookups.enabled(org),
+			reputation?.enabled(org),
+			urlhaus?.enabled(),
+		]);
 		return [
 			...remote,
 			...(ip ? ["abuseipdb" as const] : []),
-			...(urlhaus ? ["urlhaus" as const] : []),
+			...(feed ? ["urlhaus" as const] : []),
 		];
 	}
 	return {

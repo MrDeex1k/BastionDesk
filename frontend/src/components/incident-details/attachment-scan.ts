@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { yaraRequest, type AttachmentScan } from "@/lib/yara";
+import { yaraRequest, attachmentScanSchema } from "@/lib/yara";
 
 export function useAttachmentScan(incidentId: string, hasAttachment: boolean) {
   const { session, organizationId, role } = useAuth();
@@ -11,13 +11,13 @@ export function useAttachmentScan(incidentId: string, hasAttachment: boolean) {
   const scan = useQuery({
     queryKey,
     enabled,
-    queryFn: ({ signal }) => yaraRequest<AttachmentScan>(path, organizationId!, { signal }),
+    queryFn: ({ signal }) => yaraRequest(path, organizationId!, attachmentScanSchema, { signal }),
     refetchInterval: ({ state }) =>
       state.data?.state === "pending" || state.data?.state === "running" ? 1000 : 15_000,
   });
   const rescan = useMutation({
     mutationKey: queryKey,
-    mutationFn: () => yaraRequest<AttachmentScan>(path, organizationId!, { method: "POST" }),
+    mutationFn: () => yaraRequest(path, organizationId!, attachmentScanSchema, { method: "POST" }),
     onSuccess: () => client.invalidateQueries({ queryKey }),
   });
   const state = scan.data?.state;

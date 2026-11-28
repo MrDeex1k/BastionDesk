@@ -124,7 +124,8 @@ obu sposobów zlecenia. Wyniki zapisuje się oddzielnie dla każdego kroku.
    `YARA_LEGACY_SCAN_NOT_BEFORE` pozostawić puste do zakończenia wycofywania
    starych linków. Ustawić w tej zmiennej moment w formacie ISO 8601 po upływie
    godziny od wyłączenia ostatniej instancji wydającej stare linki albo po ich
-   unieważnieniu. Po tym momencie backend pozwala zlecić pierwszy skan
-   starszego pliku. Automatyczne skanowanie nowych plików działa od wdrożenia.
+   unieważnieniu. Po zmianie `.env` odtworzyć kontener poleceniem
+   `docker compose up -d --force-recreate backend`, aby wczytał nową wartość.
+   Po wskazanym momencie backend pozwala zlecić pierwszy skan starszego pliku. Automatyczne skanowanie nowych plików działa od wdrożenia.
 4. Uruchomić `bun run test:core:db` oraz `bun scripts/test-phase1-e2e.ts --yara`.
    Polecenia tworzą własne środowisko testowe i usuwają je po zakończeniu.

@@ -106,7 +106,9 @@ export function enrichmentStore(db: Pick<Pool, "query">, transaction: Transactio
 				if (!saved.rowCount) return;
 				const incidents = await client.query<{ incident_id: string }>(
 					`SELECT i.incident_id FROM incident_ioc_enrichment i JOIN ioc_enrichment_jobs j ON j.id=i.job_id
-					 WHERE i.organization_id=$1 AND i.job_id=$2 ORDER BY (i.incident_id=j.trigger_incident_id) DESC, i.incident_id LIMIT 1`,
+					 WHERE i.organization_id=$1 AND i.job_id=$2
+					 AND (j.requested_by IS NULL OR i.incident_id=j.trigger_incident_id)
+					 ORDER BY (i.incident_id=j.trigger_incident_id) DESC, i.incident_id LIMIT 1`,
 					[job.organizationId, job.id],
 				);
 				const incident = incidents.rows[0];

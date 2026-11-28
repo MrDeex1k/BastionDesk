@@ -68,11 +68,16 @@ export function urlhaus(
 	let nextRefreshAt = 0;
 	let failure: Exclude<Refresh, Feed> = { status: "unavailable" };
 
-	async function refresh(): Promise<Refresh> {
-		const authKey = await readKey()
-			.then((key) => key.trim())
+	async function configuredKey() {
+		const key = await readKey()
+			.then((value) => value.trim())
 			.catch(() => "");
-		if (!/^[a-zA-Z0-9_-]{20,200}$/.test(authKey)) return { status: "not_configured" };
+		return /^[a-zA-Z0-9_-]{20,200}$/.test(key) ? key : undefined;
+	}
+
+	async function refresh(): Promise<Refresh> {
+		const authKey = await configuredKey();
+		if (!authKey) return { status: "not_configured" };
 		const endpoint = new URL(
 			`https://urlhaus-api.abuse.ch/v2/files/exports/${authKey}/recent.csv`,
 		);
@@ -127,6 +132,9 @@ export function urlhaus(
 	}
 
 	return {
+		async enabled() {
+			return Boolean(await configuredKey());
+		},
 		async check(value: string): Promise<UrlhausLookup> {
 			const result = await currentFeed();
 			if ("status" in result) return { provider: "urlhaus", status: result.status };

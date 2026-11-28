@@ -198,9 +198,9 @@ export function scanWorkerStore(db: Db) {
 				await db.query<
 					Pick<Job, "id" | "state"> & { publication_token: string }
 				>(`WITH due AS (
-			 SELECT id FROM yara_scan_jobs WHERE publish_after <= clock_timestamp()
-			 AND ((state='pending' AND available_at <= clock_timestamp()) OR
-			      (state='running' AND lease_until < clock_timestamp()) OR state='dead')
+			 SELECT id FROM yara_scan_jobs WHERE publish_after <= statement_timestamp()
+			 AND ((state='pending' AND available_at <= statement_timestamp()) OR
+			      (state='running' AND lease_until < statement_timestamp()) OR state='dead')
 			 ORDER BY publish_after LIMIT 20 FOR UPDATE SKIP LOCKED)
 			 UPDATE yara_scan_jobs j SET publish_after=clock_timestamp()+interval '30 seconds', publication_token=gen_random_uuid()
 			 FROM due WHERE j.id=due.id RETURNING j.id,j.state,j.publication_token`)
@@ -208,7 +208,10 @@ export function scanWorkerStore(db: Db) {
 		},
 		async published(id: string, token: string) {
 			await db.query(
-				"UPDATE yara_scan_jobs SET publish_after='infinity', publication_token=NULL WHERE id=$1 AND publication_token=$2",
+				`UPDATE yara_scan_jobs SET publication_token=NULL,
+				 publish_after=CASE WHEN state='dead' THEN 'infinity'::timestamptz
+				 ELSE statement_timestamp()+interval '5 minutes' END
+				 WHERE id=$1 AND publication_token=$2`,
 				[id, token],
 			);
 		},
