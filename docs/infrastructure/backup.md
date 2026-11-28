@@ -203,13 +203,18 @@ na kopii i zaplanuj okno serwisowe. Zachowaj dotychczasowy wolumen, obraz,
 konfigurację, certyfikaty i dostęp do MinIO. Jeśli instalacja używa dodatkowych
 ról lub tablespace'ów, przenieś też obiekty globalne z `pg_dumpall --globals-only`.
 
-1. Na dotychczasowej rewizji zatrzymaj stos i uruchom samą bazę 18. Zapisz dump
-   poza wolumenem bazy, a następnie zatrzymaj serwer.
+1. Na dotychczasowej rewizji zatrzymaj stos i uruchom samą bazę 18. Zapisz
+   definicję bazy i dump poza jej wolumenem, a następnie zatrzymaj serwer.
+   Odtworzenie do istniejącej bazy za pomocą `pg_restore --single-transaction`
+   pomija ustawienia, komentarz i uprawnienia na poziomie bazy.
 
    ```sh
    docker compose stop
    docker compose up -d --wait database
    umask 077
+   docker compose exec -T database sh -ec \
+     'exec pg_dump --schema-only --create -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+     > bastiondesk-pg18-schema.sql
    docker compose exec -T database sh -ec \
      'exec pg_dump -Fc -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
      > bastiondesk-pg18.dump
@@ -245,8 +250,32 @@ ról lub tablespace'ów, przenieś też obiekty globalne z `pg_dumpall --globals
      'exec vacuumdb --analyze-in-stages -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
    ```
 
-4. Uruchom [plan migracji schematu](../database/migrations.md#połączenie-i-polecenia)
-   na odtworzonej bazie, zastosuj oczekujące migracje i sprawdź dane.
+4. Przed uruchomieniem aplikacji odtwórz ustawienia i uprawnienia bazy.
+   Z `bastiondesk-pg18-schema.sql` skopiuj do `bastiondesk-pg19-db-settings.sql`
+   polecenia odtwarzające ustawienia, komentarz i uprawnienia bazy
+   (`ALTER DATABASE ... SET`, `ALTER ROLE ... IN DATABASE ... SET`,
+   `COMMENT ON DATABASE`, `GRANT` i `REVOKE` na bazie). Zachowaj ich kolejność,
+   aby odtworzyć także ograniczenia takie jak cofnięcie `CONNECT` dla `PUBLIC`.
+   Przejrzyj plik i zastosuj go, jeśli zawiera polecenia:
+
+   ```sh
+   docker compose -f docker-compose.yml -f compose.pg19.yml exec -T database sh -ec \
+     'exec psql -X -v ON_ERROR_STOP=1 --single-transaction -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f -' \
+     < bastiondesk-pg19-db-settings.sql
+   ```
+
+5. Przygotuj `.env.migrator` i certyfikaty zgodnie z
+   [instrukcją dla Compose](deploy.md#build-and-start). Uruchom migrator
+   wewnątrz sieci Compose, używając pliku wskazującego wolumen PostgreSQL 19.
+
+   ```sh
+   docker compose -f docker-compose.yml -f compose.pg19.yml run --rm --no-deps --build \
+     --env-from-file .env.migrator \
+     --volume /absolute/path/migrator:/certs/migrator:ro \
+     backend bun src/migrations/cli.ts plan
+   ```
+
+   Po sprawdzeniu planu uruchom to samo polecenie z `apply` i zweryfikuj dane.
    Uruchom stos z tym samym plikiem `compose.pg19.yml`, przebuduj usługę backupu
    i potwierdź nowy dump oraz jego odtworzenie. Używaj tego pliku przy kolejnych
    wdrożeniach, aby wskazywać wolumen PostgreSQL 19.
