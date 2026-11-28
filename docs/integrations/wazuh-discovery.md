@@ -72,7 +72,7 @@ przed ponowieniem operacji.
 ### Odbiór z rzeczywistym Wazuh
 
 Uruchom test z katalogu głównego przez `bun scripts/test-phase1-e2e.ts --wazuh`
-po zainstalowaniu Chromium używanego przez Playwright. Przekaż
+po zainstalowaniu Chromium używanego przez Flashwright. Przekaż
 `E2E_WAZUH_ORIGIN`, `E2E_WAZUH_USER`, `E2E_WAZUH_CA_FILE`
 i `E2E_WAZUH_PASSWORD_FILE` z plikiem hasła tylko do odczytu.
 Dla laboratorium z przekierowaniem można przekazać `E2E_WAZUH_TLS_NAME`.

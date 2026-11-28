@@ -17,3 +17,12 @@ export async function assertCoreSchema(pool: Pick<Pool, "query"> = getPgPool()) 
 	if (history.rowCount !== 2)
 		throw new Error("CORE_MIGRATIONS_REQUIRED: missing migration history");
 }
+
+export async function assertIocEnrichmentSchema(pool: Pick<Pool, "query"> = getPgPool()) {
+	const result = await pool.query<{ ready: boolean }>(`SELECT
+		to_regclass('public.ioc_enrichment_jobs') IS NOT NULL
+		AND to_regclass('public.incident_ioc_enrichment') IS NOT NULL
+		AND EXISTS (SELECT 1 FROM bastiondesk_meta.migrations WHERE id='0006_ioc_enrichment') AS ready`);
+	if (!result.rows[0]?.ready)
+		throw new Error("IOC_MIGRATIONS_REQUIRED: run bun run db:migrate:apply before startup");
+}

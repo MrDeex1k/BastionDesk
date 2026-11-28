@@ -1078,6 +1078,35 @@ Odpowiedź zawiera `status` o wartości `ready`, `not_public`, `not_configured`,
 `rate_limited` lub `unavailable`. `ready` zawiera dostawcę, adres, ocenę
 dostawcy, liczbę zgłoszeń oraz czas pobrania i wygaśnięcia wyniku.
 
+`urlhaus` informuje, czy backend ma skonfigurowaną ścieżkę do klucza URLhaus.
+Analityk i administrator mogą wysłać `POST /api/analyst/incidents/:id/urlhaus`
+z `{"url":"…"}` i tokenem CSRF. Wartość musi odpowiadać wskaźnikowi `url`
+z tego zgłoszenia. Odpowiedź zwraca `data.provider` o wartości `urlhaus`
+oraz `data.status` o wartości `matched`, `not_found`, `not_configured`,
+`rate_limited` lub `unavailable`. `matched` i `not_found` zawierają czasy
+`fetchedAt` i `expiresAt` wykazu. `not_found` oznacza brak adresu w pobranym
+wykazie. Audyt zapisuje wynik operacji bez adresu i klucza.
+
+`lookupProviders` zawiera identyfikatory źródeł aktywnych dla organizacji.
+Analityk i administrator mogą wysłać `POST /api/analyst/incidents/:id/ioc-enrichment`
+z tokenem CSRF oraz `{"provider":"virustotal","kind":"sha256","value":"…"}`.
+`provider` przyjmuje `otx`, `hybrid_analysis` lub `virustotal`. Backend sprawdza
+zgodność `kind` i `value` z IOC zgłoszenia. Hybrid Analysis i VirusTotal obsługują
+tylko `sha256`. OTX sprawdza IPv4, IPv6, domeny i hashe.
+`data.status` może mieć wartość `ready`, `not_found`, `not_configured`,
+`not_public`, `unsupported`, `unavailable` lub `rate_limited`. `ready` zawiera
+`summary` typu `pulses`, `sandbox` lub `engines`. `ready` i `not_found` zwracają
+`fetchedAt` i `expiresAt`. Każdy wynik zawiera identyfikator `provider`.
+
+Nowe zgłoszenia automatycznie zlecają sprawdzenia w aktywnych źródłach.
+`enrichmentChecks` w szczegółach dla analityka i administratora zwraca
+`provider`, `kind`, `value`, `result` i `retryAt`. `result: null` oznacza
+sprawdzenie oczekujące lub w trakcie. Endpointy ręczne zwracają `pending`,
+gdy zlecą pracę w tle, lub poprzedni wynik z `retryAt`, jeśli ponowienie
+musi poczekać. Po błędzie minimalny odstęp wynosi 60 sekund. Po udanym
+sprawdzeniu hasha, również z wynikiem `not_found`, ten sam hash można
+sprawdzić u tego samego dostawcy po 24 godzinach w obrębie organizacji.
+
 **Nagłówki:**
 ```
 Cookie: better-auth.session_token=<session_token>

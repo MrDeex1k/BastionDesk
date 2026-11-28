@@ -1,31 +1,39 @@
 import type { Pool } from "pg";
 import { createAuditEntry } from "../contracts/audit";
 import type { ReputationResult } from "../core/ioc/enrichment";
+import type { LookupProvider, LookupResult } from "../core/ioc/provider-lookups";
 import type { LiveIdentity } from "../identity/contract";
+import type { UrlhausLookup } from "./urlhaus";
 
-export function ipReputationAudit(db: Pick<Pool, "query">) {
+export function iocLookupAudit(
+	db: Pick<Pool, "query">,
+	provider: "abuseipdb" | "urlhaus" | LookupProvider,
+) {
+	const action = `incidents.${provider === "abuseipdb" ? "ip_reputation" : provider}.v1`;
 	return async (
-		identity: LiveIdentity,
+		identity: Pick<LiveIdentity, "organizationId" | "subject"> & { automatic?: boolean },
 		incidentId: string,
-		status: ReputationResult["status"],
+		status: ReputationResult["status"] | UrlhausLookup["status"] | LookupResult["status"],
 	) => {
 		const id = crypto.randomUUID();
 		const outcome =
-			status === "ready"
+			status === "ready" || status === "matched" || status === "not_found"
 				? "succeeded"
-				: status === "not_public" || status === "not_configured"
+				: status === "not_public" || status === "not_configured" || status === "unsupported"
 					? "denied"
 					: "failed";
 		const reasonCode =
 			outcome === "succeeded"
-				? "USER_REQUEST"
+				? identity.automatic
+					? "SYSTEM_RULE"
+					: "USER_REQUEST"
 				: outcome === "denied"
 					? "POLICY_DENIED"
 					: "DEPENDENCY_FAILURE";
 		const entry = createAuditEntry(
 			{
 				organizationId: identity.organizationId,
-				actor: { kind: "user", id: identity.subject },
+				actor: { kind: identity.automatic ? "service" : "user", id: identity.subject },
 				correlationId: id,
 				causationId: null,
 			},
@@ -33,8 +41,8 @@ export function ipReputationAudit(db: Pick<Pool, "query">) {
 			{
 				id,
 				commandId: id,
-				source: "abuseipdb",
-				action: "incidents.ip_reputation.v1",
+				source: provider,
+				action,
 				resource: { type: "incident", id: incidentId },
 				occurredAt: new Date().toISOString(),
 				outcome,

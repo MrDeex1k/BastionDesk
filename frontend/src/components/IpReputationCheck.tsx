@@ -1,13 +1,5 @@
-import { useMutation } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-import { Button } from "./ui/button";
-
-type Lookup =
-  | {
-      status: "ready";
-      result: { confidence: number; reports: number; fetchedAt: string; expiresAt: string };
-    }
-  | { status: "not_public" | "not_configured" | "unavailable" | "rate_limited" };
+import type { IpLookupResult, SavedEnrichment } from "@/ApiModel/evidence";
+import { EnrichmentAction, useEnrichmentLookup } from "./EnrichmentAction";
 
 const failureLabels = {
   not_public: "Sprawdzanie reputacji dotyczy tylko publicznych adresów IP.",
@@ -20,49 +12,32 @@ const timestamp = new Intl.DateTimeFormat("pl-PL", { dateStyle: "short", timeSty
 export function IpReputationCheck({
   incidentId,
   address,
+  saved,
 }: {
   incidentId: string;
   address: string;
+  saved?: SavedEnrichment<IpLookupResult>;
 }) {
-  const lookup = useMutation({
-    mutationFn: async () => {
-      const response = await apiFetch(`/api/analyst/incidents/${incidentId}/ip-reputation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address }),
-      });
-      if (!response.ok) throw new Error("Nie udało się sprawdzić reputacji IP.");
-      return ((await response.json()) as { data: Lookup }).data;
-    },
-  });
+  const lookup = useEnrichmentLookup(incidentId, "ip-reputation", { address }, saved);
+  const result = lookup.result;
 
   return (
     <div className="mt-2 space-y-1">
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={lookup.isPending}
-        onClick={() => lookup.mutate()}
-      >
-        Sprawdź w AbuseIPDB
-      </Button>
+      <EnrichmentAction label="AbuseIPDB" status={result?.status} {...lookup} />
       <div className="text-xs" role="status">
-        {lookup.isPending && "Sprawdzanie reputacji IP…"}
-        {lookup.error?.message}
-        {lookup.data?.status === "ready" && (
+        {lookup.error}
+        {result?.status === "ready" && (
           <>
             <p>
-              AbuseIPDB: ocena {lookup.data.result.confidence}/100 · zgłoszenia{" "}
-              {lookup.data.result.reports}
+              AbuseIPDB: ocena {result.result.confidence}/100 · zgłoszenia {result.result.reports}
             </p>
             <p>
-              Pobrano {timestamp.format(new Date(lookup.data.result.fetchedAt))} · ważne do{" "}
-              {timestamp.format(new Date(lookup.data.result.expiresAt))}
+              Pobrano {timestamp.format(new Date(result.result.fetchedAt))} · ważne do{" "}
+              {timestamp.format(new Date(result.result.expiresAt))}
             </p>
           </>
         )}
-        {lookup.data && lookup.data.status !== "ready" && failureLabels[lookup.data.status]}
+        {result && result.status !== "ready" && failureLabels[result.status]}
       </div>
     </div>
   );

@@ -1,5 +1,27 @@
 import { test as base, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+
+const exec = promisify(execFile);
+
+async function removeFirefoxHome(directory: string) {
+  try {
+    await rm(directory, { recursive: true, force: true });
+  } catch (error) {
+    if (
+      !(error instanceof Error && "code" in error) ||
+      (error.code !== "EACCES" && error.code !== "EPERM")
+    )
+      throw error;
+    // macOS can add a deny-delete ACL to folders created inside this temporary home.
+    await exec("/bin/chmod", ["-RN", directory]);
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
 export interface Identity {
   email: string;
@@ -36,8 +58,8 @@ export async function api(
   return response.json();
 }
 
-export async function login(page: Page, identity: Identity) {
-  await page.goto("/login");
+export async function login(page: Page, identity: Identity, { alreadyAtLogin = false } = {}) {
+  if (!alreadyAtLogin) await page.goto("/login");
   await page.getByLabel("Adres e-mail", { exact: true }).fill(identity.email);
   await page.getByRole("button", { name: "Dalej", exact: true }).click();
   await page.getByLabel("Hasło", { exact: true }).fill(identity.password);
@@ -45,6 +67,29 @@ export async function login(page: Page, identity: Identity) {
 }
 
 export const test = base.extend<{ scenario: Scenario }>({
+  launchOptions: [
+    async ({ browserName, launchOptions }, use) => {
+      if (browserName !== "firefox" || process.platform !== "darwin") {
+        await use(launchOptions);
+        return;
+      }
+      // Firefox 157 on macOS 27 can fail while looking up the user's Firefox app data.
+      const directory = await mkdtemp(join(tmpdir(), "bastiondesk-firefox-"));
+      try {
+        // macOS protects these directories from deletion when it creates them itself.
+        await mkdir(join(directory, "Library", "Application Support"), { recursive: true });
+        await mkdir(join(directory, "Downloads"));
+        await mkdir(join(directory, "Documents"));
+        await use({
+          ...launchOptions,
+          env: { ...process.env, ...launchOptions.env, CFFIXED_USER_HOME: directory },
+        });
+      } finally {
+        await removeFirefoxHome(directory);
+      }
+    },
+    { scope: "worker" },
+  ],
   scenario: async ({ playwright, baseURL }, use) => {
     const mailpit = process.env.E2E_MAILPIT_URL;
     if (!mailpit || !baseURL)

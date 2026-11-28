@@ -11,6 +11,10 @@ export type Reputation = {
 
 type Failure = "not_configured" | "not_public" | "unavailable" | "rate_limited";
 export type ReputationResult = { status: "ready"; result: Reputation } | { status: Failure };
+export type FeedLookup<Provider extends string> = { provider: Provider } & (
+	| { status: "matched" | "not_found"; fetchedAt: string; expiresAt: string }
+	| { status: Exclude<Failure, "not_public"> }
+);
 export type ProviderReply =
 	| { status: "ready"; confidence: number; reports: number }
 	| { status: "rate_limited"; retryAfterSeconds: number }

@@ -359,6 +359,8 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["incident", incidentId, mode, organizationId, session?.session.id, role],
+    refetchInterval: (query) =>
+      query.state.data?.data.enrichmentChecks?.some(({ result }) => !result) ? 4000 : false,
     queryFn: async () => {
       // --- REAL SERVER IMPLEMENTATION ---
       const endpoint =
@@ -495,6 +497,10 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
             <IndicatorList
               indicators={incident.indicators}
               reputationIncidentId={incident.ipReputation ? incident.id : undefined}
+              urlhausIncidentId={incident.urlhaus ? incident.id : undefined}
+              incidentId={incident.id}
+              lookupProviders={incident.lookupProviders}
+              enrichmentChecks={incident.enrichmentChecks}
             />
           )}
 

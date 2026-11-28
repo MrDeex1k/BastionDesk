@@ -106,7 +106,7 @@ dodaje i wyłącza jej administrator.
 | YARA-12 | Dopasowanie utrzymuje blokadę niezależnie od roli. Po zmianie reguł ręczne zlecenie i próba pobrania korzystają z tej samej analizy według aktywnej wersji. |
 
 Odbiór obu kroków obejmuje testy polityki pobierania i uprawnień, testy
-integracyjne z PostgreSQL, RabbitMQ i MinIO oraz scenariusze Playwright dla
+integracyjne z PostgreSQL, RabbitMQ i MinIO oraz scenariusze Flashwright dla
 obu sposobów zlecenia. Wyniki zapisuje się oddzielnie dla każdego kroku.
 
 ## Uruchomienie i weryfikacja

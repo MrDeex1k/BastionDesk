@@ -6,7 +6,11 @@ import { jobStore } from "../messaging/store";
 import { attachmentScans, scanWorkerStore } from "../yara/store";
 import { baseRuleSet, ruleSet } from "../yara/rules";
 import { assertYaraSchema } from "../yara/schema";
-import { assertCoreSchema } from "../adapters/core-schema";
+import { assertCoreSchema, assertIocEnrichmentSchema } from "../adapters/core-schema";
+import { enrichmentStore } from "../adapters/ioc-enrichment-store";
+import { enrichmentServices, startEnrichmentWorker } from "../adapters/ioc-enrichment-worker";
+import { enrichmentTargets } from "./ioc/automatic";
+import { providerLookups } from "./ioc/provider-lookups";
 import { migrate } from "../migrations/runner";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -118,6 +122,13 @@ try {
 		);
 	const beforeAuthUpgrade = await authSnapshot();
 	const migrations = [
+		{
+			id: "0006_ioc_enrichment",
+			sql: await readFile(
+				new URL("../../../database/versioned/0006_ioc_enrichment.sql", import.meta.url),
+				"utf8",
+			),
+		},
 		{
 			id: "0005_yara_attachments",
 			sql: await readFile(
@@ -685,6 +696,105 @@ try {
 	const foreignPage = await listJobs(pool, "foreign", { state: "dead" });
 	assert(!foreignPage.jobs.some((row) => pagedIds.includes(row.id)));
 	console.log("PASS paginated dead jobs, tenant isolation and fixed replay service identity");
+	await assertIocEnrichmentSchema(pool);
+	const enrichment = enrichmentStore(pool, transaction);
+	const autoWrites = createIncidentWrites(transaction, async (_org, input) =>
+		enrichmentTargets(input, ["virustotal"]),
+	);
+	const document = {
+		...createInput,
+		userDescription: "IOC enrichment fixture",
+		userScreenshotMetadata: { contentHash: "b".repeat(64) },
+		userAttachmentMetadata: { contentHash: hash },
+	};
+	const [first, second] = await Promise.all([
+		autoWrites.create(a, { ...document, id: crypto.randomUUID() }),
+		autoWrites.create(a, { ...document, id: crypto.randomUUID() }),
+	]);
+	assert.equal((await enrichment.forIncident("foreign", first.id)).length, 0);
+	assert.deepEqual(
+		(await enrichment.forIncident("org", first.id)).map(({ value }) => value),
+		[hash],
+	);
+	assert.equal((await enrichment.forIncident("org", second.id))[0]?.result, null);
+	const firstBatch = await enrichment.claim();
+	assert.equal(firstBatch.length, 1);
+	const iocJob = firstBatch[0]!;
+	assert.equal((await enrichment.claim()).length, 0);
+	await enrichment.finish(
+		iocJob,
+		{ provider: "virustotal", status: "unavailable" },
+		async () => {},
+	);
+	const failedCheck = (await enrichment.forIncident("org", second.id))[0]!;
+	assert.equal(failedCheck.result?.status, "unavailable");
+	assert.ok(new Date(failedCheck.retryAt!).getTime() - Date.now() > 59_000);
+	await enrichment.enqueue("org", first.id, iocJob, a.subject);
+	assert.equal((await enrichment.claim()).length, 0, "API errors must wait 60 seconds");
+	await pool.query(
+		"UPDATE ioc_enrichment_jobs SET retry_at=clock_timestamp()-interval '1 second' WHERE id=$1",
+		[iocJob.id],
+	);
+	await enrichment.enqueue("org", first.id, iocJob, a.subject);
+	const renewed = (await enrichment.claim())[0]!;
+	assert.equal(renewed.id, iocJob.id);
+	assert.equal(renewed.requestedBy, a.subject);
+	const time = new Date().toISOString();
+	await enrichment.finish(
+		renewed,
+		{ provider: "virustotal", status: "not_found", fetchedAt: time, expiresAt: time },
+		async () => {},
+	);
+	const completedCheck = (await enrichment.forIncident("org", second.id))[0]!;
+	assert.equal(completedCheck.result?.status, "not_found");
+	assert.ok(new Date(completedCheck.retryAt!).getTime() - Date.now() > 86_399_000);
+	await enrichment.enqueue("org", second.id, renewed, a.subject);
+	assert.equal((await enrichment.claim()).length, 0, "successful file checks must wait 24h");
+	await pool.query(
+		"UPDATE ioc_enrichment_jobs SET retry_at=clock_timestamp()-interval '1 second' WHERE id=$1",
+		[iocJob.id],
+	);
+	await enrichment.enqueue("org", second.id, renewed, a.subject);
+	let outbound = 0;
+	const stopWorker = startEnrichmentWorker(
+		enrichment,
+		enrichmentServices(
+			providerLookups({
+				virustotal: {
+					keyFor: async () => "fixture-key-not-a-secret",
+					lookup: async () => {
+						outbound++;
+						return { status: "not_found" };
+					},
+				},
+			}),
+		),
+	);
+	try {
+		const deadline = Date.now() + 5_000;
+		while (
+			!(await enrichment.forIncident("org", second.id))[0]?.result &&
+			Date.now() < deadline
+		)
+			await Bun.sleep(25);
+		assert.equal(
+			(await enrichment.forIncident("org", first.id))[0]?.result?.status,
+			"not_found",
+		);
+		assert.equal(outbound, 1);
+		const audit = (
+			await pool.query<{ entry: { actor: { kind: string; id: string } } }>(
+				"SELECT entry FROM core_audit WHERE entry->>'action'='incidents.virustotal.v1' AND entry->'resource'->>'id'=$1",
+				[second.id],
+			)
+		).rows[0]?.entry;
+		assert.deepEqual(audit?.actor, { kind: "user", id: a.subject });
+	} finally {
+		await stopWorker();
+	}
+	console.log(
+		"PASS IOC auto enqueue ignores screenshots, shares checks within a tenant and enforces both cooldowns",
+	);
 	console.log(
 		"PASS migration repeat, concurrent receipt replay, conflict, restart and minimal audit",
 	);

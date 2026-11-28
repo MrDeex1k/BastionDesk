@@ -5,12 +5,14 @@ import { createServer } from "node:net";
 const root = resolve(import.meta.dir, "..");
 const wazuh = process.argv.includes("--wazuh");
 const yara = process.argv.includes("--yara");
-if (wazuh) {
+const task = process.argv.includes("--all") ? "test:e2e:all" : "test:e2e";
+const useIndexer = wazuh || Boolean(process.env.E2E_WAZUH_ORIGIN);
+if (useIndexer) {
   for (const name of ["E2E_WAZUH_ORIGIN", "E2E_WAZUH_USER", "E2E_WAZUH_CA_FILE", "E2E_WAZUH_PASSWORD_FILE"]) {
     if (!process.env[name]) throw new Error(`Set ${name} before running the Wazuh live test.`);
   }
 }
-const wazuhFiles = wazuh
+const wazuhFiles = useIndexer
   ? {
       E2E_WAZUH_CA_FILE: resolve(process.env.E2E_WAZUH_CA_FILE!),
       E2E_WAZUH_PASSWORD_FILE: resolve(process.env.E2E_WAZUH_PASSWORD_FILE!),
@@ -195,8 +197,8 @@ try {
   );
   config.services.backend.volumes.push(`${tlsDirectory}/pgbouncer:/certs/migrator:ro`, `${root}/scripts/fixtures/phase4-probe.ts:/app/backend/phase4-probe.ts:ro`);
   config.services["yara-worker"].environment.DATABASE_URL = `${env.DATABASE_URL}?sslmode=require`;
-  if (yara) config.services.backend.volumes.push(`${root}/scripts/fixtures/phase7-yara-legacy.ts:/app/backend/phase7-yara-legacy.ts:ro`);
-  if (wazuh) {
+  config.services.backend.volumes.push(`${root}/scripts/fixtures/phase7-yara-legacy.ts:/app/backend/phase7-yara-legacy.ts:ro`);
+  if (useIndexer) {
     const sourceKey = join(tlsDirectory, "wazuh-source.key");
     await Bun.write(sourceKey, Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"));
     await chmod(sourceKey, 0o644);
@@ -250,31 +252,30 @@ try {
     E2E_BASE_URL: baseUrl,
     E2E_MAILPIT_URL: `http://127.0.0.1:${mailPort}`,
     E2E_RUN_ID: runId,
+    E2E_YARA_COMPOSE_CONFIG: configFile,
+    E2E_YARA_COMPOSE_ENV: envFile,
+    E2E_YARA_COMPOSE_PROJECT: project,
+    ...wazuhFiles,
   };
-  if (wazuh) {
-    await command(["bun", "run", "--cwd", "frontend", "test:e2e", "wazuh.spec.ts"], {
-      ...testEnvironment,
-      ...wazuhFiles,
-    });
+  const runBrowserTests = async (spec?: string) => {
+    await command(["bun", "run", "--cwd", "frontend", task, ...(spec ? [spec] : [])], testEnvironment);
+    if (!useIndexer || spec === "yara.spec.ts") return;
     const logs = await compose(["logs", "--no-color", "backend", "auth-service", "nginx"], true);
     if (wazuhSecrets.some((value) => logs.includes(value)))
       throw new Error("Wazuh credentials appeared in an application log.");
     console.log("[phase1] PASS Wazuh analyst workflow and credential redaction");
+  };
+  if (wazuh) {
+    await runBrowserTests("wazuh.spec.ts");
   } else if (yara) {
-    await command(["bun", "run", "--cwd", "frontend", "test:e2e", "yara.spec.ts"], {
-      ...testEnvironment,
-      E2E_YARA_COMPOSE_CONFIG: configFile,
-      E2E_YARA_COMPOSE_ENV: envFile,
-      E2E_YARA_COMPOSE_PROJECT: project,
-    });
+    await runBrowserTests("yara.spec.ts");
     console.log("[phase7] PASS automatic and manual YARA workflows");
   } else {
     await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "seed"]);
     await compose(["restart", "auth-service"]);
     await compose(["up", "-d", "--wait", "--wait-timeout", "30", "auth-service"]);
     await compose(["exec", "-T", "auth-service", "bun", "phase5-probe.ts", "resume"]);
-    const task = process.argv.includes("--all") ? "test:e2e:all" : "test:e2e";
-    await command(["bun", "x", "--no-install", "turbo", "run", task], testEnvironment);
+    await runBrowserTests();
     await compose(["stop", "classifier-worker", "rabbitmq"]);
     await compose(["exec", "-T", "backend", "bun", "phase4-probe.ts", "seed"]);
     await compose(["up", "-d", "--wait", "--wait-timeout", "120", "rabbitmq", "classifier-worker"]);

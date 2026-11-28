@@ -18,8 +18,8 @@
     "test": "bun test",
     "test:components": "bun test ./tests/component",
     "test:order": "bun test --randomize --seed 42 && bun test --randomize --seed 1337",
-    "test:e2e": "playwright test --project=chromium",
-    "test:e2e:all": "playwright test",
+    "test:e2e": "FLASHWRIGHT_SESSION=0 playwright test --project=chromium",
+    "test:e2e:all": "FLASHWRIGHT_SESSION=0 playwright test",
     "test:e2e:report": "bun scripts/public-e2e-report.ts"
   },
   "dependencies": {
@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",
-    "@playwright/test": "1.65.1",
+    "@playwright/test": "npm:flashwright-test@1.64.1-flashwright.12",
     "@shadcn/lint": "0.2.5",
     "@tanstack/router-plugin": "1.169.0",
     "@testing-library/dom": "10.4.2",

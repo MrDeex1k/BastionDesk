@@ -1,18 +1,11 @@
-import { createHash } from "node:crypto";
-import { join } from "node:path";
-import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { z } from "zod";
 import { ipReputation, type ReputationProvider } from "../core/ioc/enrichment";
+import { organizationApiKey } from "./organization-api-key";
 
 export function configuredIpReputation(directory = process.env.ABUSEIPDB_KEYS_DIR) {
 	if (!directory) return undefined;
-	return ipReputation(async (organizationId) => {
-		const name = createHash("sha256").update(organizationId).digest("hex");
-		const path = join(directory, name + ".key");
-		const key = (await readFile(path, "utf8")).trim();
-		return /^[a-zA-Z0-9_-]{20,200}$/.test(key) ? key : undefined;
-	}, abuseIpDb());
+	return ipReputation(organizationApiKey(directory), abuseIpDb());
 }
 
 const responseSchema = z.object({

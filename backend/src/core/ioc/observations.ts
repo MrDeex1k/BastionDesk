@@ -32,7 +32,7 @@ function parseDomain(value: string): Canonical | undefined {
 		return { kind: "domain", value: ascii };
 }
 
-function parseUrl(value: string): Canonical | undefined {
+export function canonicalUrl(value: string): string | undefined {
 	const url = URL.parse(value.replace(/^hxxp/i, "http"));
 	if (
 		!url ||
@@ -44,7 +44,12 @@ function parseUrl(value: string): Canonical | undefined {
 	const host = url.hostname.replace(/^\[|\]$/g, "");
 	if (!parseIp(host) && !parseDomain(host)) return;
 	url.hash = "";
-	return { kind: "url", value: url.href };
+	return url.href;
+}
+
+function parseUrl(value: string): Canonical | undefined {
+	const normalized = canonicalUrl(value);
+	if (normalized) return { kind: "url", value: normalized };
 }
 
 function parseHash(value: string): Canonical | undefined {

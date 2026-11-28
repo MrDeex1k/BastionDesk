@@ -122,7 +122,7 @@ app.get("/api", (_req, res) => {
 
 import apiRoutes from "./routes/index";
 
-const { coreIncidentWrites, withIncidentTransaction } =
+const { createIncidentWrites, withIncidentTransaction } =
 	await import("./adapters/core-incident-writes");
 const { coreWriteRoutes, coreCommandHandler } = await import("./adapters/core-command-http");
 const { coreFileRoutes, coreFileHandler } = await import("./adapters/core-file-http");
@@ -146,13 +146,52 @@ const wazuhRoutes = coreWazuhRoutes(
 	wazuhService(wazuhSourceStore(getPgPool()), wazuhRefreshSeconds()),
 );
 const { coreIncidentReads } = await import("./adapters/core-incident-reads");
-const { coreReadPaths, coreReadHandler, coreReputationPaths, coreReputationHandler } =
-	await import("./adapters/core-http");
+const {
+	coreReadPaths,
+	coreReadHandler,
+	coreReputationPaths,
+	coreReputationHandler,
+	coreUrlhausPaths,
+	coreUrlhausHandler,
+	coreLookupPaths,
+	coreLookupHandler,
+} = await import("./adapters/core-http");
 const { configuredIpReputation } = await import("./adapters/abuseipdb");
 const reputation = configuredIpReputation();
-const { ipReputationAudit } = await import("./adapters/core-ip-reputation-audit");
-const { assertCoreSchema } = await import("./adapters/core-schema");
+const { configuredUrlhaus } = await import("./adapters/urlhaus");
+const urlhaus = configuredUrlhaus();
+const { configuredProviderLookups } = await import("./adapters/threat-intelligence");
+const providerLookups = configuredProviderLookups();
+const { enrichmentStore } = await import("./adapters/ioc-enrichment-store");
+const { enrichmentServices, startEnrichmentWorker } =
+	await import("./adapters/ioc-enrichment-worker");
+const iocStore = enrichmentStore(getPgPool(), withIncidentTransaction);
+const iocServices = enrichmentServices(providerLookups, reputation, urlhaus);
+const coreIncidentWrites = createIncidentWrites(withIncidentTransaction, iocServices.plan);
+const readIocChecks = async (org: string, incidentId: string) => {
+	const [enabled, checks] = await Promise.all([
+		iocServices.enabled(org),
+		iocStore.forIncident(org, incidentId),
+	]);
+	return checks.filter(({ provider }) => enabled.includes(provider));
+};
+const scheduleIocCheck = async (
+	org: string,
+	incidentId: string,
+	target: Parameters<typeof iocStore.enqueue>[2],
+	subject: string,
+) => {
+	if (!(await iocServices.enabled(org)).includes(target.provider)) return;
+	await iocStore.enqueue(org, incidentId, target, subject);
+	return (await iocStore.forIncident(org, incidentId)).find(
+		({ provider, kind, value }) =>
+			provider === target.provider && kind === target.kind && value === target.value,
+	);
+};
+const { iocLookupAudit } = await import("./adapters/core-ioc-audit");
+const { assertCoreSchema, assertIocEnrichmentSchema } = await import("./adapters/core-schema");
 await assertCoreSchema();
+await assertIocEnrichmentSchema();
 await (await import("./yara/schema")).assertYaraSchema(getPgPool());
 const yaraRoutes = coreYaraRoutes(
 	coreIdentity,
@@ -176,7 +215,14 @@ const core = await (
 	})),
 	{
 		paths: coreReadPaths,
-		handle: coreReadHandler(coreIdentity, coreIncidentReads, reputation),
+		handle: coreReadHandler(
+			coreIdentity,
+			coreIncidentReads,
+			reputation,
+			urlhaus,
+			providerLookups,
+			readIocChecks,
+		),
 	},
 	{
 		method: "post",
@@ -184,8 +230,32 @@ const core = await (
 		handle: coreReputationHandler(
 			coreIdentity,
 			coreIncidentReads,
-			ipReputationAudit(getPgPool()),
+			iocLookupAudit(getPgPool(), "abuseipdb"),
 			reputation,
+			scheduleIocCheck,
+		),
+	},
+	{
+		method: "post",
+		paths: coreUrlhausPaths,
+		handle: coreUrlhausHandler(
+			coreIdentity,
+			coreIncidentReads,
+			iocLookupAudit(getPgPool(), "urlhaus"),
+			urlhaus,
+			scheduleIocCheck,
+		),
+	},
+	{
+		method: "post",
+		paths: coreLookupPaths,
+		handle: coreLookupHandler(
+			coreIdentity,
+			coreIncidentReads,
+			(provider, actor, id, status) =>
+				iocLookupAudit(getPgPool(), provider)(actor, id, status),
+			providerLookups,
+			scheduleIocCheck,
 		),
 	},
 	...coreFileRoutes.map((route) => ({
@@ -214,6 +284,8 @@ for (const route of coreAdminRoutes) {
 }
 app.get(coreReadPaths, apiRateLimiter, core.http);
 app.post(coreReputationPaths, apiRateLimiter, core.http);
+app.post(coreUrlhausPaths, apiRateLimiter, core.http);
+app.post(coreLookupPaths, apiRateLimiter, core.http);
 
 for (const route of coreFileRoutes) app.route(route.paths)[route.method](apiRateLimiter, core.http);
 for (const route of coreWriteRoutes)
@@ -238,6 +310,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start Server
+const stopEnrichment = startEnrichmentWorker(iocStore, iocServices);
 const server = mtlsServer("backend", app).listen(env.PORT, () => {
 	console.log(`Core listening with mTLS on ${env.PORT}`);
 });
@@ -259,6 +332,7 @@ async function gracefulShutdown(signal: string) {
 		console.log("HTTP server closed");
 
 		try {
+			await stopEnrichment();
 			await core.close();
 			await closeDatabase();
 			console.log("Database connections closed");

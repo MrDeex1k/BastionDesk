@@ -4,7 +4,7 @@ import { api, expect, login, test } from "./fixtures";
 
 const execFileAsync = promisify(execFile);
 
-test("YARA blocks a stored attachment when an organization rule matches", async ({
+test("YARA-E2E-01 blocks a stored attachment when an organization rule matches", async ({
   page,
   scenario,
 }) => {
@@ -82,7 +82,7 @@ test("YARA blocks a stored attachment when an organization rule matches", async 
   expect((await scenario.employee.api.get(compatible)).ok()).toBe(true);
 });
 
-test("YARA scans a legacy attachment without SHA-256 from the analyst card", async ({
+test("YARA-E2E-02 scans a legacy attachment without SHA-256 from the analyst card", async ({
   page,
   scenario,
   context,
@@ -92,7 +92,7 @@ test("YARA scans a legacy attachment without SHA-256 from the analyst card", asy
   const envFile = process.env.E2E_YARA_COMPOSE_ENV;
   test.skip(
     !project || !/^bastiondesk-e2e-\d+-\d+$/.test(project) || !config || !envFile,
-    "Requires the disposable --yara Compose stack to prepare pre-upgrade data.",
+    "Requires the disposable Compose stack to prepare pre-upgrade data.",
   );
   const description = `Faza 7 test starszego załącznika ${scenario.id}`;
   await login(page, scenario.employee);

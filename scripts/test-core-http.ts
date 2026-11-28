@@ -4,7 +4,9 @@ import { createCoreApplication } from "../backend/src/core/application";
 import type { LiveIdentity } from "../backend/src/identity/contract";
 import type { Incident } from "../backend/src/types";
 import { ipReputation } from "../backend/src/core/ioc/enrichment";
-import { coreReadHandler, coreReadPaths, coreReputationHandler, coreReputationPaths } from "../backend/src/adapters/core-http";
+import { coreLookupHandler, coreLookupPaths, coreReadHandler, coreReadPaths, coreReputationHandler, coreReputationPaths, coreUrlhausHandler, coreUrlhausPaths } from "../backend/src/adapters/core-http";
+import { providerLookups } from "../backend/src/core/ioc/provider-lookups";
+import { urlhaus } from "../backend/src/adapters/urlhaus";
 import { coreAdminHandler, coreAdminRoutes } from "../backend/src/adapters/core-admin-http";
 
 const express = createRequire(new URL("../backend/package.json", import.meta.url))("express");
@@ -29,9 +31,11 @@ const admin = coreAdminHandler(identity, {
   summary: async () => ({ success: true, data: { total: 0 } }),
 });
 const date = new Date();
+const reportUrl = "https://sample.example/payload";
+const absentUrl = "https://sample.example/other";
 const incident: Incident = {
   id: crypto.randomUUID(), dataZgloszenia: date, userId: "u", organizationId: "org",
-  status: "Zgłoszony", userDescription: "Adres źródłowy 1.1.1.1 oraz prywatny 10.0.0.7.",
+  status: "Zgłoszony", userDescription: `Adres źródłowy 1.1.1.1, prywatny 10.0.0.7 oraz ${reportUrl} i ${absentUrl}.`,
   userScreenshotPath: null, userScreenshotMetadata: {}, userAttachmentPath: null, userAttachmentMetadata: {},
   analystId: null, analystNote: null, czyRozwiazany: false, dataRozwiazania: null,
   analystReportPath: null, analystReportMetadata: {}, analystReportData: null,
@@ -48,12 +52,27 @@ const reputation = ipReputation(async (org) => org === "org" ? "test-key" : unde
   name: "abuseipdb",
   lookup: async () => { externalLookups++; return { status: "ready", confidence: 15, reports: 2 }; },
 });
+let feedRequests = 0;
+const urlhausAudits: Array<{ organizationId: string; status: string }> = [];
+const urlhausFeed = urlhaus(async () => "test-key-for-urlhaus-fixture", async () => {
+  feedRequests++;
+  return new Response(`"1","2026-01-01 00:00:00","${reportUrl}","online"\n`);
+});
+let otxRequests = 0;
+const lookups = providerLookups({ otx: {
+  keyFor: async (org) => org === "org" ? "fixture-key" : undefined,
+  lookup: async () => { otxRequests++; return { status: "ready", summary: { kind: "pulses", count: 2 } }; },
+} });
 const core = await createCoreApplication([
   ...coreAdminRoutes.map((route) => ({ ...route, handle: admin })),
-  { paths: coreReadPaths, handle: coreReadHandler(identity, reads, reputation) },
+  { paths: coreReadPaths, handle: coreReadHandler(identity, reads, reputation, urlhausFeed, lookups) },
   { method: "post", paths: coreReputationPaths, handle: coreReputationHandler(identity, reads, async (actor, _id, status) => {
     audited.push({ actor: actor.subject, status });
   }, reputation) },
+  { method: "post", paths: coreUrlhausPaths, handle: coreUrlhausHandler(identity, reads, async (actor, _id, status) => {
+    urlhausAudits.push({ organizationId: actor.organizationId, status });
+  }, urlhausFeed) },
+  { method: "post", paths: coreLookupPaths, handle: coreLookupHandler(identity, reads, async () => {}, lookups) },
 ]);
 const outer = express();
 outer.use(express.json(), core.http);
@@ -114,23 +133,54 @@ try {
   const lookup = (address: string) => fetch(`${base}/api/analyst/incidents/${incident.id}/ip-reputation`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address }),
   });
+  const checkUrl = (url: string) => fetch(`${base}/api/analyst/incidents/${incident.id}/urlhaus`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }),
+  });
+  const checkOtx = (value: string) => fetch(`${base}/api/analyst/incidents/${incident.id}/ioc-enrichment`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ provider: "otx", kind: "ipv4", value }),
+  });
   role = "pracownik";
   const employeeDetail = await fetch(`${base}/api/incidents/${incident.id}`);
-  assert.equal((await employeeDetail.json()).data.indicators, undefined);
+  const employeeData = (await employeeDetail.json()).data;
+  assert.equal(employeeData.indicators, undefined);
+  assert.equal(employeeData.urlhaus, undefined);
+  assert.equal(employeeData.lookupProviders, undefined);
   assert.equal((await lookup("1.1.1.1")).status, 403);
+  assert.equal((await checkUrl(reportUrl)).status, 403);
+  assert.equal((await checkOtx("1.1.1.1")).status, 403);
   role = "analityk";
   const analystDetail = await fetch(`${base}/api/analyst/incidents/${incident.id}`);
-  assert.equal((await analystDetail.json()).data.ipReputation, true);
+  const analystData = (await analystDetail.json()).data;
+  assert.equal(analystData.ipReputation, true);
+  assert.equal(analystData.urlhaus, true);
+  assert.deepEqual(analystData.lookupProviders, ["otx"]);
   organizationId = "foreign";
   assert.equal((await lookup("1.1.1.1")).status, 404);
+  assert.equal((await checkUrl(reportUrl)).status, 404);
+  assert.equal((await checkOtx("1.1.1.1")).status, 404);
   organizationId = "org";
   assert.equal((await lookup("8.8.8.8")).status, 404);
+  assert.equal((await checkUrl("https://unknown.example/")).status, 404);
+  assert.equal((await checkOtx("8.8.8.8")).status, 404);
+  assert.equal((await (await checkOtx("10.0.0.7")).json()).data.status, "not_public");
+  assert.equal(otxRequests, 0);
+  assert.deepEqual((await (await checkOtx("1.1.1.1")).json()).data.summary, { kind: "pulses", count: 2 });
+  assert.equal(otxRequests, 1);
+  assert.equal(feedRequests, 0);
   assert.deepEqual((await (await lookup("10.0.0.7")).json()).data, { status: "not_public" });
   const allowed = await lookup("1.1.1.1");
   assert.equal(allowed.headers.get("cache-control"), "private, no-store");
   assert.equal((await allowed.json()).data.result.confidence, 15);
   assert.equal(externalLookups, 1);
   assert.deepEqual(audited, [{ actor: "u", status: "not_public" }, { actor: "u", status: "ready" }]);
+  const match = await checkUrl(reportUrl);
+  assert.equal(match.headers.get("cache-control"), "private, no-store");
+  assert.equal((await match.json()).data.status, "matched");
+  role = "admin";
+  assert.equal((await (await checkUrl(absentUrl)).json()).data.status, "not_found");
+  assert.equal(feedRequests, 1);
+  assert.deepEqual(urlhausAudits, [{ organizationId: "org", status: "matched" }, { organizationId: "org", status: "not_found" }]);
   authenticated = false;
   assert.equal((await fetch(`${base}/api/incidents/my`)).status, 401);
   assert.equal((await fetch(`${base}/api/admin/incidents`)).status, 401);
