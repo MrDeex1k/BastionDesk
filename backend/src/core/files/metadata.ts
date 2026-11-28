@@ -7,6 +7,7 @@ export interface StoredFileMetadata {
 	size?: number;
 	uploadedAt?: string;
 	etag?: string;
+	contentHash?: string;
 }
 
 export type StoredFileMetadataPayload = StoredFileMetadata | StoredFileMetadata[] | null;

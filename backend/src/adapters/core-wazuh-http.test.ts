@@ -26,6 +26,11 @@ const source = {
 	timestamp,
 	agent,
 	rule: { id: "510", level: 7, description: "Test" },
+	data: {
+		srcip: "203.0.113.2",
+		yara_rule: "Fixture_Rule",
+		yara_scanned_file: "/tmp/fixture.txt",
+	},
 	privatePayload: { active: true },
 };
 const records = Array.from({ length: 71 }, (_, index) => {
@@ -321,7 +326,15 @@ test("WAZ-01–07 authorization, lifecycle, stable pagination, JSON, and failure
 		expect(next.nextCursor).toBeNull();
 		expect(first.alerts.every((row: { ruleLevel: number }) => row.ruleLevel === 7)).toBe(true);
 		const doc = { revision, indexName: records[0]!._index, documentId: records[0]!._id };
-		expect((await get("alerts/detail", doc)).agentId).toBe("001");
+		const detail = await get("alerts/detail", doc);
+		expect(detail.agentId).toBe("001");
+		expect(detail.indicators).toEqual([
+			{ kind: "ipv4", value: "203.0.113.2", fields: ["data.srcip"] },
+		]);
+		expect(detail.fileObservations).toEqual([
+			{ method: "yara", status: "matched", rule: "Fixture_Rule", file: "/tmp/fixture.txt" },
+		]);
+		expect(detail.privatePayload).toBeUndefined();
 		expect((await get("alerts/json", doc))._source).toEqual(source);
 		for (const path of ["alerts/detail", "alerts/json"]) {
 			const client = new AbortController();

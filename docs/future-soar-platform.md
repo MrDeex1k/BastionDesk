@@ -35,7 +35,8 @@ ponownego uruchomienia podczas tej aktualizacji. Wersja manifestów nadal wynosi
 | 4 — messaging | Zaimplementowana; raport zachowuje status „do odbioru” | [Realizacja](backend/phase-4-messaging.md), PostgreSQL outbox/inbox, RabbitMQ, worker LLM, retry/DLQ i OTLP. |
 | 5 — auth/gateway | Zaimplementowana, odbiór techniczny zapisany 23 września 2026 | [Runbook](backend/phase-5-identity.md), osobny auth, JWT/JWKS i mTLS. |
 | 6 — Wazuh | Odczyt alertów z Indexera zaimplementowany i sprawdzony w laboratorium | [Specyfikacja i wyniki](integrations/wazuh-stage-6-spec.md). WAZ-04 zamknięto po teście E2E na istniejącym alercie agenta Ubuntu `001`. |
-| 7–12 — funkcje SOAR i wydanie | Planowane | IOC/TI, korelacja, playbooki, reakcja, rozszerzony LLM i badania. |
+| 7 — IOC, Threat Intelligence i artefakty | Lokalna YARA i integracje TI przeszły testy w kopii roboczej brancha. Pełny odbiór otwarty. | [Wyniki weryfikacji](#wyniki-weryfikacji-fazy-7). Test AbuseIPDB na żywo odłożony do dostarczenia klucza. Ponowne użycie wyników Wazuh pozostaje otwarte. |
+| 8–12 — funkcje SOAR i wydanie | Planowane | Korelacja, playbooki, reakcja, rozszerzony LLM i badania. |
 
 Bieżące ograniczenia obejmują brak lokalnego modelu assetów i IOC oraz silnika
 playbooków. Klasyfikator
@@ -516,7 +517,7 @@ pełnego przejścia na BastionDesk `2.0`.
 3. Pokryć komponentowo krytyczne formularze, walidację, stany błędów,
    uprawnienia oraz przełączanie organizacji bez testowania szczegółów
    implementacyjnych komponentów.
-4. Skonfigurować Playwright dla Chromium, Firefox i WebKit; Chromium pozostaje
+4. Skonfigurować Flashwright dla Chromium, Firefox i WebKit; Chromium pozostaje
    szybką bramką zmian, a pełna macierz przeglądarek działa na checkpointach.
 5. Dodać deterministyczne przygotowanie danych i sesji przez API z osobnym
    tenantem dla każdego scenariusza oraz sprzątaniem stanu testowego.
@@ -539,7 +540,7 @@ pełnego przejścia na BastionDesk `2.0`.
 | React Testing Library | Renderowanie komponentów i zapytania odzwierciedlające sposób korzystania z UI. |
 | `user-event` | Symulacja pełnych interakcji użytkownika, takich jak wpisywanie, klikanie i nawigacja klawiaturą. |
 | `jest-dom` | Wyłącznie dodatkowe matchery DOM dla `expect` z `bun:test`, np. `toBeVisible()`; pakiet nie wprowadza runnera Jest. |
-| Playwright | Testy E2E kompletnej aplikacji w prawdziwych przeglądarkach. |
+| Flashwright | Testy E2E kompletnej aplikacji w prawdziwych przeglądarkach. |
 
 ### Kryterium ukończenia
 
@@ -714,6 +715,9 @@ Kryterium WAZ-04 jest zamknięte. [Kryteria i wyniki](integrations/wazuh-stage-6
 Automatycznie zbierać dowody i wzbogacać incydenty bez zależności domeny od
 jednego providera.
 
+Analiza załączników zaczyna się od [dwóch kroków lokalnego skanowania YARA](integrations/yara-stage-7-attachments-spec.md).
+Specyfikacja opisuje kolejność wdrożenia, uprawnienia, pobieranie i kryteria odbioru.
+
 ### Podział analizy plików
 
 - **Pliki wykryte na monitorowanych urządzeniach.** Wazuh skanuje pliki za
@@ -722,8 +726,9 @@ jednego providera.
   i powiązanym zgłoszeniu. Discovery ustali, jak rozpoznać wynik przypisany
   do danego pliku, również gdy Wazuh rejestruje analizę jako osobny alert.
 - **Pliki załączone przez pracowników do zgłoszeń.** BastionDesk uruchamia
-  YARA w izolowanym workerze. Jeżeli organizacja włączy VirusTotal, worker
-  wyszukuje raport po SHA-256. Treść załącznika pozostaje w BastionDesk.
+  YARA w izolowanym workerze. Przy nowym zgłoszeniu BastionDesk szuka istniejącego
+  raportu po SHA-256 w aktywnym dla organizacji VirusTotal lub Hybrid Analysis.
+  Treść załącznika pozostaje w BastionDesk.
 
 ### Ponowne użycie wyników
 
@@ -755,6 +760,123 @@ analizy, braku raportu u providera i błędu analizy.
 
 Potencjalni providerzy do ponownej oceny: AbuseIPDB, URLhaus, LevelBlue OTX,
 Hybrid Analysis i opcjonalnie VirusTotal.
+
+### Pierwszy dostawca reputacji adresów IP
+
+AbuseIPDB sprawdza publiczne adresy IPv4 i IPv6 znalezione w opisie zgłoszenia.
+Nowe zgłoszenie zleca odczyt w tle. Zdalny odczyt
+przekazuje jeden adres IP i klucz danej organizacji. Wynik zachowuje źródło,
+godzinny okres ważności i ocenę dostawcy. Backend współdzieli równoległe zapytania
+o ten sam adres w obrębie organizacji. Limit dostawcy wstrzymuje kolejne zapytania
+tej organizacji. Próba jest zapisywana w audycie z identyfikatorem zgłoszenia
+i stanem, bez wartości IOC i klucza.
+
+Włączenie wymaga zamontowania w backendzie katalogu sekretów tylko do odczytu
+i wskazania go w `ABUSEIPDB_KEYS_DIR`. Każdy plik ma nazwę złożoną z SHA-256
+identyfikatora organizacji zapisanego szesnastkowo oraz rozszerzenia `.key`.
+Zawartość to klucz API tej organizacji. [Dokumentacja API AbuseIPDB](https://docs.abuseipdb.com/#check-endpoint)
+
+### Wykaz URLhaus
+
+Adres URL znaleziony w opisie nowego zgłoszenia jest sprawdzany w tle.
+Backend dopasowuje pełny adres do wykazu `recent.csv`
+z ostatnich 30 dni. Do URLhaus wysyła wyłącznie żądanie pobrania wykazu
+z kluczem. Wynik wskazuje źródło, czas pobrania i wygaśnięcia wykazu. Brak
+wpisu dotyczy zakresu tego wykazu. Wynik operacji trafia do audytu bez
+adresu i klucza. [URLhaus Community API](https://urlhaus.abuse.ch/api/)
+
+Włączenie wymaga ustawienia `URLHAUS_KEY_FILE` na ścieżkę do pliku z kluczem.
+W Compose należy zamontować sekret tylko w kontenerze `backend`, na przykład
+w `/run/secrets/urlhaus-key`, i zapewnić użytkownikowi kontenera prawo do
+odczytu. Konfiguracja jest wspólna dla instalacji, ponieważ wykaz jest publiczny.
+Żądania użytkowników nadal podlegają uprawnieniom do zgłoszenia w organizacji.
+
+Backend pobiera wykaz na żądanie i współdzieli jedno pobranie między
+równoległymi sprawdzeniami. Udany wykaz jest ważny 10 minut. Przy błędzie
+kolejna próba jest możliwa po co najmniej 10 minutach, a odpowiedź `429`
+może wydłużyć ten odstęp przez `Retry-After`. Cache i odstęp obowiązują w
+obrębie procesu. W tej konfiguracji uruchamiać jeden backend na klucz i
+zachować odstęp przy ponownym uruchomieniu. Testy automatyczne używają
+fikcyjnego wykazu, a sprawdzenie na żywo wymaga jednego odczytu Community API.
+
+### LevelBlue OTX, Hybrid Analysis i VirusTotal
+
+Przy tworzeniu nowego zgłoszenia zapis i zlecenia do aktywnych źródeł odbywają
+się w jednej transakcji. Worker backendu wykonuje odczyty poza żądaniem HTTP.
+Analityk i administrator widzą przebieg i wyniki przy IOC. W starszych
+zgłoszeniach sprawdzenie można zlecić ręcznie.
+
+| Dostawca | Klucze organizacji | Zakres odczytu |
+| --- | --- | --- |
+| LevelBlue OTX | `OTX_KEYS_DIR` | Publiczne IPv4 i IPv6, domeny oraz MD5, SHA-1 i SHA-256. Pełne adresy URL nadal sprawdza się lokalnie w wykazie URLhaus. Wynik OTX pokazuje liczbę powiązanych wpisów (Pulses). [LevelBlue OTX SDK](https://github.com/AlienVault-OTX/OTX-Python-SDK) |
+| Hybrid Analysis | `HYBRID_ANALYSIS_KEYS_DIR` | Odczyt istniejących raportów przez `GET /api/v2/search/hash` z SHA-256. Wynik pokazuje werdykt z zakończonego raportu oraz datę i ocenę, jeśli API je zwróci. [API v2](https://hybrid-analysis.com/docs/api/v2), [Klient Hybrid Analysis](https://github.com/hybrid-analysis/hybrid-analysis-mcp-server/blob/main/src/mcp_hybrid_analysis/server.py#L295) |
+| VirusTotal | `VIRUSTOTAL_KEYS_DIR` | Odczyt istniejącego raportu po SHA-256 i prezentacja statystyk silników. [Dokumentacja odczytu raportu](https://docs.virustotal.com/reference/file-info) |
+
+W każdym katalogu klucz ma postać pliku `<SHA-256 identyfikatora organizacji>.key`,
+tak jak w AbuseIPDB. W Compose katalog należy udostępnić tylko backendowi i tylko
+do odczytu. Dodanie klucza włącza źródło dla danej organizacji. Usunięcie klucza
+cofa dostęp także do zapisanych w pamięci wyników. Klucze z Pęku kluczy służą
+do testów lokalnych i trafiają na serwer przez magazyn sekretów wdrożenia.
+
+Backend wysyła jedynie kwalifikujący się wskaźnik. Filtr OTX odrzuca prywatne IP
+i domeny z zarezerwowanymi lub typowo lokalnymi sufiksami. Włączenie OTX dla
+organizacji obejmuje odczyt domen z nowego opisu. Hybrid Analysis i VirusTotal
+otrzymują tylko SHA-256. Treść załączników oraz zrzuty pozostają w BastionDesk.
+Audyt zawiera dostawcę, organizację, użytkownika i wynik operacji.
+
+Wyniki i terminy ponowienia zapisuje migracja `0006_ioc_enrichment`.
+To samo sprawdzenie współdzielą zgłoszenia jednej organizacji. Dla hashy po
+zakończonym odczycie, także bez raportu, kolejne sprawdzenie tego samego
+wskaźnika u tego samego dostawcy jest możliwe po 24 godzinach. Po błędzie
+przycisk ponowienia jest widoczny i aktywuje się po 60 sekundach. `Retry-After`
+może wydłużyć przerwę po `429`, a pobrania wykazu URLhaus mają własny odstęp.
+Domyślna ochrona darmowych kont ogranicza odczyt do jednego
+żądania na 15 sekund i 50 żądań w ruchomym oknie 24 godzin na dostawcę i klucz.
+Odpowiedź `429` wstrzymuje dalsze odczyty zgodnie z `Retry-After`. Liczniki i wyniki
+są współdzielone przez zadania w obrębie procesu. Na koncie testowym uruchamiać
+jeden proces backendu na klucz.
+To są limity BastionDesk. Warunki i dostęp konta u dostawcy trzeba uwzględnić
+przy odbiorze. Błąd dostawcy nie wpływa na obsługę incydentu ani politykę pobierania.
+
+### Konta testowe i limity dostawców
+
+Konta testowe URLhaus, LevelBlue OTX, Hybrid Analysis i VirusTotal korzystają
+z darmowych planów. Klucze deweloperskie są w pęku logowania macOS, pod nazwą
+konta `bastiondesk-dev`. We wdrożeniu klucze przekazuje się z magazynu sekretów
+do backendu zgodnie z konfiguracją danej integracji.
+
+| Wpis w Pęku kluczy | Zakres testu na żywo |
+| --- | --- |
+| `BastionDesk AbuseIPDB` (oczekuje na klucz testowy) | Po dostarczeniu klucza skonfigurować `ABUSEIPDB_KEYS_DIR` dla organizacji testowej i sprawdzić odczyt reputacji jednego publicznego adresu IP z kontenera backendu. |
+| `BastionDesk URLhaus` | Pobrać feed raz i testować dopasowania lokalnie. Zachować co najmniej 5 minut między pobraniami zrzutów. Community API podlega zasadom fair use, a użycie komercyjne może wymagać płatnego planu. [URLhaus Community API](https://urlhaus.abuse.ch/api/) |
+| `BastionDesk LevelBlue OTX` | Sprawdzić odczyt jednego publicznego IOC na koncie testowym. Darmowy dostęp OTX jest przeznaczony do użytku niekomercyjnego. [Warunki OTX](https://www.levelblue.com/legal/otx-eula-terms) |
+| `BastionDesk Hybrid Analysis` | Sprawdzić odczyt istniejącego raportu po SHA-256. Przed testem potwierdzić dostępne operacje i limity przyznane kontu. [Dokumentacja API](https://www.hybrid-analysis.com/docs/api/v2) |
+| `BastionDesk VirusTotal` | Sprawdzić odczyt istniejącego raportu po SHA-256 w dozwolonym teście niekomercyjnym. Public API ma limit 4 zapytań na minutę i 500 na dobę oraz ograniczenia dotyczące przepływów biznesowych. [Limity i warunki Public API](https://docs.virustotal.com/reference/public-vs-premium-api) |
+
+Testy automatyczne korzystają z danych testowych lub zapisanych odpowiedzi.
+Próby na żywo używają publicznych wskaźników kontrolnych i zakresu odczytu.
+Po odpowiedzi `429` zakończyć próbę i uwzględnić czas ponowienia podany przez
+dostawcę. W diagnostyce URLhaus redagować również ścieżkę wywołania, która może
+zawierać `Auth-Key`.
+
+### Wyniki weryfikacji fazy 7
+
+Przebieg z 28 listopada 2026 na branchu `feat/yara-attachment-scanning`:
+
+- **Flashwright** — 40 testów zaliczonych w Chromium, Firefoxie i WebKit.
+  W każdej przeglądarce przeszły automatyczny i ręczny skan YARA oraz odczyt
+  rzeczywistego alertu agenta `001` z Indexera Wazuh. Dwa pominięcia dotyczą
+  scenariusza PassKey wymagającego Chromium.
+- **Backend i frontend** — 101 i 29 testów zaliczonych. Przeszły też migracje,
+  testy API, PostgreSQL i RabbitMQ. Osobna próba potwierdziła, że MinIO odrzuca
+  podpisany adres po upływie jego ważności.
+- **Threat Intelligence** — z kontenera backendu potwierdzono odpowiedź URLhaus
+  i LevelBlue OTX oraz odczyt raportów Hybrid Analysis i VirusTotal. AbuseIPDB
+  przeszło testy automatyczne z odpowiedziami testowymi. Próbę na żywo odłożono
+  do dostarczenia klucza testowego.
+- **Wazuh** — Indexer działał, a w sprawdzonych indeksach nie znaleziono
+  alertów z wynikami YARA ani VirusTotal. Ponowne użycie zgodnego wyniku Wazuh
+  dla załącznika pozostaje do wdrożenia i zweryfikowania na kontrolnym alercie.
 
 ### Kryterium ukończenia
 
@@ -883,7 +1005,7 @@ Udowodnić wartość systemu i przygotować powtarzalny deployment.
 7. Ustabilizować Docker Compose jako wariant podstawowy.
 8. Przygotować docs użytkownika, operatora i dewelopera.
 9. Oddzielić zakres magisterski od elementów późniejszego produktu.
-10. Uruchomić pełny zestaw React Testing Library i Playwright przeciw
+10. Uruchomić pełny zestaw React Testing Library i Flashwright przeciw
     docelowemu BastionDesk `2.0` oraz potwierdzić parity przepływów `1.0.3`.
 11. Wydać wersję z macierzą wspieranych komponentów.
 
@@ -956,7 +1078,7 @@ W nowej wersji nie wystarczą wyłącznie testy jednostkowe.
 - testy izolacji organizacji;
 - testy idempotencji, retry i trybu zdegradowanego;
 - testy migracji danych;
-- odpowiednie scenariusze Playwright dla zmienianych przepływów krytycznych.
+- odpowiednie scenariusze Flashwright dla zmienianych przepływów krytycznych.
 
 ### Na checkpointach
 
@@ -968,7 +1090,7 @@ W nowej wersji nie wystarczą wyłącznie testy jednostkowe.
 - active response wyłącznie w izolowanym labie.
 
 `bun:test` z React Testing Library jest standardem testów komponentowych, a
-Playwright standardem testów przeglądarkowych E2E. Testy utworzone dla `1.0.3`
+Flashwright standardem testów przeglądarkowych E2E. Testy utworzone dla `1.0.3`
 pozostają aktywnym kontraktem zachowania podczas migracji i muszą przejść na
 docelowym BastionDesk `2.0`.
 

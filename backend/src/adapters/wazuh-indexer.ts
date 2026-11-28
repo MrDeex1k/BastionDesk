@@ -1,9 +1,23 @@
 import { z } from "zod";
 import { alertReference, ruleLevel, uniqueAlerts } from "../core/alerts/read";
+import { wazuhEvidence } from "../core/ioc/evidence";
 import { indexerTransport } from "../wazuh/network";
 import { WazuhError, type SourceConnection } from "../wazuh/source";
 
 const fields = ["timestamp", "agent.id", "agent.name", "rule.id", "rule.level", "rule.description"];
+const evidenceFields = [
+	"data.srcip",
+	"data.dstip",
+	"data.domain",
+	"data.url",
+	"data.yara",
+	"data.yara_rule",
+	"data.yara_scanned_file",
+	"data.virustotal",
+	"syscheck.sha256_after",
+	"syscheck.sha1_after",
+	"syscheck.md5_after",
+];
 const alertFields = z.object({
 	timestamp: z.string().refine((value) => Number.isFinite(Date.parse(value))),
 	agent: z.object({ id: z.string().min(1), name: z.string().optional() }),
@@ -125,7 +139,7 @@ export function wazuhIndexer(connection: SourceConnection, send = indexerTranspo
 				"/" + encodeURIComponent(key.indexName) + "/_search",
 				{
 					size: 1,
-					_source: full ? true : fields,
+					_source: full ? true : [...fields, ...evidenceFields],
 					query: { ids: { values: [key.documentId] } },
 				},
 				signal,
@@ -138,7 +152,9 @@ export function wazuhIndexer(connection: SourceConnection, send = indexerTranspo
 				(full && !row._source)
 			)
 				throw new WazuhError("UNAVAILABLE");
-			return full ? { _index: row._index, _id: row._id, _source: row._source } : project(row);
+			return full
+				? { _index: row._index, _id: row._id, _source: row._source }
+				: { ...project(row), ...wazuhEvidence(row._source ?? {}) };
 		},
 	};
 }

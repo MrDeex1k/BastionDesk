@@ -1,10 +1,17 @@
 import { z } from "zod";
 
 /** A wake-up pointer, never an authority for tenant identity or incident content. */
-export const deliverySchema = z.strictObject({
+const delivery = {
 	schemaVersion: z.literal(1),
-	type: z.literal("incident.classify.v1"),
 	jobId: z.uuid(),
+} as const;
+export const deliverySchema = z.strictObject({
+	...delivery,
+	type: z.literal("incident.classify.v1"),
+});
+const yaraDeliverySchema = z.strictObject({
+	...delivery,
+	type: z.literal("attachment.yara.v1"),
 });
 export type Delivery = z.infer<typeof deliverySchema>;
 export const topology = {
@@ -14,6 +21,13 @@ export const topology = {
 	deadExchange: "bastiondesk.dead.v1",
 	deadQueue: "bastiondesk.classifier.dead.v1",
 } as const;
+export const yaraTopology = {
+	...topology,
+	routingKey: "attachment.yara.v1",
+	queue: "bastiondesk.yara.v1",
+	deadQueue: "bastiondesk.yara.dead.v1",
+} as const;
+export type JobTopology = typeof topology | typeof yaraTopology;
 export const maxAttempts = 4;
 export const leaseSeconds = 120;
 export function failureDecision(attempt: number, retryable: boolean) {
@@ -22,7 +36,16 @@ export function failureDecision(attempt: number, retryable: boolean) {
 		? { state: "pending" as const, delaySeconds: [5, 30, 120][attempt - 1]! }
 		: { state: "dead" as const, delaySeconds: 0 };
 }
-export function decodeDelivery(body: Buffer): Delivery {
+export function decodeDelivery(body: Buffer): Delivery;
+export function decodeDelivery(
+	body: Buffer,
+	type: JobTopology["routingKey"],
+): Delivery | z.infer<typeof yaraDeliverySchema>;
+export function decodeDelivery(
+	body: Buffer,
+	type: JobTopology["routingKey"] = topology.routingKey,
+) {
 	if (body.length > 1024) throw new Error("MESSAGE_TOO_LARGE");
-	return deliverySchema.parse(JSON.parse(body.toString("utf8")));
+	const schema = type === yaraTopology.routingKey ? yaraDeliverySchema : deliverySchema;
+	return schema.parse(JSON.parse(body.toString("utf8")));
 }

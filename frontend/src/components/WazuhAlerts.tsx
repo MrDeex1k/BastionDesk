@@ -2,7 +2,15 @@ import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { useAuth } from "@/hooks/useAuth";
-import { wazuhRequest, WazuhRequestError, type WazuhAlert, type WazuhStatus } from "@/lib/wazuh";
+import {
+  wazuhRequest,
+  WazuhRequestError,
+  type WazuhAlert,
+  type WazuhAlertDetail,
+  type WazuhStatus,
+} from "@/lib/wazuh";
+import { IndicatorList } from "./IndicatorList";
+import { WazuhFileObservations } from "./WazuhFileObservations";
 import { WazuhSourceForm } from "./WazuhSourceForm";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -373,7 +381,7 @@ function AlertDetails({
     queryKey: [...key, "detail"],
     retry: false,
     gcTime: 0,
-    queryFn: ({ signal }) => load("detail", signal) as Promise<WazuhAlert>,
+    queryFn: ({ signal }) => load("detail", signal) as Promise<WazuhAlertDetail>,
   });
   const json = useQuery({
     queryKey: [...key, "json"],
@@ -410,6 +418,10 @@ function AlertDetails({
             </>
           )}
         </dl>
+        {detail.data?.indicators && <IndicatorList indicators={detail.data.indicators} />}
+        {detail.data?.fileObservations && (
+          <WazuhFileObservations observations={detail.data.fileObservations} />
+        )}
         {detail.isPending && <p role="status">Pobieranie szczegółów…</p>}
         {detail.isError && <p role="alert">{detail.error.message}</p>}
         {detail.isSuccess && !showJson && (

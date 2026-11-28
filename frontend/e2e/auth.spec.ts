@@ -3,7 +3,11 @@ import { test, expect, login } from "./fixtures";
 test("AUTH-E2E-01 login, role redirect, reload and logout", async ({ page, scenario }) => {
   await page.goto("/admin-dashboard");
   await expect(page).toHaveURL(/\/login/);
-  await login(page, { ...scenario.employee, password: "Wrong-password-123!" });
+  await login(
+    page,
+    { ...scenario.employee, password: "Wrong-password-123!" },
+    { alreadyAtLogin: true },
+  );
   await expect(page.getByLabel("Hasło", { exact: true })).toBeVisible();
   await expect(page.getByText(/Invalid email or password|Nieprawidłow/i).first()).toBeVisible();
   await page.getByLabel("Hasło", { exact: true }).fill(scenario.employee.password);
@@ -51,7 +55,7 @@ test("AUTH-E2E-03 password reset through captured email", async ({ page, scenari
   await page.getByLabel("Powtórz nowe hasło").fill(nextPassword);
   await page.getByRole("button", { name: /Zmień hasło|Zapisz/ }).click();
   await expect(page).toHaveURL(/\/login/);
-  await login(page, { ...scenario.employee, password: nextPassword });
+  await login(page, { ...scenario.employee, password: nextPassword }, { alreadyAtLogin: true });
   await expect(page.getByRole("heading", { name: "Panel Pracownika" })).toBeVisible();
 });
 

@@ -5,11 +5,17 @@ const scenarios = new Set([
   "AUTH-E2E-01",
   "AUTH-E2E-02",
   "AUTH-E2E-03",
+  "AUTH-E2E-04",
+  "AUTH-E2E-05",
   "INC-E2E-01",
   "INC-E2E-02",
   "ORG-E2E-01",
   "ORG-E2E-02",
   "ORG-E2E-03",
+  "WAZ-04",
+  "WAZ-06",
+  "YARA-E2E-01",
+  "YARA-E2E-02",
 ]);
 const browsers = new Set(["chromium", "firefox", "webkit"]);
 const statuses = new Set(["passed", "failed", "timedOut", "skipped", "interrupted"]);
@@ -28,6 +34,7 @@ const milliseconds = (value: unknown) =>
 // errors, source, attachments, URLs, headers, environment or console output.
 export function publicE2eReport(input: unknown) {
   const rows: Array<{ scenario: string; browser: string; status: string; durationMs: number }> = [];
+  let invalidResult = false;
   function visit(suites: unknown) {
     for (const value of array(suites)) {
       const suite = record(value);
@@ -39,10 +46,23 @@ export function publicE2eReport(input: unknown) {
           const results = array(test.results);
           for (const resultValue of results.length ? results : [{}]) {
             const result = record(resultValue);
+            const scenario = allowed(id, scenarios);
+            const browser = allowed(test.projectName, browsers);
+            const status = allowed(result.status, statuses);
+            const expectedSkip =
+              test.expectedStatus === "skipped" &&
+              status === "skipped" &&
+              (scenario === "WAZ-04" ||
+                scenario === "YARA-E2E-02" ||
+                (scenario === "AUTH-E2E-04" && browser !== "chromium"));
+            invalidResult ||=
+              scenario === "unknown" ||
+              browser === "unknown" ||
+              (status !== "passed" && !expectedSkip);
             rows.push({
-              scenario: allowed(id, scenarios),
-              browser: allowed(test.projectName, browsers),
-              status: allowed(result.status, statuses),
+              scenario,
+              browser,
+              status,
               durationMs: milliseconds(result.duration),
             });
           }
@@ -56,12 +76,10 @@ export function publicE2eReport(input: unknown) {
   const hasErrors = array(source.errors).length > 0;
   const state = !rows.length
     ? "unavailable"
-    : !hasErrors &&
-        rows.every(
-          (row) =>
-            row.status === "passed" && row.scenario !== "unknown" && row.browser !== "unknown",
-        )
-      ? "passed"
+    : !hasErrors && !invalidResult
+      ? rows.some((row) => row.status === "passed")
+        ? "passed"
+        : "unavailable"
       : "failed";
   return { schemaVersion: 1, state, hasErrors, rows };
 }

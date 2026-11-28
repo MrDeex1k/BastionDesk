@@ -1066,6 +1066,47 @@ curl "http://localhost:4567/api/incidents/my?page=1&limit=10" \
 
 **Opis:** Pobiera szczegółowe informacje o incydencie. Pracownicy widzą tylko własne incydenty.
 
+Odczyt szczegółów przez analityka lub administratora zwraca również `indicators`.
+Lista zawiera `kind`, znormalizowane `value` i `fields` wskazujące pola
+źródłowe w opisie zgłoszenia lub metadanych załącznika. Dotyczy to także tras
+`/api/analyst/incidents/:id` i `/api/admin/incidents/:id`.
+
+`ipReputation` informuje, czy organizacja ma klucz do AbuseIPDB. Analityk lub
+administrator może wysłać `POST /api/analyst/incidents/:id/ip-reputation` z
+`{"address":"…"}` i tokenem CSRF. Adres musi być wskaźnikiem tego zgłoszenia.
+Odpowiedź zawiera `status` o wartości `ready`, `not_public`, `not_configured`,
+`rate_limited` lub `unavailable`. `ready` zawiera dostawcę, adres, ocenę
+dostawcy, liczbę zgłoszeń oraz czas pobrania i wygaśnięcia wyniku.
+
+`urlhaus` informuje, czy backend ma skonfigurowaną ścieżkę do klucza URLhaus.
+Analityk i administrator mogą wysłać `POST /api/analyst/incidents/:id/urlhaus`
+z `{"url":"…"}` i tokenem CSRF. Wartość musi odpowiadać wskaźnikowi `url`
+z tego zgłoszenia. Odpowiedź zwraca `data.provider` o wartości `urlhaus`
+oraz `data.status` o wartości `matched`, `not_found`, `not_configured`,
+`rate_limited` lub `unavailable`. `matched` i `not_found` zawierają czasy
+`fetchedAt` i `expiresAt` wykazu. `not_found` oznacza brak adresu w pobranym
+wykazie. Audyt zapisuje wynik operacji bez adresu i klucza.
+
+`lookupProviders` zawiera identyfikatory źródeł aktywnych dla organizacji.
+Analityk i administrator mogą wysłać `POST /api/analyst/incidents/:id/ioc-enrichment`
+z tokenem CSRF oraz `{"provider":"virustotal","kind":"sha256","value":"…"}`.
+`provider` przyjmuje `otx`, `hybrid_analysis` lub `virustotal`. Backend sprawdza
+zgodność `kind` i `value` z IOC zgłoszenia. Hybrid Analysis i VirusTotal obsługują
+tylko `sha256`. OTX sprawdza IPv4, IPv6, domeny i hashe.
+`data.status` może mieć wartość `ready`, `not_found`, `not_configured`,
+`not_public`, `unsupported`, `unavailable` lub `rate_limited`. `ready` zawiera
+`summary` typu `pulses`, `sandbox` lub `engines`. `ready` i `not_found` zwracają
+`fetchedAt` i `expiresAt`. Każdy wynik zawiera identyfikator `provider`.
+
+Nowe zgłoszenia automatycznie zlecają sprawdzenia w aktywnych źródłach.
+`enrichmentChecks` w szczegółach dla analityka i administratora zwraca
+`provider`, `kind`, `value`, `result` i `retryAt`. `result: null` oznacza
+sprawdzenie oczekujące lub w trakcie. Endpointy ręczne zwracają `pending`,
+gdy zlecą pracę w tle, lub poprzedni wynik z `retryAt`, jeśli ponowienie
+musi poczekać. Po błędzie minimalny odstęp wynosi 60 sekund. Po udanym
+sprawdzeniu hasha, również z wynikiem `not_found`, ten sam hash można
+sprawdzić u tego samego dostawcy po 24 godzinach w obrębie organizacji.
+
 **Nagłówki:**
 ```
 Cookie: better-auth.session_token=<session_token>
@@ -2000,7 +2041,7 @@ Odpowiedzi Core używają `Cache-Control: private, no-store`.
 | `PATCH /api/wazuh/source` | JSON z `revision` i `enabled` | Aktualny stan `enabled` i nowa `revision`. Włączenie ponawia test połączenia. |
 | `DELETE /api/wazuh/source` | Parametr `revision` | `null` po usunięciu lokalnej konfiguracji. |
 | `GET /api/wazuh/alerts` | `revision` oraz opcjonalnie `level`, `from`, `to`, `cursor`, `view` | `alerts`, `cursor` i `nextCursor`. |
-| `GET /api/wazuh/alerts/detail` | `revision`, `indexName`, `documentId` | Podsumowanie konkretnego alertu. |
+| `GET /api/wazuh/alerts/detail` | `revision`, `indexName`, `documentId` | Podsumowanie alertu oraz tablice `indicators` i `fileObservations`. |
 | `GET /api/wazuh/alerts/json` | `revision`, `indexName`, `documentId` | `_index`, `_id` i pełny dokument `_source` z Wazuh. |
 
 JSON konfiguracji zawiera `origin` jako adres HTTPS z opcjonalnym portem,
@@ -2029,6 +2070,12 @@ Przekazuj tę samą wartość podczas odświeżania, zmiany filtrów i stronicow
 Odczyt bez kursora zastępuje poprzedni kontekst PIT dla widoku i unieważnia
 jego kursory. Bez `view` kontekst jest przypisany do zestawu filtrów w ramach
 sesji, organizacji i rewizji źródła.
+
+`indicators` wskazuje pola dokumentu, w których wystąpił dany wskaźnik.
+`fileObservations` opisuje wyniki obecne w dokumencie. Wpis YARA zawiera regułę
+dopasowania. Wpis VirusTotal rozróżnia dopasowanie, brak dopasowań, brak raportu
+i błąd. Gdy Wazuh podaje identyfikator zdarzenia źródłowego, odpowiedź zawiera
+go jako `sourceAlertId`.
 
 | HTTP | Kody błędów Wazuh |
 | --- | --- |

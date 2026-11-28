@@ -1,28 +1,28 @@
 import { traced, traceCarrier, SpanKind } from "./telemetry";
 import { connect, type Channel, type ConfirmChannel, type ConsumeMessage } from "amqplib";
 import { readFileSync } from "node:fs";
-import { decodeDelivery, deliverySchema, topology, type Delivery } from "./contract";
+import { decodeDelivery, topology, type JobTopology } from "./contract";
 
-export async function declareTopology(channel: Channel) {
-	await channel.assertExchange(topology.exchange, "direct", { durable: true });
-	await channel.assertExchange(topology.deadExchange, "direct", { durable: true });
-	await channel.assertQueue(topology.deadQueue, {
+export async function declareTopology(channel: Channel, queue: JobTopology = topology) {
+	await channel.assertExchange(queue.exchange, "direct", { durable: true });
+	await channel.assertExchange(queue.deadExchange, "direct", { durable: true });
+	await channel.assertQueue(queue.deadQueue, {
 		durable: true,
 		arguments: { "x-queue-type": "quorum" },
 	});
-	await channel.bindQueue(topology.deadQueue, topology.deadExchange, topology.routingKey);
-	await channel.assertQueue(topology.queue, {
+	await channel.bindQueue(queue.deadQueue, queue.deadExchange, queue.routingKey);
+	await channel.assertQueue(queue.queue, {
 		durable: true,
 		arguments: {
 			"x-queue-type": "quorum",
 			"x-overflow": "reject-publish",
-			"x-dead-letter-exchange": topology.deadExchange,
-			"x-dead-letter-routing-key": topology.routingKey,
+			"x-dead-letter-exchange": queue.deadExchange,
+			"x-dead-letter-routing-key": queue.routingKey,
 			"x-dead-letter-strategy": "at-least-once",
 			"x-delivery-limit": 20,
 		},
 	});
-	await channel.bindQueue(topology.queue, topology.exchange, topology.routingKey);
+	await channel.bindQueue(queue.queue, queue.exchange, queue.routingKey);
 }
 
 /** One in-flight publish per channel; a return must fail even when confirmed. */
@@ -31,13 +31,13 @@ export async function publishConfirmed(
 	jobId: string,
 	dead = false,
 	parent?: string | null,
+	queue: JobTopology = topology,
 ) {
 	return traced("messaging.publish", parent, SpanKind.PRODUCER, async () => {
-		const delivery = deliverySchema.parse({
-			schemaVersion: 1,
-			type: topology.routingKey,
-			jobId,
-		});
+		const delivery = Buffer.from(
+			JSON.stringify({ schemaVersion: 1, type: queue.routingKey, jobId }),
+		);
+		decodeDelivery(delivery, queue.routingKey);
 		let returned = false;
 		const onReturn = () => {
 			returned = true;
@@ -48,9 +48,9 @@ export async function publishConfirmed(
 			await Promise.race([
 				new Promise<void>((resolve, reject) => {
 					channel.publish(
-						dead ? topology.deadExchange : topology.exchange,
-						topology.routingKey,
-						Buffer.from(JSON.stringify(delivery)),
+						dead ? queue.deadExchange : queue.exchange,
+						queue.routingKey,
+						delivery,
 						{
 							persistent: true,
 							mandatory: true,
@@ -97,7 +97,7 @@ export function brokerOptions(environment: Record<string, string | undefined>) {
 	};
 }
 
-export async function openBroker(environment = process.env) {
+export async function openBroker(environment = process.env, queue: JobTopology = topology) {
 	const options = brokerOptions(environment);
 	const connection = await connect(options.url, options.socket);
 	const failed = () => console.error("[MESSAGING] Broker connection interrupted");
@@ -107,7 +107,7 @@ export async function openBroker(environment = process.env) {
 	publisher.on("error", failed);
 	consumer.on("error", failed);
 	try {
-		await declareTopology(publisher);
+		await declareTopology(publisher, queue);
 		await consumer.prefetch(1);
 	} catch (error) {
 		await connection.close().catch(() => {});
@@ -117,17 +117,19 @@ export async function openBroker(environment = process.env) {
 		connection,
 		publisher,
 		consumer,
-		async consume(handle: (delivery: Delivery, parent?: string) => Promise<void>) {
+		async consume(
+			handle: (delivery: ReturnType<typeof decodeDelivery>, parent?: string) => Promise<void>,
+		) {
 			return consumer.consume(
-				topology.queue,
+				queue.queue,
 				(message: ConsumeMessage | null) => {
 					if (!message) {
 						void connection.close().catch(() => {});
 						return;
 					}
-					let delivery: Delivery;
+					let delivery: ReturnType<typeof decodeDelivery>;
 					try {
-						delivery = decodeDelivery(message.content);
+						delivery = decodeDelivery(message.content, queue.routingKey);
 					} catch {
 						consumer.nack(message, false, false);
 						return;

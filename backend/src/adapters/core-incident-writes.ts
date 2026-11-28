@@ -1,3 +1,4 @@
+import { enqueueScan } from "../yara/store";
 import { enqueueClassification } from "../messaging/store";
 import { DomainError } from "../contracts/errors";
 import { makeCommand, withReceipt, recordFailure } from "./core-receipts";
@@ -7,6 +8,8 @@ import { getPgPool } from "../lib/database";
 import type { Incident } from "../types";
 import type { Command } from "../contracts/operations";
 import type { PoolClient } from "pg";
+import type { EnrichmentPlanner } from "../core/ioc/automatic";
+import { enqueueEnrichment } from "./ioc-enrichment-store";
 
 export async function withIncidentTransaction<T>(
 	work: (client: PoolClient) => Promise<T>,
@@ -26,7 +29,10 @@ export async function withIncidentTransaction<T>(
 		client.release();
 	}
 }
-export function createIncidentWrites(transaction = withIncidentTransaction): IncidentWrites {
+export function createIncidentWrites(
+	transaction = withIncidentTransaction,
+	planEnrichment?: EnrichmentPlanner,
+): IncidentWrites {
 	async function audited<T>(
 		command: Command,
 		work: (client: PoolClient) => Promise<T>,
@@ -110,6 +116,7 @@ export function createIncidentWrites(transaction = withIncidentTransaction): Inc
 			});
 		},
 		async create(identity, input, request) {
+			const targets = (await planEnrichment?.(identity.organizationId, input)) ?? [];
 			const stableMetadata = (metadata: Record<string, unknown>) => ({
 				originalName: metadata.originalName ?? null,
 				size: metadata.size ?? null,
@@ -146,6 +153,21 @@ export function createIncidentWrites(transaction = withIncidentTransaction): Inc
 							],
 						);
 						await enqueueClassification(client, command, input.id);
+						await enqueueEnrichment(client, identity.organizationId, input.id, targets);
+						if (
+							input.userAttachmentPath &&
+							typeof input.userAttachmentMetadata.contentHash === "string"
+						) {
+							await enqueueScan(
+								client,
+								{
+									organizationId: identity.organizationId,
+									incidentId: input.id,
+									storageKey: input.userAttachmentPath,
+								},
+								input.userAttachmentMetadata.contentHash,
+							);
+						}
 						return {
 							value: result.rows[0]!,
 							resourceId: input.id,

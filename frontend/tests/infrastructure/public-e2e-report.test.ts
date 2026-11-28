@@ -77,6 +77,21 @@ test("missing results and runner errors cannot produce a passing summary", () =>
   expect(publicE2eReport(fixture("skipped")).state).toBe("failed");
 });
 
+test("reports expected browser skips and recognizes the YARA and Wazuh scenarios", () => {
+  const spec = (title: string, projectName: string, status: string) => ({
+    title,
+    tests: [{ projectName, expectedStatus: status, results: [{ status, duration: 0 }] }],
+  });
+  const skippedPassKey = spec("AUTH-E2E-04 passkey", "firefox", "skipped");
+  const skippedWazuh = spec("WAZ-04 live indexer", "chromium", "skipped");
+  const passedYara = spec("YARA-E2E-02 legacy", "webkit", "passed");
+  const summary = (specs: ReturnType<typeof spec>[]) => publicE2eReport({ suites: [{ specs }] });
+  expect(summary([skippedPassKey, skippedWazuh, passedYara]).state).toBe("passed");
+  expect(summary([skippedPassKey, skippedWazuh]).state).toBe("unavailable");
+  skippedPassKey.tests[0]!.projectName = "chromium";
+  expect(summary([skippedPassKey, passedYara]).state).toBe("failed");
+});
+
 test("publish command emits only safe files and removes stale output on invalid input", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bastiondesk-public-report-"));
   const frontend = join(directory, "frontend");

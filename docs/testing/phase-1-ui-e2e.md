@@ -29,11 +29,22 @@ bun run test:e2e          # izolowany Compose + Chromium + sprzątanie
 bun run test:e2e:all      # ten sam kontrakt w Chromium, Firefox i WebKit
 ```
 
-Linux wymaga bibliotek systemowych przeglądarek; można je przygotować przez
-`playwright install --with-deps chromium firefox webkit`. Docker Compose,
-OpenSSL, Bun zgodny z rootowym `packageManager` i Node.js dla runnera
-Playwright muszą być dostępne.
+Linux wymaga bibliotek systemowych przeglądarek. Można je przygotować przez
+`playwright install --with-deps chromium firefox webkit`. Do uruchomienia
+potrzebne są Docker Compose, OpenSSL, Bun zgodny z rootowym `packageManager`
+oraz Node.js `22.18` lub nowszy.
 Nie są potrzebne produkcyjne sekrety, token Hugging Face ani zewnętrzny SMTP.
+
+Runner korzysta z `flashwright-test` przypiętego przez alias npm
+`@playwright/test`. Instalacja przeglądarek, importy, konfiguracja i CLI
+zachowują nazwy Playwright. Testy uruchamiają świeży kontekst, czekają na
+animacje i zachowują pełny czas oczekiwania asercji. Skrypty wyłączają sesję
+utrzymywaną między uruchomieniami, ponieważ każde uruchomienie Compose
+tworzy inny stos i port. [Przewodnik migracji Flashwright](https://github.com/xcodebeast/flashwright/blob/main/docs/migration.md)
+
+Na macOS fixture Firefoksa przydziela osobny tymczasowy katalog danych każdemu
+workerowi i usuwa go po zakończeniu. Umożliwia to start Firefoksa 157 na macOS 27
+z zachowaniem uprawnień systemowych. [Zgłoszenie błędu Firefoksa](https://github.com/microsoft/playwright/issues/42768)
 
 Do porównania ze ścieżką migracyjną uruchom osobną, jednorazową instalację:
 
@@ -51,7 +62,7 @@ Nie kieruj fixture do instalacji z rzeczywistymi kontami.
 ## Testy komponentowe
 
 `frontend/bunfig.toml` ogranicza Bun do `tests` (komponenty i infrastruktura);
-`test:components` wybiera tylko `tests/component`. Playwright posiada
+`test:components` wybiera tylko `tests/component`. Flashwright posiada
 osobny katalog `e2e`. Runnerem jest `bun:test`; `jest-dom` dostarcza tylko
 matchery, nie runner Jest.
 
@@ -85,7 +96,7 @@ po zmianie kolejności wszystkie scenariusze nadal muszą przechodzić.
 Każdy scenariusz ma unikalny tenant oraz własne konta admina, analityka i
 pracownika. Przygotowanie przechodzi przez publiczne API: rejestrację,
 Mailpit, weryfikację emaila, logowanie i aktywację organizacji. Cookies
-pozostają w kontekstach Playwright; nie utrzymujemy wspólnych plików sesji.
+pozostają w kontekstach Flashwright; nie utrzymujemy wspólnych plików sesji.
 UUID oddziela dane nawet pomiędzy równoległymi przebiegami. Jeden worker
 ogranicza obciążenie lokalnej instalacji i rzeczywistych limitów auth.
 
@@ -94,11 +105,20 @@ ogranicza obciążenie lokalnej instalacji i rzeczywistych limitów auth.
 | AUTH-E2E-01 | Ochrona trasy, błędne i poprawne hasło, przekierowanie według roli, odświeżenie i wylogowanie. |
 | AUTH-E2E-02 | Rejestracja w przeglądarce, email weryfikacyjny i widok użytkownika bez organizacji. |
 | AUTH-E2E-03 | Reset hasła przez UI, wiadomość Mailpit i logowanie nowym hasłem. |
+| AUTH-E2E-04–05 | Wirtualny PassKey w Chromium przez CDP oraz odrzucenie sfałszowanej tożsamości i braku tokenu CSRF. |
 | INC-E2E-01 | Zgłoszenie z plikami, przypisanie, trwała notatka, raport i sprawozdanie, rozwiązanie, pobranie raportu ze sprawdzeniem bajtów, widok admina. |
 | INC-E2E-02 | Dostępność zgłoszenia przy niedostępnym klasyfikatorze. |
 | ORG-E2E-01 | Dodawanie członka, zmiana roli, anulowanie usunięcia i potwierdzone usunięcie. |
 | ORG-E2E-02 | Przełączenie aktywnej organizacji i izolacja widocznych zgłoszeń. |
 | ORG-E2E-03 | Utworzenie konta z organizacją przez UI i panel administratora po weryfikacji. |
+| WAZ-04, WAZ-06 | Odczyt rzeczywistego alertu z Indexera po podłączeniu laboratorium oraz automatyczne odświeżanie widoku z użyciem fixture. |
+| YARA-E2E-01–02 | Automatyczne blokowanie dopasowanego pliku i ręczny skan starszego załącznika w izolowanym Compose. |
+
+`--yara` i `--wazuh` wybierają scenariusze integracji. Dodanie `--all` uruchamia
+wybrane testy w trzech przeglądarkach. WAZ-04 wymaga własnego Indexera i
+konfiguracji opisanej w [instrukcji Wazuh](../integrations/wazuh-discovery.md).
+Po podaniu tej konfiguracji `test:e2e:all` obejmuje również WAZ-04.
+Starszy załącznik YARA jest przygotowywany przez pełny przebieg lokalny.
 
 1.0.3 nie ma przełącznika organizacji w UI. ORG-E2E-02 zmienia kontekst przez
 publiczne API sesji i sprawdza widok po przeładowaniu. Test komponentowy
@@ -167,6 +187,10 @@ załączniki są pomijane. Nieznane wartości dostają etykietę `unknown`; brak
 wyników daje `unavailable`, a błędny JSON zatrzymuje generowanie. Nie jest to
 redakcja regexem nad surowymi plikami. Przy dodawaniu scenariusza trzeba
 uzupełnić dozwolone ID w generatorze raportu.
+Raport zachowuje przewidziane pominięcia (PassKey poza Chromium, WAZ-04 bez
+Indexera i starszy załącznik YARA poza jednorazowym Compose) z wynikiem
+`skipped`. Do zaliczenia przebiegu potrzebny jest co najmniej jeden zaliczony
+scenariusz oraz brak nieprzewidzianych pominięć i błędów.
 
 Raport pokazuje, który scenariusz się nie powiódł; pełną diagnostykę uzyskuje
 się przez lokalne odtworzenie błędu. Przy udostępnianiu wyników należy

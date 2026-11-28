@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import type { IncidentDetail, IncidentDetailResponse } from "@/ApiModel";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, readJsonError } from "@/lib/api";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -10,6 +10,8 @@ import { Skeleton } from "./ui/skeleton";
 import { Textarea } from "./ui/textarea";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useAttachmentScan } from "./incident-details/attachment-scan";
+import { IndicatorList } from "./IndicatorList";
 import { IncidentFileCard } from "./incident-details/IncidentFileCard";
 import { UploadFileDialog } from "./incident-details/UploadFileDialog";
 import { useIncidentUpload } from "./incident-details/useIncidentUpload";
@@ -177,20 +179,9 @@ function useIncidentDetailsActions({
       if (!response.ok) throw new Error("Failed to unassign incident");
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Incydent został oddany do puli");
-      queryClient.setQueryData(
-        ["incident", incidentId],
-        (old: IncidentDetailResponse | undefined) => ({
-          ...old,
-          data: {
-            ...old?.data,
-            analystId: null,
-            analystName: undefined,
-            status: "Zgłoszony",
-          } as IncidentDetail,
-        }),
-      );
+      await queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
       onBack();
     },
@@ -211,7 +202,9 @@ function useIncidentDetailsActions({
     },
     onSuccess: (_data: unknown, variables) => {
       toast.success(`Status zmieniony na: ${variables}`);
-      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["incident", incidentId],
+      });
       void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
@@ -232,7 +225,9 @@ function useIncidentDetailsActions({
     },
     onSuccess: () => {
       toast.success("Incydent oznaczony jako rozwiązany");
-      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["incident", incidentId],
+      });
       void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
     },
     onError: () => {
@@ -254,7 +249,9 @@ function useIncidentDetailsActions({
     },
     onSuccess: () => {
       toast.success("Notatka została zapisana");
-      void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["incident", incidentId],
+      });
     },
     onError: () => {
       toast.error("Nie udało się zapisać notatki");
@@ -276,8 +273,13 @@ function useIncidentDetailsActions({
         const response = await apiFetch(url);
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to download file: ${errorText}`);
+          if (type === "attachments") {
+            void queryClient.invalidateQueries({
+              queryKey: ["yara-scan", incidentId],
+            });
+          }
+          toast.error(await readJsonError(response, "Nie udało się pobrać pliku"));
+          return;
         }
 
         const blob = await response.blob();
@@ -294,7 +296,7 @@ function useIncidentDetailsActions({
         toast.error("Nie udało się pobrać pliku");
       }
     },
-    [incidentId, mode],
+    [incidentId, mode, queryClient],
   );
 
   const handleTransitionClick = useCallback(
@@ -325,7 +327,7 @@ function useIncidentDetailsActions({
 
 export function IncidentDetails({ incidentId, onBack, mode = "employee" }: IncidentDetailsProps) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, organizationId, session, role } = useAuth();
   const currentAnalystId = user?.id || null;
   const [noteDraft, setNoteDraft] = useState<{
     incidentId: string | null;
@@ -345,7 +347,9 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
   } = useIncidentUpload({ incidentId, queryClient });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["incident", incidentId, mode],
+    queryKey: ["incident", incidentId, mode, organizationId, session?.session.id, role],
+    refetchInterval: (query) =>
+      query.state.data?.data.enrichmentChecks?.some(({ result }) => !result) ? 4000 : false,
     queryFn: async () => {
       // --- REAL SERVER IMPLEMENTATION ---
       const endpoint =
@@ -361,6 +365,7 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
     },
   });
   const incident = data?.data;
+  const attachmentScan = useAttachmentScan(incidentId, Boolean(incident?.userAttachmentPath));
   const incidentAnalystNote = incident?.analystNote;
   const incidentIdValue = incident?.id;
   const incidentStatus = incident?.status;
@@ -477,6 +482,17 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
             </div>
           </div>
 
+          {mode !== "employee" && incident.indicators && (
+            <IndicatorList
+              indicators={incident.indicators}
+              reputationIncidentId={incident.ipReputation ? incident.id : undefined}
+              urlhausIncidentId={incident.urlhaus ? incident.id : undefined}
+              incidentId={incident.id}
+              lookupProviders={incident.lookupProviders}
+              enrichmentChecks={incident.enrichmentChecks}
+            />
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <IncidentFileCard
               title="Zrzut ekranu"
@@ -496,6 +512,7 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
               icon={Paperclip}
               isAssignedToMe={isAssignedToMe}
               mode={mode}
+              scan={attachmentScan}
               onDownload={(filename) => downloadFile("attachments", filename)}
             />
           </div>
