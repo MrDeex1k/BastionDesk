@@ -10,6 +10,7 @@ import type { Command } from "../contracts/operations";
 import type { PoolClient } from "pg";
 import type { EnrichmentPlanner } from "../core/ioc/automatic";
 import { enqueueEnrichment } from "./ioc-enrichment-store";
+import { enqueueCorrelation } from "../correlation/service";
 
 export async function withIncidentTransaction<T>(
 	work: (client: PoolClient) => Promise<T>,
@@ -32,6 +33,7 @@ export async function withIncidentTransaction<T>(
 export function createIncidentWrites(
 	transaction = withIncidentTransaction,
 	planEnrichment?: EnrichmentPlanner,
+	queueCorrelation = false,
 ): IncidentWrites {
 	async function audited<T>(
 		command: Command,
@@ -154,6 +156,10 @@ export function createIncidentWrites(
 						);
 						await enqueueClassification(client, command, input.id);
 						await enqueueEnrichment(client, identity.organizationId, input.id, targets);
+						if (queueCorrelation)
+							await enqueueCorrelation(client, identity.organizationId, {
+								reportId: input.id,
+							});
 						if (
 							input.userAttachmentPath &&
 							typeof input.userAttachmentMetadata.contentHash === "string"

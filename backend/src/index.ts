@@ -141,9 +141,18 @@ const { yaraScanner } = await import("./yara/scanner");
 const { coreYaraRoutes } = await import("./adapters/core-yara-http");
 const { getObjectBuffer } = await import("./lib/storage");
 const scans = attachmentScans(getPgPool(), withIncidentTransaction);
-const wazuhRoutes = coreWazuhRoutes(
+const wazuhSources = wazuhSourceStore(getPgPool());
+const wazuh = wazuhService(wazuhSources, wazuhRefreshSeconds());
+const wazuhRoutes = coreWazuhRoutes(coreIdentity, wazuh);
+const { coreCorrelationRoutes } = await import("./adapters/core-correlation-http");
+const { correlationCases } = await import("./adapters/core-correlation-store");
+const { startCorrelationWorker } = await import("./correlation/service");
+const { startRiskWorker } = await import("./risk/store");
+const correlationRoutes = coreCorrelationRoutes(
 	coreIdentity,
-	wazuhService(wazuhSourceStore(getPgPool()), wazuhRefreshSeconds()),
+	correlationCases(getPgPool(), withIncidentTransaction),
+	wazuh,
+	wazuhSources,
 );
 const { coreIncidentReads } = await import("./adapters/core-incident-reads");
 const {
@@ -167,7 +176,7 @@ const { enrichmentServices, startEnrichmentWorker } =
 	await import("./adapters/ioc-enrichment-worker");
 const iocStore = enrichmentStore(getPgPool(), withIncidentTransaction);
 const iocServices = enrichmentServices(providerLookups, reputation, urlhaus);
-const coreIncidentWrites = createIncidentWrites(withIncidentTransaction, iocServices.plan);
+const coreIncidentWrites = createIncidentWrites(withIncidentTransaction, iocServices.plan, true);
 const readIocChecks = async (org: string, incidentId: string) => {
 	const [enabled, checks] = await Promise.all([
 		iocServices.enabled(org),
@@ -189,9 +198,11 @@ const scheduleIocCheck = async (
 	);
 };
 const { iocLookupAudit } = await import("./adapters/core-ioc-audit");
-const { assertCoreSchema, assertIocEnrichmentSchema } = await import("./adapters/core-schema");
+const { assertCoreSchema, assertIocEnrichmentSchema, assertCorrelationSchema } =
+	await import("./adapters/core-schema");
 await assertCoreSchema();
 await assertIocEnrichmentSchema();
+await assertCorrelationSchema();
 await (await import("./yara/schema")).assertYaraSchema(getPgPool());
 const yaraRoutes = coreYaraRoutes(
 	coreIdentity,
@@ -205,6 +216,7 @@ const core = await (
 ).createCoreApplication([
 	...wazuhRoutes,
 	...yaraRoutes,
+	...correlationRoutes,
 	...coreAdminRoutes.map((route) => ({
 		...route,
 		handle: coreAdminHandler(coreIdentity, {
@@ -273,7 +285,7 @@ const core = await (
 	},
 ]);
 app.get("/api/core/health", core.http);
-for (const route of [...wazuhRoutes, ...yaraRoutes])
+for (const route of [...wazuhRoutes, ...yaraRoutes, ...correlationRoutes])
 	app.route(route.paths)[route.method](apiRateLimiter, core.http);
 
 for (const route of coreAdminRoutes) {
@@ -311,6 +323,10 @@ app.use(errorHandler);
 
 // Start Server
 const stopEnrichment = startEnrichmentWorker(iocStore, iocServices);
+const stopCorrelation = startCorrelationWorker(getPgPool(), wazuh);
+const stopRisk = startRiskWorker(withIncidentTransaction, (error) =>
+	console.error("[RISK] Recalculation failed", error),
+);
 const server = mtlsServer("backend", app).listen(env.PORT, () => {
 	console.log(`Core listening with mTLS on ${env.PORT}`);
 });
@@ -332,7 +348,7 @@ async function gracefulShutdown(signal: string) {
 		console.log("HTTP server closed");
 
 		try {
-			await stopEnrichment();
+			await Promise.all([stopEnrichment(), stopCorrelation(), stopRisk()]);
 			await core.close();
 			await closeDatabase();
 			console.log("Database connections closed");

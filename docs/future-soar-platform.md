@@ -888,6 +888,9 @@ providera nie blokuje obsługi incydentu.
 
 ## Faza 8 — korelacja i scoring ryzyka
 
+[Specyfikacja fazy 8](integrations/stage-8-correlation-spec.md) zawiera
+uzgodnione przepływy, reguły decyzyjne i scenariusze odbioru.
+
 ### Cel
 
 Łączyć zgłoszenia, alerty, assety, IOC i wyniki analizy w wyjaśnialny incydent.
@@ -905,16 +908,19 @@ providera nie blokuje obsługi incydentu.
 2. **Dane testowe i pierwsza reguła.** Przygotować oznaczone pary zgłoszenie–alert
    dla trafień, pomyłek i przypadków niejednoznacznych. Uwzględnić wspólne IP,
    zmianę adresu, identyczne ID agenta w różnych źródłach, opóźniony alert,
-   duplikat i podobne zdarzenia z różnych organizacji. Wybrać pierwszą regułę
-   łączącą wiarygodną zgodność zasobu lub IOC z oknem czasu. Zapisać sygnały,
-   czas, odwołania do dowodów i wersję reguły przy każdej sugestii.
+   duplikat i podobne zdarzenia z różnych organizacji. Pierwsza reguła łączy
+   zgodność potwierdzonego zasobu lub SHA-256 z konfigurowalnym oknem czasu,
+   domyślnie ±24 godziny. Zapisać sygnały, czas, odwołania do dowodów i wersję
+   reguły przy każdej sugestii.
 
-3. **Korelacja asynchroniczna.** Uruchomić analizę na żądanie dla jednego
-   zgłoszenia, a po potwierdzeniu przepływu zlecać ją automatycznie dla nowych
-   zgłoszeń. Użyć istniejącego mechanizmu trwałych zadań. Kolejne reguły ocenią
+3. **Korelacja asynchroniczna.** Uruchomić analizę na żądanie, a po
+   potwierdzeniu przepływu zlecać ją automatycznie po nowym zgłoszeniu lub
+   utworzeniu incydentu z alertu. Użyć trwałej kolejki PostgreSQL z dzierżawą
+   zadań i ponawianiem po błędzie. Kolejne reguły ocenią
    agent ID, użytkownika, hostname, IP, hash, proces i MITRE ATT&CK, zależnie
-   od dostępności tych danych. Deduplikacja ma obejmować organizację, źródło,
-   parę dokumentów i wersję reguł. Błąd Indexera ma wstrzymywać kolejną próbę
+   od dostępności tych danych. Deduplikacja obejmuje organizację, źródło
+   i parę dokumentów. Sugestia zapisuje wersję reguły, a decyzja analityka
+   pozostaje przypisana do pary po zmianie wersji. Błąd Indexera wstrzymuje kolejną próbę
    korelacji z tego źródła przy zachowaniu obsługi zgłoszenia.
 
 4. **Ocena ryzyka.** Utrzymać trzy odrębne wartości. `severity` opisuje
@@ -926,8 +932,9 @@ providera nie blokuje obsługi incydentu.
    przypadkach i zmierzyć precision, recall oraz fałszywe trafienia i pominięcia
    na osobnym zestawie odbiorczym.
 
-5. **Widok analityka i ponowna analiza.** Pokazać w szczegółach incydentu
-   sugestie, uzasadnienie, dowody i składowe oceny. Analityk może zaakceptować
+5. **Widok analityka i ponowna analiza.** Umożliwić utworzenie incydentu z
+   alertu Wazuh i ręczne powiązanie z obu widoków. Pokazać w szczegółach
+   incydentu sugestie, uzasadnienie, dowody i składowe oceny. Analityk może zaakceptować
    lub odrzucić sugestię, ręcznie połączyć lub rozłączyć dowody oraz podać
    powód korekty. Każda zmiana zapisuje aktora, czas i uzasadnienie. Ponowne
    przeliczenie według nowej wersji reguł zachowuje poprzednią ocenę oraz

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Activity, User, UserX, Plus } from "lucide-react";
+import { Cases } from "../components/correlation/Cases";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { WazuhAlerts } from "../components/WazuhAlerts";
 import { AnalystIncidentList } from "../components/AnalystIncidentList";
@@ -42,7 +43,7 @@ export function AnalystDashboardPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="mb-6 flex flex-wrap items-center justify-center gap-4">
-          <TabsList className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-1">
+          <TabsList className="h-auto flex-wrap rounded-lg border border-zinc-800 bg-zinc-950/70 p-1">
             <TabsTrigger
               value="assigned"
               className="px-6 py-2 text-white/85 hover:text-white data-active:bg-blue-600 data-active:text-white"
@@ -58,6 +59,7 @@ export function AnalystDashboardPage() {
               Nieprzypisane
             </TabsTrigger>
             <TabsTrigger value="wazuh">Alerty Wazuh</TabsTrigger>
+            <TabsTrigger value="cases">Incydenty analityczne</TabsTrigger>
           </TabsList>
 
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -91,6 +93,7 @@ export function AnalystDashboardPage() {
         <TabsContent value="wazuh" className="mt-0 w-full">
           {activeTab === "wazuh" && <WazuhAlerts />}
         </TabsContent>
+        <TabsContent value="cases">{activeTab === "cases" && <Cases />}</TabsContent>
       </Tabs>
     </div>
   );

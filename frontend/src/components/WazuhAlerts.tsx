@@ -1,3 +1,4 @@
+import { AlertTriage } from "./correlation/Triage";
 import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
@@ -418,6 +419,11 @@ function AlertDetails({
             </>
           )}
         </dl>
+        <AlertTriage
+          key={JSON.stringify([revision, indexName, documentId])}
+          alert={alert}
+          revision={revision}
+        />
         {detail.data?.indicators && <IndicatorList indicators={detail.data.indicators} />}
         {detail.data?.fileObservations && (
           <WazuhFileObservations observations={detail.data.fileObservations} />

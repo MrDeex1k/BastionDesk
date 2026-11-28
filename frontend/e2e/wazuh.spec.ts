@@ -93,7 +93,10 @@ function latestAgentAlert(ca: string, password: string, since?: string) {
         ...(tlsName && {
           checkServerIdentity: (_host, cert) => checkServerIdentity(tlsName, cert),
         }),
-        headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body) },
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+        },
       },
       (response) => {
         let data = "";
@@ -243,6 +246,73 @@ test("WAZ-04 agent 001 from the Indexer to the analyst, including the full JSON"
     await page.keyboard.press("Escape");
   }
 
+  await found.row.getByRole("button", { name: `Szczegóły alertu ${hit._id}`, exact: true }).click();
+  await dialog.getByRole("button", { name: "Utwórz incydent lub powiąż zgłoszenie" }).click();
+  await dialog.getByRole("textbox", { name: "Tytuł" }).fill("Incydent z alertu " + scenario.id);
+  const createCase = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/correlation/cases") && response.request().method() === "POST",
+  );
+  await dialog.getByRole("button", { name: "Utwórz incydent", exact: true }).click();
+  const createdCase = await createCase;
+  expect(createdCase.ok(), `Utworzenie incydentu: ${await createdCase.text()}`).toBe(true);
+  const { id: caseId } = (await createdCase.json()).data;
+  const casePath = "/api/correlation/cases/" + caseId;
+  const { data: initialCase } = await api(scenario.analyst.api, casePath);
+  expect(initialCase.evidence).toEqual([
+    expect.objectContaining({
+      alert: expect.objectContaining({ documentId: hit._id }),
+    }),
+  ]);
+  expect((await scenario.employee.api.get(casePath)).status()).toBe(403);
+
+  const csrf = await scenario.employee.api.get("/api/csrf");
+  const token = (await csrf.json()).data.token;
+  const report = await scenario.employee.api.post("/api/incidents", {
+    multipart: { userDescription: "Zgłoszenie do korelacji " + scenario.id },
+    headers: { "x-csrf-token": token, origin: new URL(csrf.url()).origin },
+  });
+  expect(report.ok()).toBe(true);
+  const { id: reportId } = (await report.json()).data;
+  const reportPath = "/api/correlation/reports/" + reportId;
+  const { data: candidates } = await api(
+    scenario.analyst.api,
+    "/api/correlation/alerts?query=" + encodeURIComponent(hit._id),
+  );
+  const selected = candidates.find((candidate: AlertKey) => candidate.documentId === hit._id);
+  expect(selected).toMatchObject({ ...key, revision, agentId });
+  if (Math.abs(Date.now() - timestamp) < 24 * 60 * 60_000 - 60_000) {
+    await test.step("Confirming an agent automatically suggests a matching alert", async () => {
+      await api(scenario.analyst.api, reportPath + "/asset", {
+        sourceId: selected.sourceId,
+        agentId,
+      });
+      await expect
+        .poll(async () => (await api(scenario.analyst.api, reportPath)).data.suggestions)
+        .toContainEqual(
+          expect.objectContaining({
+            alert: expect.objectContaining({ agentId }),
+            signals: expect.arrayContaining(["asset:" + agentId]),
+          }),
+        );
+    });
+  } else {
+    test.info().annotations.push({
+      type: "historical-alert",
+      description: "The live alert is outside the automatic correlation window.",
+    });
+  }
+  const { data: linked } = await api(scenario.analyst.api, "/api/correlation/links", {
+    reportId,
+    alert: { ...key, revision },
+  });
+  expect(linked.id).toBe(caseId);
+  expect((await api(scenario.analyst.api, reportPath)).data.caseId).toBe(caseId);
+  expect((await api(scenario.analyst.api, casePath)).data.evidence).toContainEqual(
+    expect.objectContaining({ reportId }),
+  );
+  await page.keyboard.press("Escape");
+
   const other = await api(scenario.admin.api, "/api/auth/organization/create", {
     name: `Other ${scenario.id}`,
     slug: `other-${scenario.id}`,
@@ -255,15 +325,20 @@ test("WAZ-04 agent 001 from the Indexer to the analyst, including the full JSON"
       email: scenario.analyst.email,
       role: "analityk",
     });
-    await api(page.request, "/api/auth/organization/set-active", { organizationId: other.id });
+    await api(page.request, "/api/auth/organization/set-active", {
+      organizationId: other.id,
+    });
     for (const path of [listPath, detailPath, jsonPath])
       expect((await page.request.get(path)).status()).toBe(403);
+    expect((await page.request.get(casePath)).status()).toBe(404);
     await page.reload();
     await page.getByRole("tab", { name: "Alerty Wazuh", exact: true }).click();
     await expect(page.getByText("Organizacja nie ma skonfigurowanego źródła Wazuh.")).toBeVisible();
     await expect(page.getByRole("table", { name: "Alerty Wazuh" })).toHaveCount(0);
   } finally {
-    await api(scenario.admin.api, "/api/auth/organization/delete", { organizationId: other.id });
+    await api(scenario.admin.api, "/api/auth/organization/delete", {
+      organizationId: other.id,
+    });
     await api(scenario.admin.api, "/api/auth/organization/set-active", {
       organizationId: scenario.organizationId,
     });
@@ -334,7 +409,9 @@ test("WAZ-06 refresh interval, inactive views, historical pages and manual recov
   await page.clock.install();
   await page.route("**/api/wazuh/source?*", (route) =>
     route.fulfill({
-      json: { data: { source: { enabled: true, revision }, refreshSeconds: seconds } },
+      json: {
+        data: { source: { enabled: true, revision }, refreshSeconds: seconds },
+      },
     }),
   );
   await page.route("**/api/wazuh/alerts?*", (route) => {
@@ -342,7 +419,9 @@ test("WAZ-06 refresh interval, inactive views, historical pages and manual recov
     if (unavailable)
       return route.fulfill({
         status: 502,
-        json: { error: { message: "Nie udało się połączyć z Indexerem Wazuh." } },
+        json: {
+          error: { message: "Nie udało się połączyć z Indexerem Wazuh." },
+        },
       });
     const secondPage = new URL(route.request().url()).searchParams.get("cursor") === "older";
     const alerts = secondPage
@@ -393,7 +472,10 @@ test("WAZ-06 refresh interval, inactive views, historical pages and manual recov
   await expect(refresh).toBeEnabled();
 
   await page.evaluate(() => {
-    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
     document.dispatchEvent(new Event("visibilitychange"));
   });
   const beforeHidden = requests;
@@ -403,7 +485,10 @@ test("WAZ-06 refresh interval, inactive views, historical pages and manual recov
   await expect(refresh).toHaveCount(0);
   const beforeInactive = requests;
   await page.evaluate(() => {
-    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await page.clock.fastForward(61_000);

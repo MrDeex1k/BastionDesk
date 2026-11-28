@@ -2,6 +2,7 @@ import {
 	keepAliveMs,
 	wazuhIndexer,
 	type DocumentKey,
+	type CandidateFilters,
 	type SearchFilters,
 	type Sort,
 } from "../adapters/wazuh-indexer";
@@ -154,7 +155,11 @@ export function wazuhService(store: Store, refreshSeconds: number, indexer = waz
 				refreshSeconds,
 				settings:
 					source && admin
-						? { origin: source.origin, username: source.username, ca: source.ca_pem }
+						? {
+								origin: source.origin,
+								username: source.username,
+								ca: source.ca_pem,
+							}
 						: undefined,
 			};
 		},
@@ -255,6 +260,57 @@ export function wazuhService(store: Store, refreshSeconds: number, indexer = waz
 			} finally {
 				cursor.snapshot.activeReads--;
 			}
+		},
+		async correlationCandidates(
+			org: string,
+			assetSource: string | null,
+			filters: CandidateFilters,
+			request: AbortSignal,
+		) {
+			const signal = operationDeadline(request);
+			const source = await withinDeadline(signal, () => store.get(org));
+			if (!source?.enabled) return [];
+			const sourceId = source.source_id ?? source.revision;
+			const remote = indexer(await withinDeadline(signal, () => sourceConnection(source)));
+			const rows = await remote.candidates(
+				{
+					...filters,
+					agentId: assetSource === sourceId ? filters.agentId : undefined,
+				},
+				signal,
+			);
+			await activeSource(org, source.revision, signal);
+			return rows.map((row) => ({ ...row, sourceId }));
+		},
+		async correlationPicker(
+			org: string,
+			filters: { from: string; to: string; query: string },
+			request: AbortSignal,
+		) {
+			const signal = operationDeadline(request);
+			const source = await withinDeadline(signal, () => store.get(org));
+			if (!source?.enabled) return [];
+			const remote = indexer(await withinDeadline(signal, () => sourceConnection(source)));
+			const rows = await remote.correlationPicker(filters, signal);
+			await activeSource(org, source.revision, signal);
+			return rows.map((row) => ({
+				...row,
+				revision: source.revision,
+				sourceId: source.source_id ?? source.revision,
+			}));
+		},
+		async correlationAlert(
+			org: string,
+			revision: string,
+			key: DocumentKey,
+			request: AbortSignal,
+		) {
+			const signal = operationDeadline(request);
+			const source = await activeSource(org, revision, signal);
+			const remote = indexer(await withinDeadline(signal, () => sourceConnection(source)));
+			const row = await remote.correlationAlert(key, signal);
+			await activeSource(org, revision, signal);
+			return { ...row, sourceId: source.source_id ?? revision };
 		},
 		async document(
 			org: string,

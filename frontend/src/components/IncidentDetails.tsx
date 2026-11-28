@@ -1,3 +1,4 @@
+import { ReportTriage } from "./correlation/Triage";
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -493,6 +494,7 @@ export function IncidentDetails({ incidentId, onBack, mode = "employee" }: Incid
             </div>
           </div>
 
+          {mode !== "employee" && <ReportTriage reportId={incident.id} />}
           {mode !== "employee" && incident.indicators && (
             <IndicatorList
               indicators={incident.indicators}

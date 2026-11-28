@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { ShieldCheck, Building2, Activity, ShieldAlert, ScanSearch } from "lucide-react";
+import { Cases } from "../components/correlation/Cases";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 
 const AdminIncidentList = lazy(() =>
@@ -51,7 +52,7 @@ export function AdminDashboardPage() {
       <div className="w-full max-w-7xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full gap-8">
           <div className="flex justify-center">
-            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-1 border border-zinc-800 bg-zinc-950/80 sm:grid-cols-4">
+            <TabsList className="grid h-auto w-full max-w-5xl grid-cols-1 border border-zinc-800 bg-zinc-950/80 sm:grid-cols-5">
               <TabsTrigger
                 value="stats"
                 className="text-white/85 data-active:bg-blue-600 data-active:text-white"
@@ -80,6 +81,7 @@ export function AdminDashboardPage() {
                 <ScanSearch className="mr-2 size-4" />
                 Reguły YARA
               </TabsTrigger>
+              <TabsTrigger value="cases">Incydenty analityczne</TabsTrigger>
             </TabsList>
           </div>
 
@@ -110,6 +112,7 @@ export function AdminDashboardPage() {
               {activeTab === "yara" && <YaraRulesForm />}
             </Suspense>
           </TabsContent>
+          <TabsContent value="cases">{activeTab === "cases" && <Cases />}</TabsContent>
         </Tabs>
       </div>
     </div>
