@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { S3Client } from "bun";
 import { Pool } from "pg";
 import { z } from "zod";
+import { runtimeConnectionString } from "../lib/database-config";
 
 const config = z.object({
 	DATABASE_URL: z.url({ protocol: /^postgres(?:ql)?$/ }),
@@ -17,20 +18,8 @@ const maxObjectSize = 50 * 1024 * 1024;
 
 export function workerDependencies(environment: Record<string, string | undefined>) {
 	const settings = config.parse(environment);
-	const connection = new URL(settings.DATABASE_URL);
-	// The connection-string parser can override the explicit TLS options below.
-	for (const name of [
-		"ssl",
-		"sslmode",
-		"sslcert",
-		"sslkey",
-		"sslrootcert",
-		"sslnegotiation",
-		"uselibpqcompat",
-	])
-		connection.searchParams.delete(name);
 	const pool = new Pool({
-		connectionString: connection.toString(),
+		connectionString: runtimeConnectionString(settings.DATABASE_URL),
 		ssl: {
 			rejectUnauthorized: true,
 			ca: readFileSync(settings.DB_TLS_CA_PATH, "utf8"),

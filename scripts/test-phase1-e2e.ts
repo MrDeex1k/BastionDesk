@@ -77,11 +77,11 @@ Object.assign(env, {
   EMAIL_FROM_NAME: "BastionDesk E2E",
 });
 env.S3_SECRET_KEY = env.MINIO_ROOT_PASSWORD;
-env.MIGRATION_DATABASE_URL = `postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@database:5432/${env.POSTGRES_DB}`;
+env.MIGRATION_DATABASE_URL = `postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@${env.POSTGRES_HOST}:${env.POSTGRES_PORT}/${env.POSTGRES_DB}`;
 env.MIGRATION_TLS_CA = "/certs/ca/ca.crt";
 env.MIGRATION_TLS_CERT = "/certs/migrator/client.crt";
 env.MIGRATION_TLS_KEY = "/certs/migrator/client.key";
-env.DATABASE_URL = `postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@pgbouncer:6432/${env.POSTGRES_DB}`;
+env.DATABASE_URL = `postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@${env.PGBOUNCER_HOST}:${env.PGBOUNCER_PORT}/${env.POSTGRES_DB}`;
 await Bun.write(
   envFile,
   Object.entries(env)

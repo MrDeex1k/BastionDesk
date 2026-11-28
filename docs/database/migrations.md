@@ -26,8 +26,9 @@ wymagają osobnej, przeglądanej ścieżki upgrade; nie są automatycznie usuwan
 ## Połączenie i polecenia
 
 Ustawić `MIGRATION_DATABASE_URL` dla **bezpośredniego PostgreSQL**, z kontem
-uprawnionym do DDL. Nie korzystać z PgBouncera. Runner nie korzysta awaryjnie
-z aplikacyjnego `DATABASE_URL`.
+uprawnionym do DDL. URL musi zawierać jawne dane logowania, host, port
+i nazwę bazy. Połączenie aplikacyjne `DATABASE_URL` służy do dostępu przez
+PgBouncer.
 
 Dla zwykłego środowiska podać `MIGRATION_TLS_CA`, `MIGRATION_TLS_CERT` oraz
 `MIGRATION_TLS_KEY` wskazujące pliki mTLS. Weryfikacja serwera jest włączona.

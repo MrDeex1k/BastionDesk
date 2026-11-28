@@ -2,13 +2,14 @@
 
 import path from "node:path";
 import dotenv from "dotenv";
+import { databaseEnvironment } from "./database-config";
 
 // Wczytanie .env z głównego folderu projektu (parent directory)
 const envPath = path.resolve(import.meta.dir, "../../../.env");
 dotenv.config({ path: envPath });
 
-function getEnvVar(key: string, defaultValue?: string): string {
-	const value = process.env[key] ?? defaultValue;
+function getEnvVar(key: string): string {
+	const value = process.env[key];
 	if (value === undefined) {
 		throw new Error(`Missing required environment variable: ${key}`);
 	}
@@ -107,15 +108,7 @@ const rawEnv = {
 	NODE_ENV: getEnvVar("NODE_ENV"),
 
 	// Database
-	DATABASE_URL: getEnvVar("DATABASE_URL"),
-	POSTGRES_USER: getEnvVar("POSTGRES_USER"),
-	POSTGRES_PASSWORD: getEnvVar("POSTGRES_PASSWORD"),
-	POSTGRES_DB: getEnvVar("POSTGRES_DB"),
-	PGBOUNCER_HOST: getEnvVar("PGBOUNCER_HOST"),
-	PGBOUNCER_PORT: getEnvNumber("PGBOUNCER_PORT", 6432),
-	DB_TLS_CA_PATH: getEnvVar("DB_TLS_CA_PATH"),
-	DB_TLS_CERT_PATH: getEnvVar("DB_TLS_CERT_PATH"),
-	DB_TLS_KEY_PATH: getEnvVar("DB_TLS_KEY_PATH"),
+	...databaseEnvironment(process.env),
 
 	// Better-Auth
 	BETTER_AUTH_URL: getEnvVar("BETTER_AUTH_URL"),
