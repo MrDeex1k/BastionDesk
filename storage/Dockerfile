@@ -1,6 +1,6 @@
 FROM busybox:1.38.0-musl AS wget-src
 
-FROM postgres:18.7-alpine3.24 AS mc-src
+FROM postgres:19.0-alpine3.24 AS mc-src
 ARG TARGETARCH
 RUN apk add --no-cache ca-certificates curl
 COPY download-client.sh /download-client.sh

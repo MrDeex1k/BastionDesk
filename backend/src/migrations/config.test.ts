@@ -10,14 +10,14 @@ test("migration CLI cannot accidentally use runtime database credentials", async
 });
 
 test("plaintext requires explicit opt-in and a loopback host", async () => {
-	const local = { MIGRATION_DATABASE_URL: "postgresql://fixture@127.0.0.1/fixture" };
+	const local = { MIGRATION_DATABASE_URL: "postgresql://fixture:fixture@127.0.0.1:5432/fixture" };
 	await assert.rejects(migrationConfig(local), /MIGRATION_TLS_REQUIRED/);
 	expect((await migrationConfig({ ...local, MIGRATION_ALLOW_LOCAL_PLAINTEXT: "true" })).ssl).toBe(
 		false,
 	);
 	await assert.rejects(
 		migrationConfig({
-			MIGRATION_DATABASE_URL: "postgresql://fixture@db.internal/app",
+			MIGRATION_DATABASE_URL: "postgresql://fixture:fixture@db.internal:5432/app",
 			MIGRATION_ALLOW_LOCAL_PLAINTEXT: "true",
 		}),
 		/MIGRATION_TLS_REQUIRED/,
@@ -27,13 +27,14 @@ test("plaintext requires explicit opt-in and a loopback host", async () => {
 test("URL options cannot override verified TLS configuration", async () => {
 	await assert.rejects(
 		migrationConfig({
-			MIGRATION_DATABASE_URL: "postgresql://fixture@localhost/app?sslmode=disable",
+			MIGRATION_DATABASE_URL:
+				"postgresql://fixture:fixture@localhost:5432/app?sslmode=disable",
 		}),
 		/INVALID_MIGRATION_DATABASE_URL/,
 	);
 	await assert.rejects(
 		migrationConfig({
-			MIGRATION_DATABASE_URL: "postgresql://fixture@localhost/app",
+			MIGRATION_DATABASE_URL: "postgresql://fixture:fixture@localhost:5432/app",
 			MIGRATION_TLS_CA: "ca.pem",
 		}),
 		/INCOMPLETE_MIGRATION_TLS/,

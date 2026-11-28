@@ -12,6 +12,9 @@ Bieżący kod ma jawny migrator oraz procedurę przejścia auth z fazy 4 do 5,
 ale nie deklaruje obsługi upgrade z dowolnej historycznej rewizji.
 
 Dla nowej instalacji przygotuj nową bazę, wolumeny i sekrety/certyfikaty.
+Dla działającego PostgreSQL 18 wykonaj
+[aktualizację bazy do 19](backup.md#aktualizacja-postgresql-18-do-19)
+przed uruchomieniem nowego obrazu serwera.
 Dla istniejącej instalacji zachowaj sekrety, dane i tożsamości zgodnie z
 [instrukcją migracji](../database/migrations.md) i
 [runbookiem fazy 5](../backend/phase-5-identity.md); najpierw zweryfikuj
@@ -85,6 +88,12 @@ Dla frontendu i Better Auth lokalny model uruchomienia zakłada jeden publiczny 
 - `BETTER_AUTH_URL=http://localhost:4567`
 - `BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:4567`
 
+Aplikacja wymaga jawnych wartości `PGBOUNCER_HOST`, `PGBOUNCER_PORT`,
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` i ścieżek `DB_TLS_*`.
+W `DATABASE_URL` podaj użytkownika, hasło, host, port i nazwę bazy.
+Znaki specjalne w danych zapisanych w URL zakoduj procentowo. Pula aplikacji
+używa TLS skonfigurowanego przez ścieżki certyfikatów z pliku `.env`.
+
 ## TLS and Certificates
 
 ### Development / Local Compose
@@ -140,8 +149,9 @@ kończą start błędem `CORE_MIGRATIONS_REQUIRED`. Auth wymaga tabeli `jwks`
 z `0003_auth_jwks`. Integracja Wazuh wymaga tabeli `wazuh_sources`
 z `0004_wazuh_sources`. Migrator jest uruchamiany przez operatora.
 
-Migrator potrzebuje bezpośredniego połączenia do `database:5432` oraz własnego
-certyfikatu klienta zgodnego z użytkownikiem PostgreSQL. Przykład uruchomienia
+Migrator potrzebuje bezpośredniego połączenia do PostgreSQL. Dla Compose użyj
+hosta i portu z `POSTGRES_HOST` i `POSTGRES_PORT` oraz certyfikatu klienta
+zgodnego z użytkownikiem PostgreSQL. Przykład uruchomienia
 w sieci Compose po przygotowaniu chronionego pliku `.env.migrator` i certyfikatów:
 
 ```bash

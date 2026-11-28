@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { ClientConfig } from "pg";
+import { parsePostgresUrl } from "../lib/database-config";
 
 /** Deliberately never falls back to the application's DATABASE_URL. */
 export async function migrationConfig(
@@ -7,8 +8,8 @@ export async function migrationConfig(
 ): Promise<ClientConfig> {
 	const connectionString = env.MIGRATION_DATABASE_URL;
 	if (!connectionString) throw new Error("MIGRATION_DATABASE_URL_REQUIRED");
-	const url = new URL(connectionString);
-	if (!["postgres:", "postgresql:"].includes(url.protocol) || url.search || url.hash) {
+	const url = parsePostgresUrl(connectionString, "MIGRATION_DATABASE_URL");
+	if (url.search || url.hash) {
 		throw new Error("INVALID_MIGRATION_DATABASE_URL");
 	}
 	const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);

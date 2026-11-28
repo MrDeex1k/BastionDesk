@@ -64,7 +64,7 @@ try {
 		"POSTGRES_PASSWORD",
 		"-p",
 		"127.0.0.1::5432",
-		"postgres:18.7",
+		"postgres:19.0",
 	]);
 	started = true;
 	for (let i = 0; i < 60; i++) {
@@ -301,6 +301,19 @@ try {
 	assert.equal(await scans.download(legacyFile, true), "unscanned");
 	const queued = await scanWorker.dispatch();
 	assert.equal(queued.length, 1);
+	const scanJobId = queued[0]!.id;
+	const jobTuple = async () =>
+		(
+			await pool!.query<{ tuple: string }>(
+				"SELECT ctid::text AS tuple FROM yara_scan_jobs WHERE id=$1",
+				[scanJobId],
+			)
+		).rows[0]?.tuple;
+	const originalTuple = await jobTuple();
+	assert.ok(originalTuple);
+	const duplicateFile = await attachment("duplicate.txt");
+	assert.equal(await jobTuple(), originalTuple, "reusing a YARA job should not rewrite its row");
+	assert.equal(await scans.download(duplicateFile, true), "pending");
 	await scanWorker.published(queued[0]!.id, queued[0]!.publication_token);
 	assert.equal(
 		(await scanWorker.dispatch()).length,
@@ -349,11 +362,12 @@ try {
 	await scans.activate("org", baseRuleSet);
 	assert.equal(await scans.download(firstFile, true), "clean");
 	assert.equal((await scans.status(firstFile)).latest?.ruleVersion, baseRuleSet.version);
-	await pool.query("DELETE FROM incidents WHERE id = ANY($1::uuid[])", [
-		[firstFile.incidentId, identicalFile.incidentId, legacyFile.incidentId],
-	]);
+	const scanIncidentIds = [firstFile, identicalFile, legacyFile, duplicateFile].map(
+		({ incidentId }) => incidentId,
+	);
+	await pool.query("DELETE FROM incidents WHERE id = ANY($1::uuid[])", [scanIncidentIds]);
 	await pool.query("DELETE FROM core_jobs WHERE incident_id = ANY($1::uuid[])", [
-		[firstFile.incidentId, identicalFile.incidentId],
+		scanIncidentIds,
 	]);
 	console.log(
 		"PASS YARA upload, concurrent deduplication, legacy scan, durable retry, active version and download policy",
@@ -745,7 +759,12 @@ try {
 	const time = new Date().toISOString();
 	await enrichment.finish(
 		renewed,
-		{ provider: "virustotal", status: "not_found", fetchedAt: time, expiresAt: time },
+		{
+			provider: "virustotal",
+			status: "not_found",
+			fetchedAt: time,
+			expiresAt: time,
+		},
 		async () => {},
 	);
 	const completedCheck = (await enrichment.forIncident("org", second.id))[0]!;

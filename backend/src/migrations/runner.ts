@@ -36,7 +36,8 @@ export async function migrate(
 		await client.query("SET LOCAL statement_timeout = '60s'");
 		await client.query("SELECT pg_advisory_xact_lock(186231, 2)");
 		const version = await client.query("SHOW server_version_num");
-		if (Math.floor(Number(version.rows[0].server_version_num) / 10000) !== 18) {
+		const major = Math.floor(Number(version.rows[0].server_version_num) / 10000);
+		if (major !== 18 && major !== 19) {
 			throw new Error("UNSUPPORTED_POSTGRES_VERSION");
 		}
 		const exists = await client.query(
@@ -78,7 +79,10 @@ export async function migrate(
 			}
 		}
 		await client.query(mode === "apply" ? "COMMIT" : "ROLLBACK");
-		return { adopted: applied.length > 0, pending: pending.map((entry) => entry.id) };
+		return {
+			adopted: applied.length > 0,
+			pending: pending.map((entry) => entry.id),
+		};
 	} catch (error) {
 		await client.query("ROLLBACK");
 		throw error;
