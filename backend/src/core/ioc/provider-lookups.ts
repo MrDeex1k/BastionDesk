@@ -64,7 +64,22 @@ export function providerLookups(
 ) {
 	const cache = new Map<string, TimedReport>();
 	const pending = new Map<string, Promise<LookupResult>>();
-	const budgets = new Map<string, { starts: number[]; next: number }>();
+	const budgets = new Map<string, { starts: number[]; next: number; inFlight: number }>();
+	let nextBudgetCleanup = 0;
+
+	function pruneBudgets(current: number) {
+		if (current < nextBudgetCleanup) return;
+		nextBudgetCleanup = current + minute;
+		for (const [key, budget] of budgets) {
+			const lastStart = budget.starts.at(-1);
+			if (
+				!budget.inFlight &&
+				budget.next <= current &&
+				(lastStart === undefined || lastStart <= current - day)
+			)
+				budgets.delete(key);
+		}
+	}
 
 	return {
 		async enabled(org: string) {
@@ -89,12 +104,13 @@ export function providerLookups(
 			const budgetKey = `${provider}:${createHash("sha256").update(apiKey).digest("hex")}`;
 			const cacheKey = JSON.stringify([org, budgetKey, indicator.kind, indicator.value]);
 			const current = now();
+			pruneBudgets(current);
 			const saved = cache.get(cacheKey);
 			if (saved && Date.parse(saved.expiresAt) > current) return { provider, ...saved };
 			const active = pending.get(cacheKey);
 			if (active) return active;
 
-			const budget = budgets.get(budgetKey) ?? { starts: [], next: 0 };
+			const budget = budgets.get(budgetKey) ?? { starts: [], next: 0, inFlight: 0 };
 			budget.starts = budget.starts.filter((start) => start > current - day);
 			const dailyReset =
 				budget.starts.length >= maxDailyRequests ? budget.starts[0]! + day : 0;
@@ -105,6 +121,7 @@ export function providerLookups(
 
 			budget.next = current + minute / 4;
 			budget.starts.push(current);
+			budget.inFlight++;
 			budgets.set(budgetKey, budget);
 			const request = Promise.resolve()
 				.then(() => adapter.lookup(indicator, apiKey))
@@ -135,7 +152,10 @@ export function providerLookups(
 					return { provider, ...result };
 				})
 				.catch((): LookupResult => ({ provider, status: "unavailable" }))
-				.finally(() => pending.delete(cacheKey));
+				.finally(() => {
+					budget.inFlight--;
+					pending.delete(cacheKey);
+				});
 			pending.set(cacheKey, request);
 			return request;
 		},

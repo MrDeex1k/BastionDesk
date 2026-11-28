@@ -27,10 +27,7 @@ export function useEnrichmentLookup<T extends { status: string }>(
       if (!reply.ok) throw new Error("Nie udało się zlecić sprawdzenia.");
       return ((await reply.json()) as { data: Response }).data;
     },
-    onSuccess: (reply) => {
-      if (reply.status === "pending" || reply.retryAt)
-        void queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["incident", incidentId] }),
   });
   const waiting = saved ? !saved.result : mutation.data?.status === "pending";
   const result = saved ? saved.result : (mutation.data as T | undefined);

@@ -361,8 +361,24 @@ services:
             printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/incidents/*/attachment_*"]}]}\n' "$${S3_BUCKET}" > "$$policy"
             mc admin policy create minio bastiondesk-yara-read "$$policy" \
               && mc admin user add minio "$${YARA_S3_ACCESS_KEY}" "$${YARA_S3_SECRET_KEY}" \
-              && mc admin policy attach minio bastiondesk-yara-read --user "$${YARA_S3_ACCESS_KEY}" \
               || { rm -f "$$policy"; kill $$pid; exit 1; }
+            attached=false
+            for i in $(seq 1 10); do
+              if output=$$(mc admin policy attach minio bastiondesk-yara-read --user "$${YARA_S3_ACCESS_KEY}" 2>&1); then
+                attached=true
+                break
+              fi
+              case "$$output" in
+                *[Ss]pecified\ policy\ change\ is\ already\ in\ effect*) attached=true; break ;;
+              esac
+              sleep 2
+            done
+            if [ "$$attached" != true ]; then
+              printf '%s\n' "$$output" >&2
+              rm -f "$$policy"
+              kill $$pid
+              exit 1
+            fi
             rm -f "$$policy"
           fi
         fi

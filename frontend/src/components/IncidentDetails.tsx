@@ -179,20 +179,9 @@ function useIncidentDetailsActions({
       if (!response.ok) throw new Error("Failed to unassign incident");
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Incydent został oddany do puli");
-      queryClient.setQueryData(
-        ["incident", incidentId],
-        (old: IncidentDetailResponse | undefined) => ({
-          ...old,
-          data: {
-            ...old?.data,
-            analystId: null,
-            analystName: undefined,
-            status: "Zgłoszony",
-          } as IncidentDetail,
-        }),
-      );
+      await queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       void queryClient.invalidateQueries({ queryKey: ["analystIncidents"] });
       onBack();
     },

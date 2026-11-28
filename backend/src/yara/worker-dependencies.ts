@@ -41,6 +41,7 @@ export function workerDependencies(environment: Record<string, string | undefine
 		connectionTimeoutMillis: 2000,
 		query_timeout: 10_000,
 	});
+	pool.on("error", () => console.error("[YARA] Idle database connection interrupted"));
 	const storage = new S3Client({
 		endpoint: settings.YARA_S3_ENDPOINT,
 		bucket: settings.YARA_S3_BUCKET,

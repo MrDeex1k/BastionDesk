@@ -268,6 +268,8 @@ try {
   if (wazuh) {
     await runBrowserTests("wazuh.spec.ts");
   } else if (yara) {
+    await compose(["restart", "storage-1"]);
+    await compose(["up", "-d", "--no-deps", "--wait", "--wait-timeout", "60", "storage-1"]);
     await runBrowserTests("yara.spec.ts");
     console.log("[phase7] PASS automatic and manual YARA workflows");
   } else {
