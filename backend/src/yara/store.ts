@@ -35,7 +35,12 @@ type Db = Pick<Pool, "query">;
 export type Transaction = <T>(work: (client: PoolClient) => Promise<T>) => Promise<T>;
 
 export async function lockRules(client: PoolClient, org: string) {
-	await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 71843))", [org]);
+	const { rows } = await client.query<{ supportsConflictSelect: boolean }>(
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 71843)),
+		        current_setting('server_version_num')::int >= 190000 AS "supportsConflictSelect"`,
+		[org],
+	);
+	return rows[0]!.supportsConflictSelect;
 }
 
 export async function activeVersion(db: Db, org: string) {
@@ -60,23 +65,29 @@ export async function enqueueScan(
 	retry = false,
 ) {
 	const { organizationId, incidentId, storageKey } = attachment;
-	await lockRules(client, organizationId);
+	const supportsConflictSelect = await lockRules(client, organizationId);
 	const version = await activeVersion(client, organizationId);
 	if (version === baseRuleSet.version)
 		await saveRules(client, organizationId, version, baseRuleSet.rules);
-	const proposedId = crypto.randomUUID();
-	const { rows } = await client.query<{ id: string }>(
-		`INSERT INTO yara_scan_jobs AS current_job (id, organization_id, content_hash, rule_version)
-		 VALUES ($1,$2,$3,$4) ON CONFLICT (organization_id, content_hash, rule_version)
-		 DO UPDATE SET
+	const jobValues = [crypto.randomUUID(), organizationId, sha256, version];
+	const insertJob = `INSERT INTO yara_scan_jobs AS current_job (id, organization_id, content_hash, rule_version)
+		VALUES ($1,$2,$3,$4) ON CONFLICT (organization_id, content_hash, rule_version)`;
+	const { rows } =
+		supportsConflictSelect && !retry
+			? await client.query<{ id: string }>(
+					`${insertJob} DO SELECT FOR KEY SHARE RETURNING id`,
+					jobValues,
+				)
+			: await client.query<{ id: string }>(
+					`${insertJob} DO UPDATE SET
 		   state = CASE WHEN $5 AND current_job.state='dead' THEN 'pending' ELSE current_job.state END,
 		   attempts = CASE WHEN $5 AND current_job.state='dead' THEN 0 ELSE current_job.attempts END,
 		   available_at = CASE WHEN $5 AND current_job.state='dead' THEN clock_timestamp() ELSE current_job.available_at END,
 		   publish_after = CASE WHEN $5 AND current_job.state='dead' THEN clock_timestamp() ELSE current_job.publish_after END,
        publication_token = CASE WHEN $5 AND current_job.state='dead' THEN NULL ELSE current_job.publication_token END
 		 RETURNING id`,
-		[proposedId, organizationId, sha256, version, retry],
-	);
+					[...jobValues, retry],
+				);
 	await client.query(
 		`INSERT INTO yara_attachments (organization_id,incident_id,storage_key,job_id) VALUES ($1,$2,$3,$4)
 		 ON CONFLICT (organization_id,incident_id,storage_key) DO UPDATE SET job_id=excluded.job_id`,

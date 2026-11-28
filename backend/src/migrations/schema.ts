@@ -3,10 +3,14 @@ import type { Client } from "pg";
 
 export const checksum = (text: string) => createHash("sha256").update(text).digest("hex");
 
-// PostgreSQL 18 public application schema; excludes objects owned by extensions.
+// Public application schema on PostgreSQL 18 and 19; excludes extension-owned objects.
 // Names and definitions, never OIDs, owners or sequence current values.
 export async function schemaFingerprint(client: Client): Promise<string> {
-	const { rows } = await client.query<{ kind: string; name: string; definition: string }>(`
+	const { rows } = await client.query<{
+		kind: string;
+		name: string;
+		definition: string;
+	}>(`
 		WITH relations AS (
 			SELECT c.* FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 			WHERE n.nspname = 'public' AND NOT EXISTS (

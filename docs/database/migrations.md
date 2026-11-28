@@ -74,11 +74,12 @@ audytem konfiguracji: nie porównuje właścicieli, grantów, innych schematów,
 ustawień serwera ani bieżących wartości sekwencji. Nowe rodzaje obiektów
 wymagają rozszerzenia kontraktu fingerprintu i testu kompatybilności.
 
-Obsługujemy PostgreSQL 18. Bieżące testy migracji używają obrazu 18.7. Zmiana
-wersji rozszerzenia lub sposobu renderowania definicji przez PostgreSQL może
-wymagać przeglądu zgodności. Nie regenerować baseline tylko po to, by ominąć
-`SCHEMA_DRIFT`. Generowanie `--record-baseline` jest jednorazowym narzędziem
-testowym; odmawia nadpisania istniejącego pliku.
+Migrator obsługuje PostgreSQL 18 i 19. Testy migracji uruchamiają obrazy 18.7
+i 19.0 z tym samym baseline i weryfikują odtworzenie danych oraz historii na 19.
+Zmiana wersji rozszerzenia lub sposobu renderowania definicji przez PostgreSQL
+może wymagać przeglądu zgodności. `SCHEMA_DRIFT` wymaga porównania definicji ze
+zweryfikowanym schematem. Generowanie `--record-baseline` jest jednorazowym
+narzędziem testowym i odmawia nadpisania istniejącego pliku.
 
 SQL jest zaufanym, przeglądanym kodem repozytorium. Nie umieszczać w nim
 `BEGIN`, `COMMIT`, `ROLLBACK`, zmian search_path ani operacji poza transakcją
@@ -88,11 +89,12 @@ jest wspierane: użyć poprawki forward albo sprawdzonego restore w oknie serwis
 
 ## Dowody testowe
 
-`test:migrations` tworzy PostgreSQL na tmpfs, z losowym hasłem i portem
-wyłącznie loopback, inicjalizuje schemat i dane dwóch organizacji, robi
-pg_dump i restore do drugiej bazy, a następnie sprawdza:
+`test:migrations` uruchamia PostgreSQL 18 i 19 na tmpfs, z losowym hasłem i portami
+wyłącznie na loopback. Inicjalizuje świeże schematy, wypełnia bazę 18 danymi
+dwóch organizacji i odtwarza dump na 19. Sprawdza:
 
 - identyczność wszystkich wierszy public przed i po adoptowaniu;
+- zgodność fingerprintu i historii migracji istniejącej bazy po przejściu z 18 na 19;
 - plan bez zapisów, CLI apply i ponowne uruchomienie;
 - rollback pierwszej migracji wraz z rejestrem oraz rollback późniejszego DDL;
 - jednorazowy efekt dwóch równoczesnych runnerów;

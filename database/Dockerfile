@@ -1,4 +1,4 @@
-FROM postgres:18.7
+FROM postgres:19.0
 
 # Set environment labels
 LABEL maintainer="BastionDesk"

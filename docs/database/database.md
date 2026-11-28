@@ -1,8 +1,11 @@
-# BastionDesk — baza danych PostgreSQL 18
+# BastionDesk — baza danych PostgreSQL 19
 
 Schemat bieżącej aplikacji składa się z baseline w `database/init-sql/`
 oraz migracji w `database/versioned/`. Same skrypty inicjalizacji nie
 wystarczają do uruchomienia Core, workera i auth po fazie 5.
+
+Compose używa PostgreSQL 19.0. Istniejącą bazę 18 należy przenieść zgodnie
+z [procedurą aktualizacji serwera](../infrastructure/backup.md#aktualizacja-postgresql-18-do-19).
 
 ## Źródło prawdy
 

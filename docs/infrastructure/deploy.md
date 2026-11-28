@@ -12,6 +12,9 @@ Bieżący kod ma jawny migrator oraz procedurę przejścia auth z fazy 4 do 5,
 ale nie deklaruje obsługi upgrade z dowolnej historycznej rewizji.
 
 Dla nowej instalacji przygotuj nową bazę, wolumeny i sekrety/certyfikaty.
+Dla działającego PostgreSQL 18 wykonaj
+[aktualizację bazy do 19](backup.md#aktualizacja-postgresql-18-do-19)
+przed uruchomieniem nowego obrazu serwera.
 Dla istniejącej instalacji zachowaj sekrety, dane i tożsamości zgodnie z
 [instrukcją migracji](../database/migrations.md) i
 [runbookiem fazy 5](../backend/phase-5-identity.md); najpierw zweryfikuj
